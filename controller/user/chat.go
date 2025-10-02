@@ -1,7 +1,7 @@
 package user
 
 import (
-	"context" // 导入 context 包
+	"context"
 	"github.com/gin-gonic/gin"
 
 	"gitee.com/taoJie_1/chat/global"

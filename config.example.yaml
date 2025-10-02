@@ -1,0 +1,85 @@
+debug: false
+#本项目名称
+project_name: "淘街Chat"
+#gin监听的地址
+gin_addr: ":80"
+#访问项目的域名,端口默认80(如webhook所用)
+domain: "https://www.domain.com"
+#放置静态文件的目录
+static_dir: "static"
+# gin日志文件
+gin_log_path: "log/gin.log"
+# 运行日志文件
+run_log_path: "log/run.log"
+# 时区
+tz: "Asia/Shanghai"
+# 允许跨域的域名
+cors:
+  - "*"
+# 数据库配置
+database:
+  #数据库类型(sqlite3|mysql); 小应用sqlite3, 大应用mysql
+  type: sqlite
+  #sqlite文件路径
+  sqlite_path: "data.db"
+  # mysql地址
+  mysql_host: ""
+  # mysql端口
+  mysql_port: 3306
+  # mysql数据库名
+  mysql_dbname: ""
+  # mysql用户名
+  mysql_username: ""
+  # mysql密码
+  mysql_password: ""
+chatwoot:
+  # Chatwoot部署地址
+  url: "http://127.0.0.1:8080"
+  # 店铺ID
+  account_id: 1
+  # Chatwoot模型秘钥
+  auth: ""
+# LLM配置, 最多可配3个, 小模型在前排序
+llm:
+  - # LLM的api地址, "v1"结尾
+    url: "http://127.0.0.1:11434/v1"
+    # LLM模型名称
+    model: "qwen3:latest"
+    # LLM模型秘钥
+    auth: ""
+    # LLM的大小, small|medium|large
+    size: "small"
+    # 超时时间(秒)
+    timeout: 10
+# 配置向量化模型, 一般使用小模型就好
+llm_embedding:
+  # LLM的api地址, "v1"结尾
+  url: "http://127.0.0.1:11434/v1"
+  # LLM模型名称
+  model: "qwen3-embedding:latest"
+  # LLM模型秘钥
+  auth: ""
+  # 超时时间(秒)
+  timeout: 100
+  # 向量化模型的向量维度(向量数据库需要用到)
+  embedding_dim: 1024
+# milvus向量数据库配置
+milvus:
+  # Milvus服务地址
+  url: "http://127.0.0.1:19530"
+  # 认证Token
+  auth: ""
+  # 集合名称
+  collection_name: "chatwoot_keywords"
+# AI客服相关配置
+ai:
+  # 提示词长度限制
+  max_prompt_length: 1000
+  # 关键字前缀出现该值,则加入到向量数据库中做语义匹配
+  semantic_prefix: "ai@"
+  # 关键字前缀出现该值或为空,则做精确匹配
+  exact_prefix: ""
+  # 用于触发转人工的关键词列表
+  transfer_keywords:
+    - "人工客服"
+    - "转人工"

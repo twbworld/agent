@@ -2,8 +2,6 @@ package global
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"net/http"
 	"time"
 
@@ -15,7 +13,8 @@ import (
 // 初始化LLM客户端
 func (*GlobalInit) initLlm() error {
 	if len(global.Config.Llm) == 0 {
-		return errors.New("LLM缺少配置[rejnk33]")
+		global.Log.Warnln("LLM缺少配置[rejnk33], 相关功能将不可用")
+		return nil
 	}
 
 	validClients := make(map[enum.LlmSize]*openai.Client)
@@ -52,7 +51,8 @@ func (*GlobalInit) initLlm() error {
 	}
 
 	if len(validClients) == 0 {
-		return errors.New("所有LLM配置均无效, 初始化失败")
+		global.Log.Warnln("所有LLM配置均无效, 初始化失败, LLM相关功能将不可用")
+		return nil
 	}
 
 	// 定义模型大小的优先级顺序，用于“降级”查找
@@ -71,7 +71,8 @@ func (*GlobalInit) initLlm() error {
 	}
 
 	if lastGoodClient == nil {
-		return errors.New("未能找到任何可用的LLM客户端")
+		global.Log.Warnln("未能找到任何可用的LLM客户端, LLM相关功能将不可用")
+		return nil
 	}
 	for _, size := range sizes {
 		if global.Llm[size] == nil {
@@ -86,7 +87,8 @@ func (*GlobalInit) initLlm() error {
 // 初始化向量化服务
 func (*GlobalInit) initLlmEmbedding() error {
 	if global.Config.LlmEmbedding.Url == "" {
-		return errors.New("向量化模型URL(llm_embedding.url)未配置")
+		global.Log.Warnln("向量化模型URL(llm_embedding.url)未配置, RAG功能将不可用")
+		return nil
 	}
 
 	clientConfig := openai.DefaultConfig(global.Config.LlmEmbedding.Auth)
@@ -100,7 +102,9 @@ func (*GlobalInit) initLlmEmbedding() error {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(global.Config.LlmEmbedding.Timeout)*time.Second)
 	defer cancel()
 	if _, err := global.LlmEmbedding.ListModels(ctx); err != nil {
-		return fmt.Errorf("向量化服务连接测试失败: %w", err)
+		global.Log.Warnf("向量化服务连接测试失败: %v. RAG功能将不可用", err)
+		global.LlmEmbedding = nil
+		return nil
 	}
 
 	global.Log.Infoln("向量化服务连接成功")

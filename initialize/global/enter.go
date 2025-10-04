@@ -79,10 +79,10 @@ func (g *GlobalInit) Start() {
 		panic(err)
 	}
 	if err := g.initLlm(); err != nil {
-		panic(err)
+		global.Log.Warnf("初始化LLM服务失败: %v", err)
 	}
 	if err := g.initLlmEmbedding(); err != nil {
-		panic(err)
+		global.Log.Warnf("初始化向量化服务失败: %v", err)
 	}
 	if err := g.initChatwoot(); err != nil {
 		panic(err)

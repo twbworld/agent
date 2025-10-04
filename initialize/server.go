@@ -94,7 +94,7 @@ func waitForShutdown() {
 
 	//来到这 证明有关闭指令,将进行平滑优雅关闭服务
 
-	global.Log.Infof("程序关闭中..., port: %s, pid: %d", global.Config.GinAddr, syscall.Getpid())
+	global.Log.Infof("程序关闭中..., port: %s, pid: %d", runtime.Version(), global.Config.GinAddr, syscall.Getpid())
 
 	shutdownServer()
 }

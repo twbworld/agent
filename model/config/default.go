@@ -15,6 +15,6 @@ type Config struct {
 	Chatwoot     Chatwoot `json:"chatwoot" mapstructure:"chatwoot" yaml:"chatwoot"`
 	Llm          []Llm    `json:"llm" mapstructure:"llm" yaml:"llm"`
 	LlmEmbedding Llm      `json:"llm_embedding" mapstructure:"llm_embedding" yaml:"llm_embedding"`
-	Milvus       Milvus   `json:"milvus" mapstructure:"milvus" yaml:"milvus"`
+	VectorDb     VectorDb `json:"vector_db" mapstructure:"vector_db" yaml:"vector_db"`
 	Ai           Ai       `json:"ai" mapstructure:"ai" yaml:"ai"`
 }

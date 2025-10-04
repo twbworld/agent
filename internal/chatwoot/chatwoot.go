@@ -9,21 +9,14 @@ import (
 	"time"
 
 	"gitee.com/taoJie_1/chat/model/enum"
+	pkgchatwoot "gitee.com/taoJie_1/chat/pkg/chatwoot"
 	"github.com/sirupsen/logrus"
 )
-
-// CannedResponse 对应Chatwoot API返回的预设回复结构体
-type CannedResponse struct {
-	Id        int    `json:"id"`
-	AccountId int    `json:"account_id"`
-	ShortCode string `json:"short_code"`
-	Content   string `json:"content"`
-}
 
 // TransferToHumanRequest 定义了转人工API的请求体
 type TransferToHumanRequest struct {
 	Status string `json:"status"` // "open" 表示转为人工处理
-	// 您还可以增加 AssigneeID 或 TeamID 来指定客服或团队
+	// 还可以增加 AssigneeID 或 TeamID 来指定客服或团队
 	// TeamID int `json:"team_id,omitempty"`
 }
 
@@ -37,7 +30,7 @@ type Client struct {
 }
 
 // NewClient 创建一个新的Chatwoot客户端实例
-func NewClient(baseURL string, accountID int, apiToken string, logger *logrus.Logger) *Client {
+func NewClient(baseURL string, accountID int, apiToken string, logger *logrus.Logger) pkgchatwoot.Service {
 	return &Client{
 		BaseURL:   baseURL,
 		AccountID: accountID,
@@ -50,7 +43,7 @@ func NewClient(baseURL string, accountID int, apiToken string, logger *logrus.Lo
 }
 
 // 获取所有的预设回复
-func (c *Client) GetCannedResponses() ([]CannedResponse, error) {
+func (c *Client) GetCannedResponses() ([]pkgchatwoot.CannedResponse, error) {
 	url := fmt.Sprintf("%s/api/v1/accounts/%d/canned_responses", c.BaseURL, c.AccountID)
 
 	req, err := http.NewRequest("GET", url, nil)
@@ -77,7 +70,7 @@ func (c *Client) GetCannedResponses() ([]CannedResponse, error) {
 		return nil, fmt.Errorf("读取响应体失败: %w", err)
 	}
 
-	var responses []CannedResponse
+	var responses []pkgchatwoot.CannedResponse
 	if err := json.Unmarshal(body, &responses); err != nil {
 		return nil, fmt.Errorf("解析JSON响应失败: %w", err)
 	}
@@ -195,7 +188,6 @@ func (c *Client) ToggleTypingStatus(conversationID uint, status string) error {
 	}
 	defer resp.Body.Close()
 
-	// Chatwoot a 200 OK for this endpoint
 	if resp.StatusCode != http.StatusOK {
 		bodyBytes, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("切换输入状态API请求返回非200状态码: %d, 响应: %s", resp.StatusCode, string(bodyBytes))

@@ -6,6 +6,6 @@ import "gitee.com/taoJie_1/chat/controller/admin"
 var Api = new(ApiGroup)
 
 type ApiGroup struct {
-	UserApiGroup  user.ApiGroup
-	AdminApiGroup admin.ApiGroup
+	UserApiGroup  user.ApiGroup  //用户前台
+	AdminApiGroup admin.ApiGroup //管理后台
 }

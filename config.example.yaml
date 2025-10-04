@@ -63,9 +63,9 @@ llm_embedding:
   timeout: 100
   # 向量化模型的向量维度(向量数据库需要用到)
   embedding_dim: 1024
-# milvus向量数据库配置
-milvus:
-  # Milvus服务地址
+# 向量数据库配置
+vector_db:
+  # 服务地址
   url: "http://127.0.0.1:19530"
   # 认证Token
   auth: ""
@@ -75,6 +75,8 @@ milvus:
 ai:
   # 提示词长度限制
   max_prompt_length: 1000
+  # 设置用于匹配的短词长度限制
+  max_short_code_length: 255
   # 关键字前缀出现该值,则加入到向量数据库中做语义匹配
   semantic_prefix: "ai@"
   # 关键字前缀出现该值或为空,则做精确匹配

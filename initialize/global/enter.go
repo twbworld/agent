@@ -78,13 +78,13 @@ func (g *GlobalInit) Start() {
 	if err := g.initTz(); err != nil {
 		panic(err)
 	}
-	if err := g.initLlm(); err != nil {
+	if err := initLlm(); err != nil {
 		global.Log.Warnf("初始化LLM服务失败: %v", err)
 	}
-	if err := g.initLlmEmbedding(); err != nil {
+	if err := initLlmEmbedding(); err != nil {
 		global.Log.Warnf("初始化向量化服务失败: %v", err)
 	}
-	if err := g.initChatwoot(); err != nil {
+	if err := initChatwoot(); err != nil {
 		panic(err)
 	}
 }
@@ -136,11 +136,14 @@ func handleConfig(c *config.Config) {
 	if c.LlmEmbedding.EmbeddingDim == 0 {
 		c.LlmEmbedding.EmbeddingDim = 1024
 	}
-	if c.Milvus.CollectionName == "" {
-		c.Milvus.CollectionName = "chatwoot_keywords"
+	if c.VectorDb.CollectionName == "" {
+		c.VectorDb.CollectionName = "chatwoot_keywords"
 	}
 	if c.Ai.MaxPromptLength == 0 {
 		c.Ai.MaxPromptLength = 1000
+	}
+	if c.Ai.MaxShortCodeLength == 0 {
+		c.Ai.MaxShortCodeLength = 255
 	}
 	if c.Ai.SemanticPrefix == "" {
 		c.Ai.SemanticPrefix = "ai@"

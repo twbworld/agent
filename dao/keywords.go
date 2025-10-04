@@ -7,16 +7,14 @@ import (
 	"unicode/utf8"
 
 	"gitee.com/taoJie_1/chat/global"
-	"gitee.com/taoJie_1/chat/internal/chatwoot"
 	"gitee.com/taoJie_1/chat/model/common"
 	"gitee.com/taoJie_1/chat/model/db"
 	"gitee.com/taoJie_1/chat/model/enum"
+	"gitee.com/taoJie_1/chat/pkg/chatwoot"
 	"github.com/jmoiron/sqlx"
 )
 
 type KeywordsDb struct{}
-
-const maxShortCodeLen = 255
 
 // 获取所有数据
 func (d *KeywordsDb) GetKeywordsAllList(list *[]common.KeywordsList, tx ...*sqlx.Tx) error {
@@ -71,7 +69,7 @@ func (d *KeywordsDb) BatchInsert(data []chatwoot.CannedResponse, tx *sqlx.Tx) (i
 		if resp.ShortCode == "" || resp.Content == "" {
 			continue // 跳过无效数据
 		}
-		if utf8.RuneCountInString(resp.ShortCode) > maxShortCodeLen {
+		if utf8.RuneCountInString(resp.ShortCode) > int(global.Config.Ai.MaxShortCodeLength) {
 			global.Log.Warnf("short_code 超出长度限制，已跳过: %s", resp.ShortCode)
 			continue
 		}

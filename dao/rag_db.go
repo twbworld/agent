@@ -1,7 +1,5 @@
 package dao
 
-//这里我们封装对向量数据库的操作。同样，我们先用伪代码和模拟实现来搭建框架。
-
 import (
 	"context"
 	"fmt"
@@ -9,7 +7,8 @@ import (
 	"gitee.com/taoJie_1/chat/model/db"
 )
 
-// RagDocument 定义了存入向量数据库的文档结构
+const CannedResponseVectorIDPrefix = "cw_canned_"
+
 type RagDocument struct {
 	ID       string                 // 文档的唯一ID，我们可以用 "kw-" + source_id
 	Content  string                 // 文档内容，这里是关键词本身
@@ -47,7 +46,7 @@ func (d *RagDb) UpsertKeywords(ctx context.Context, docs []db.KeywordRule) (int,
 	//     }
 	// }
 	//
-	// err := collection.Upsert(ragDocs)
+	// err := collection.Upsert(ragDocs);
 	// if err != nil {
 	//     return 0, err
 	// }
@@ -73,7 +72,7 @@ func (d *RagDb) CleanUpStaleEntries(ctx context.Context, activeIDs []string) (in
 	// 2. 找出需要删除的ID
 	activeIDSet := make(map[string]struct{}, len(activeIDs))
 	for _, id := range activeIDs {
-		activeIDSet[id] = struct{}{}
+		activeIDSet[id] = struct{}{} 
 	}
 
 	var idsToDelete []string

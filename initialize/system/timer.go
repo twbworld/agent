@@ -9,7 +9,7 @@ import (
 var c *cron.Cron
 
 // startCronJob 启动一个新的定时任务
-func startCronJob(task func() error, schedule, name string) error {
+func startCronJob(task func() error, schedule string) error {
 	_, err := c.AddFunc(schedule, func() {
 		if err := task(); err != nil {
 			panic(err)
@@ -24,7 +24,7 @@ func timerStart(taskManager *task.Manager) error {
 		// cron.WithSeconds(), //精确到秒
 	}...)
 
-	if err := startCronJob(taskManager.KeywordReloader, "0 3 * * *", "同步关键字"); err != nil {
+	if err := startCronJob(taskManager.KeywordReloader, "0 3 * * *"); err != nil {
 		return err
 	}
 

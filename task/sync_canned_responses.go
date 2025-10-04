@@ -8,9 +8,9 @@ import (
 
 	"gitee.com/taoJie_1/chat/dao"
 	"gitee.com/taoJie_1/chat/global"
-	"gitee.com/taoJie_1/chat/internal/chatwoot"
 	"gitee.com/taoJie_1/chat/model/common"
 	"gitee.com/taoJie_1/chat/model/db"
+	"gitee.com/taoJie_1/chat/pkg/chatwoot"
 	"github.com/jmoiron/sqlx"
 	"golang.org/x/sync/errgroup"
 )
@@ -21,7 +21,7 @@ func (m *Manager) KeywordReloader() error {
 	var err error
 
 	// 从Chatwoot API获取数据
-	responses, err := global.ChatwootClient.GetCannedResponses()
+	responses, err := global.ChatwootService.GetCannedResponses()
 	if err != nil {
 		return fmt.Errorf("从Chatwoot获取预设回复失败: %w", err)
 	}
@@ -45,6 +45,7 @@ func (m *Manager) KeywordReloader() error {
 
 		// 匹配前缀
 		if strings.HasPrefix(resp.ShortCode, global.Config.Ai.SemanticPrefix) {
+			//加入"精确匹配"和"向量化"
 			keyword := strings.TrimSpace(strings.TrimPrefix(resp.ShortCode, global.Config.Ai.SemanticPrefix))
 			if keyword == "" {
 				continue
@@ -61,15 +62,15 @@ func (m *Manager) KeywordReloader() error {
 			keywordsToEmbed = append(keywordsToEmbed, keyword)
 
 			//为存储向量数据准备
-			allSemanticIDs = append(allSemanticIDs, fmt.Sprintf("cw_canned_%d", resp.Id))
+			allSemanticIDs = append(allSemanticIDs, fmt.Sprintf("%s%d", dao.CannedResponseVectorIDPrefix, resp.Id))
 
-		} else if global.Config.Ai.ExactPrefix == "" || strings.HasPrefix(resp.ShortCode, global.Config.Ai.ExactPrefix) {
+		} else if global.Config.Ai.ExactPrefix == "" || strings.HasPrefix(resp.ShortCode, global.Config.Ai.SemanticPrefix) {
+			// 加入"精确匹配"
 			keyword := strings.TrimSpace(strings.TrimPrefix(resp.ShortCode, global.Config.Ai.SemanticPrefix))
 			if keyword == "" {
 				continue
 			}
 			resp.ShortCode = strings.ToLower(keyword)
-			// 加入精确匹配列表
 			exactMatchRules = append(exactMatchRules, resp)
 		}
 	}

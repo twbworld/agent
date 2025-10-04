@@ -25,15 +25,16 @@ type Llm struct {
 	EmbeddingDim int64  `json:"embedding_dim" mapstructure:"embedding_dim" yaml:"embedding_dim"`
 }
 
-type Milvus struct {
+type VectorDb struct {
 	Url            string `json:"url" mapstructure:"url" yaml:"url"`
 	Auth           string `json:"auth" mapstructure:"auth" yaml:"auth"`
 	CollectionName string `json:"collection_name" mapstructure:"collection_name" yaml:"collection_name"`
 }
 
 type Ai struct {
-	MaxPromptLength  uint     `json:"max_prompt_length" mapstructure:"max_prompt_length" yaml:"max_prompt_length"`
-	SemanticPrefix   string   `json:"semantic_prefix" mapstructure:"semantic_prefix" yaml:"semantic_prefix"`
-	ExactPrefix      string   `json:"exact_prefix" mapstructure:"exact_prefix" yaml:"exact_prefix"`
-	TransferKeywords []string `json:"transfer_keywords" mapstructure:"transfer_keywords" yaml:"transfer_keywords"`
+	MaxPromptLength    uint     `json:"max_prompt_length" mapstructure:"max_prompt_length" yaml:"max_prompt_length"`
+	MaxShortCodeLength uint     `json:"max_short_code_length" mapstructure:"max_short_code_length" yaml:"max_short_code_length"`
+	SemanticPrefix     string   `json:"semantic_prefix" mapstructure:"semantic_prefix" yaml:"semantic_prefix"`
+	ExactPrefix        string   `json:"exact_prefix" mapstructure:"exact_prefix" yaml:"exact_prefix"`
+	TransferKeywords   []string `json:"transfer_keywords" mapstructure:"transfer_keywords" yaml:"transfer_keywords"`
 }

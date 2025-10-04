@@ -7,8 +7,6 @@ import (
 	"gitee.com/taoJie_1/chat/initialize"
 	initGlobal "gitee.com/taoJie_1/chat/initialize/global"
 	"gitee.com/taoJie_1/chat/initialize/system"
-	"gitee.com/taoJie_1/chat/internal/embedding"
-	pkgEmbedding "gitee.com/taoJie_1/chat/pkg/embedding"
 	"gitee.com/taoJie_1/chat/task"
 )
 
@@ -26,11 +24,8 @@ func main() {
 		}
 	}()
 
-	var embeddingService pkgEmbedding.Service
-	if global.LlmEmbedding != nil {
-		embeddingService = embedding.NewClient(global.LlmEmbedding, global.Config.LlmEmbedding.Model)
-	}
-	taskManager := task.NewManager(embeddingService)
+	// 直接使用 global.EmbeddingService 创建 taskManager
+	taskManager := task.NewManager(global.EmbeddingService)
 
 	switch initGlobal.Act {
 	case "":

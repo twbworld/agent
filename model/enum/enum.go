@@ -47,14 +47,13 @@ const (
 	TransferToHuman6 TransferToHuman = "金额过大[转人工]"
 )
 
-// ChatwootWebhook defines constants for Chatwoot webhook payload values.
 type ChatwootWebhook string
 
 const (
-	// MessageTypeIncoming represents a new message from the contact.
+	// 来自联系人的新消息。
 	MessageTypeIncoming ChatwootWebhook = "incoming"
-	// MessageTypeOutgoing represents a message sent from the application.
+	// 从应用程序发送的消息。
 	MessageTypeOutgoing ChatwootWebhook = "outgoing"
-	// SenderTypeContact represents the end-user in the conversation.
+	// 对话中的最终用户。
 	SenderTypeContact ChatwootWebhook = "contact"
 )

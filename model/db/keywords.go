@@ -1,6 +1,6 @@
 package db
 
-import "gitee.com/taoJie_1/chat/internal/chatwoot"
+import "gitee.com/taoJie_1/chat/pkg/chatwoot"
 
 type Keywords struct {
 	BaseField

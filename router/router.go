@@ -41,6 +41,9 @@ func Start(ginServer *gin.Engine) {
 		// ctx.Redirect(http.StatusMovedPermanently, "/404.html")
 	})
 
-	ginServer.POST("chat", controller.Api.UserApiGroup.ChatApi.HandleChat)
+	v1 := ginServer.Group("api/v1")
+	{
+		v1.POST("/chat", controller.Api.UserApiGroup.ChatApi.HandleChat)
+	}
 
 }

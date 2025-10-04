@@ -3,6 +3,7 @@ package user
 import (
 	"context"
 	"github.com/gin-gonic/gin"
+	"unicode/utf8"
 
 	"gitee.com/taoJie_1/chat/global"
 	"gitee.com/taoJie_1/chat/model/common"
@@ -16,6 +17,21 @@ func (d *ChatApi) HandleChat(ctx *gin.Context) {
 	var req common.ChatRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		common.Fail(ctx, "参数无效")
+		return
+	}
+
+	// 调用验证器验证请求
+	if err := service.Service.UserServiceGroup.Validator.ValidatorChatRequest(&req); err != nil {
+		common.Fail(ctx, err.Error())
+		return
+	}
+
+	// 提示词长度校验
+	if utf8.RuneCountInString(req.Content) > int(global.Config.Ai.MaxPromptLength) {
+		global.Log.Warnf("用户 %d 提问内容过长，已转人工", req.Conversation.ConversationID)
+		// 触发转人工
+		_ = service.Service.UserServiceGroup.ActionService.TransferToHuman(req.Conversation.ConversationID, enum.TransferToHuman3)
+		common.Fail(ctx, "提问内容过长，已为您转接人工客服")
 		return
 	}
 
@@ -41,8 +57,6 @@ func (d *ChatApi) processMessageAsync(ctx context.Context, req common.ChatReques
 		}
 	}()
 
-	// ValidatorChatRequest
-
 	// 关键词匹配和预设回复
 	answer, isAction, err := service.Service.UserServiceGroup.ActionService.CannedResponses(&req)
 	if err != nil {
@@ -50,17 +64,17 @@ func (d *ChatApi) processMessageAsync(ctx context.Context, req common.ChatReques
 		_ = service.Service.UserServiceGroup.ActionService.TransferToHuman(req.Conversation.ConversationID, enum.TransferToHuman2)
 		return
 	}
-
 	if isAction {
 		// 动作已执行（如转人工），流程结束
 		return
 	}
-
 	if answer != "" {
 		// 匹配到预设回复，直接发送消息
 		service.Service.UserServiceGroup.ActionService.SendMessage(req.Conversation.ConversationID, answer)
 		return
 	}
+
+	//....这里缺少查向量数据库的逻辑?并把向量详细传给LLM?
 
 	// 告诉用户“机器人正在输入中...”
 	service.Service.UserServiceGroup.ActionService.ToggleTyping(req.Conversation.ConversationID, true)
@@ -83,5 +97,5 @@ func (d *ChatApi) processMessageAsync(ctx context.Context, req common.ChatReques
 
 	// 如果LLM没有返回任何内容，也可能是一个需要转人工的情况
 	global.Log.Warnf("[processMessageAsync] LLM返回空回复 %d", req.Conversation.ConversationID)
-	_ = service.Service.UserServiceGroup.ActionService.TransferToHuman(req.Conversation.ConversationID, enum.TransferToHuman5) // AI无法处理
+	_ = service.Service.UserServiceGroup.ActionService.TransferToHuman(req.Conversation.ConversationID, enum.TransferToHuman5)
 }

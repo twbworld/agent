@@ -10,7 +10,6 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -173,46 +172,4 @@ func ReadyFile(fileExt ...string) (string, string) {
 	}
 
 	return filepath.Join(global.Config.StaticDir, time.Now().In(global.Tz).Format("2006/01/")) + "/", Hash(strconv.FormatInt(time.Now().UnixNano()+n.Int64(), 10))[:10] + ext
-}
-
-// 时间戳按日期分组; 例: {[1707100000,1707100000], [170720000]}
-func UnixGroup(times []int) [][]int {
-	if len(times) == 0 {
-		return [][]int{}
-	}
-	dateTime, tk := make(map[int][]int), make([]int, 0, len(times)) //用于替map做排序
-	for _, val := range times {
-		if val < 1 {
-			continue
-		}
-		dt := time.Unix(int64(val), 0).In(global.Tz)
-		d := int(time.Date(dt.Year(), dt.Month(), dt.Day(), 0, 0, 0, 0, global.Tz).Unix())
-		if _, ok := dateTime[d]; !ok {
-			dateTime[d], tk = make([]int, 0, len(times)), append(tk, d)
-		}
-		dateTime[d] = append(dateTime[d], val)
-	}
-	if len(dateTime) == 0 {
-		return [][]int{}
-	}
-	sort.Ints(tk)
-	unixGroup := make([][]int, 0, len(tk))
-	for _, v := range tk {
-		sort.Ints(dateTime[v])
-		unixGroup = append(unixGroup, dateTime[v])
-	}
-
-	return unixGroup
-}
-
-// 打散时间段(粒度为1小时) ; 如: "1-4点" 转为 ["1点", "2点", "3点"] 三个时间段
-func SpreadPeriodToHour[T timeNumber](start, end T) []T {
-	add := T(3600)
-	res := make([]T, 0, (end-start)/add+1)
-	for start < end {
-		//这不使用"<=", 不算最后的时间戳,是因为: 往后的一个时间戳值,代表当前时间戳的后一小时, 而不是当前秒
-		res = append(res, start)
-		start += add
-	}
-	return res
 }

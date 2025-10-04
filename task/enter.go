@@ -8,7 +8,7 @@ type Manager struct {
 	embeddingService embedding.Service
 }
 
-// NewManager 创建一个新的任务管理器
+// 任务管理器
 func NewManager(embeddingService embedding.Service) *Manager {
 	return &Manager{
 		embeddingService: embeddingService,

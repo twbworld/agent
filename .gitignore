@@ -70,7 +70,6 @@ ehthumbs_vista.db
 /jspm_packages
 /bower_components
 .eslintcache
-.env
 /config.yaml
 /*.db
 

@@ -8,12 +8,15 @@ import (
 	"gitee.com/taoJie_1/chat/model/enum"
 )
 
+type ILlmService interface {
+	NewChat(ctx context.Context, param *common.ChatRequest) (string, error)
+}
+
 type LlmService struct {
 }
 
 func NewLlmService() *LlmService {
-	return &LlmService{
-	}
+	return &LlmService{}
 }
 
 // 负责业务层面的决策，例如决定使用哪个模型、哪个Prompt

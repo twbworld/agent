@@ -8,9 +8,9 @@ import (
 
 	"gitee.com/taoJie_1/chat/dao"
 	"gitee.com/taoJie_1/chat/global"
+	"gitee.com/taoJie_1/chat/internal/chatwoot"
 	"gitee.com/taoJie_1/chat/model/common"
 	"gitee.com/taoJie_1/chat/model/db"
-	"gitee.com/taoJie_1/chat/pkg/chatwoot"
 	"github.com/jmoiron/sqlx"
 	"golang.org/x/sync/errgroup"
 )

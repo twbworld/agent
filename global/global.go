@@ -4,10 +4,10 @@ import (
 	"sync"
 	"time"
 
+	"gitee.com/taoJie_1/chat/internal/chatwoot"
+	"gitee.com/taoJie_1/chat/internal/embedding"
+	"gitee.com/taoJie_1/chat/internal/llm"
 	"gitee.com/taoJie_1/chat/model/config"
-	"gitee.com/taoJie_1/chat/pkg/chatwoot"
-	"gitee.com/taoJie_1/chat/pkg/embedding"
-	"gitee.com/taoJie_1/chat/pkg/llm"
 	"github.com/sirupsen/logrus"
 )
 

@@ -74,12 +74,24 @@ func (d *ChatApi) processMessageAsync(ctx context.Context, req common.ChatReques
 		return
 	}
 
-	//....这里缺少查向量数据库的逻辑?并把向量详细传给LLM?
+	// 向量数据库查询高相似度回复
+	vectorAnswer, similarity, err := service.Service.UserServiceGroup.VectorService.Search(req.Content)
+	if err != nil {
+		// 只记录日志，不中断流程，因为后面还有LLM作为兜底
+		global.Log.Errorf("[processMessageAsync] 向量数据库搜索错误: %v", err)
+	}
+	// 如果相似度高于阈值，则直接回复
+	if similarity >= global.Config.Ai.VectorSimilarityThreshold {
+		service.Service.UserServiceGroup.ActionService.SendMessage(req.Conversation.ConversationID, vectorAnswer)
+		return
+	}
 
 	// 告诉用户“机器人正在输入中...”
-	service.Service.UserServiceGroup.ActionService.ToggleTyping(req.Conversation.ConversationID, true)
+	go service.Service.UserServiceGroup.ActionService.ToggleTyping(req.Conversation.ConversationID, true)
 	// 在完成后,关闭“输入中”状态
-	defer service.Service.UserServiceGroup.ActionService.ToggleTyping(req.Conversation.ConversationID, false)
+	defer func() {
+		go service.Service.UserServiceGroup.ActionService.ToggleTyping(req.Conversation.ConversationID, false)
+	}()
 
 	// 调用LLM服务获取回复
 	llmAnswer, err := service.Service.UserServiceGroup.LlmService.NewChat(ctx, &req)
@@ -89,13 +101,12 @@ func (d *ChatApi) processMessageAsync(ctx context.Context, req common.ChatReques
 		return
 	}
 
-	// 确保LLM有返回内容
-	if llmAnswer != "" {
-		service.Service.UserServiceGroup.ActionService.SendMessage(req.Conversation.ConversationID, llmAnswer)
+	if llmAnswer == "" {
+		// 如果LLM没有返回任何内容，也可能是一个需要转人工的情况
+		global.Log.Warnf("[processMessageAsync] LLM返回空回复 %d", req.Conversation.ConversationID)
+		_ = service.Service.UserServiceGroup.ActionService.TransferToHuman(req.Conversation.ConversationID, enum.TransferToHuman5)
 		return
 	}
 
-	// 如果LLM没有返回任何内容，也可能是一个需要转人工的情况
-	global.Log.Warnf("[processMessageAsync] LLM返回空回复 %d", req.Conversation.ConversationID)
-	_ = service.Service.UserServiceGroup.ActionService.TransferToHuman(req.Conversation.ConversationID, enum.TransferToHuman5)
+	service.Service.UserServiceGroup.ActionService.SendMessage(req.Conversation.ConversationID, llmAnswer)
 }

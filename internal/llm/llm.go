@@ -7,7 +7,6 @@ import (
 
 	"gitee.com/taoJie_1/chat/model/config"
 	"gitee.com/taoJie_1/chat/model/enum"
-	"gitee.com/taoJie_1/chat/pkg/llm"
 	"github.com/sashabaranov/go-openai"
 	"github.com/sirupsen/logrus"
 )
@@ -19,8 +18,12 @@ type client struct {
 	llmConfigs []config.Llm
 }
 
+type Service interface {
+	ChatCompletion(ctx context.Context, size enum.LlmSize, prompt enum.SystemPrompt, content string) (string, error)
+}
+
 // NewClient 创建一个新的LLM客户端实例，并通过依赖注入初始化
-func NewClient(log *logrus.Logger, clients map[enum.LlmSize]*openai.Client, configs []config.Llm) llm.Service {
+func NewClient(log *logrus.Logger, clients map[enum.LlmSize]*openai.Client, configs []config.Llm) Service {
 	return &client{
 		log:        log,
 		llmClients: clients,

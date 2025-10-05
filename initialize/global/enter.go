@@ -151,4 +151,7 @@ func handleConfig(c *config.Config) {
 	if len(c.Ai.TransferKeywords) == 0 {
 		c.Ai.TransferKeywords = []string{"人工客服", "转人工"}
 	}
+	if c.Ai.VectorSimilarityThreshold == 0 {
+		c.Ai.VectorSimilarityThreshold = 0.9
+	}
 }

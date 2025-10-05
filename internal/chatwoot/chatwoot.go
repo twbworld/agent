@@ -9,9 +9,23 @@ import (
 	"time"
 
 	"gitee.com/taoJie_1/chat/model/enum"
-	pkgchatwoot "gitee.com/taoJie_1/chat/pkg/chatwoot"
 	"github.com/sirupsen/logrus"
 )
+
+type CannedResponse struct {
+	Id        int    `json:"id"`
+	AccountId int    `json:"account_id"`
+	ShortCode string `json:"short_code"`
+	Content   string `json:"content"`
+}
+
+type Service interface {
+	GetCannedResponses() ([]CannedResponse, error)
+	CreatePrivateNote(conversationID uint, content string) error
+	ToggleConversationStatus(conversationID uint) error
+	ToggleTypingStatus(conversationID uint, status string) error
+	CreateMessage(conversationID uint, content string) error
+}
 
 // TransferToHumanRequest 定义了转人工API的请求体
 type TransferToHumanRequest struct {
@@ -30,7 +44,7 @@ type Client struct {
 }
 
 // NewClient 创建一个新的Chatwoot客户端实例
-func NewClient(baseURL string, accountID int, apiToken string, logger *logrus.Logger) pkgchatwoot.Service {
+func NewClient(baseURL string, accountID int, apiToken string, logger *logrus.Logger) Service {
 	return &Client{
 		BaseURL:   baseURL,
 		AccountID: accountID,
@@ -43,7 +57,7 @@ func NewClient(baseURL string, accountID int, apiToken string, logger *logrus.Lo
 }
 
 // 获取所有的预设回复
-func (c *Client) GetCannedResponses() ([]pkgchatwoot.CannedResponse, error) {
+func (c *Client) GetCannedResponses() ([]CannedResponse, error) {
 	url := fmt.Sprintf("%s/api/v1/accounts/%d/canned_responses", c.BaseURL, c.AccountID)
 
 	req, err := http.NewRequest("GET", url, nil)
@@ -70,7 +84,7 @@ func (c *Client) GetCannedResponses() ([]pkgchatwoot.CannedResponse, error) {
 		return nil, fmt.Errorf("读取响应体失败: %w", err)
 	}
 
-	var responses []pkgchatwoot.CannedResponse
+	var responses []CannedResponse
 	if err := json.Unmarshal(body, &responses); err != nil {
 		return nil, fmt.Errorf("解析JSON响应失败: %w", err)
 	}

@@ -3,7 +3,6 @@ package embedding
 import (
 	"context"
 	"fmt"
-	"gitee.com/taoJie_1/chat/pkg/embedding"
 	"github.com/sashabaranov/go-openai"
 )
 
@@ -12,7 +11,11 @@ type client struct {
 	modelName    string
 }
 
-func NewClient(openAIClient *openai.Client, modelName string) embedding.Service {
+type Service interface {
+	CreateEmbeddings(ctx context.Context, texts []string) ([][]float32, error)
+}
+
+func NewClient(openAIClient *openai.Client, modelName string) Service {
 	return &client{
 		openAIClient: openAIClient,
 		modelName:    modelName,

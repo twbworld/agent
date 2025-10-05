@@ -1,12 +1,21 @@
 package user
 
 import (
+	"context"
 	"strings"
 
 	"gitee.com/taoJie_1/chat/global"
 	"gitee.com/taoJie_1/chat/model/common"
 	"gitee.com/taoJie_1/chat/model/enum"
+	"golang.org/x/sync/errgroup"
 )
+
+type IActionService interface {
+	TransferToHuman(ConversationID uint, remark enum.TransferToHuman) error
+	ToggleTyping(conversationID uint, status bool)
+	SendMessage(conversationID uint, content string)
+	CannedResponses(chatRequest *common.ChatRequest) (string, bool, error)
+}
 
 type ActionService struct {
 	transferKeywords map[string]struct{}
@@ -27,16 +36,29 @@ func NewActionService() *ActionService {
 
 // 转接人工客服
 func (d *ActionService) TransferToHuman(ConversationID uint, remark enum.TransferToHuman) error {
+	g, _ := errgroup.WithContext(context.Background())
+
+	// 创建私信备注
 	if remark != "" {
-		// 先创建私信备注
-		if err := global.ChatwootService.CreatePrivateNote(ConversationID, string(remark)); err != nil {
-			global.Log.Warnf("[action]为会话 %d 创建转人工备注失败: %v", ConversationID, err)
-		}
+		g.Go(func() error {
+			if err := global.ChatwootService.CreatePrivateNote(ConversationID, string(remark)); err != nil {
+				global.Log.Warnf("[action]为会话 %d 创建转人工备注失败: %v", ConversationID, err)
+			}
+			return nil
+		})
 	}
 
-	// 将会话状态切换为 open
-	if err := global.ChatwootService.ToggleConversationStatus(ConversationID); err != nil {
-		global.Log.Errorf("[action]转接会d %d 至人工客服失败: %v", ConversationID, err)
+	// 切换会话状态
+	g.Go(func() error {
+		if err := global.ChatwootService.ToggleConversationStatus(ConversationID); err != nil {
+			global.Log.Errorf("[action]转接会话 %d 至人工客服失败: %v", ConversationID, err)
+			return err
+		}
+		return nil
+	})
+
+	// 等待所有任务完成，并返回遇到的第一个错误
+	if err := g.Wait(); err != nil {
 		return err
 	}
 

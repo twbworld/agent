@@ -72,7 +72,7 @@ func (d *RagDb) CleanUpStaleEntries(ctx context.Context, activeIDs []string) (in
 	// 2. 找出需要删除的ID
 	activeIDSet := make(map[string]struct{}, len(activeIDs))
 	for _, id := range activeIDs {
-		activeIDSet[id] = struct{}{} 
+		activeIDSet[id] = struct{}{}
 	}
 
 	var idsToDelete []string
@@ -94,4 +94,8 @@ func (d *RagDb) CleanUpStaleEntries(ctx context.Context, activeIDs []string) (in
 	fmt.Printf("INFO: Deleting %d stale documents from rag DB: %v\n", len(idsToDelete), idsToDelete)
 
 	return len(idsToDelete), nil
+}
+
+func (d *RagDb) GetSimilarContent(query string) (string, float32, error) {
+	return "", float32(1), nil
 }

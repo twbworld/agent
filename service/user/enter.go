@@ -1,15 +1,17 @@
 package user
 
 type ServiceGroup struct {
-	Validator
-	ActionService
-	LlmService
+	ActionService IActionService
+	LlmService    ILlmService
+	VectorService IVectorService
+	Validator     IValidator
 }
 
-// NewServiceGroup 创建并返回一个完整的、已初始化的用户服务组
 func NewServiceGroup() ServiceGroup {
 	return ServiceGroup{
-		ActionService: *NewActionService(),
-		LlmService:    *NewLlmService(),
+		ActionService: NewActionService(),
+		LlmService:    NewLlmService(),
+		VectorService: NewVectorService(),
+		Validator:     &Validator{},
 	}
 }

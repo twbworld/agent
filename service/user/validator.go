@@ -6,6 +6,10 @@ import (
 	"strings"
 )
 
+type IValidator interface {
+	ValidatorChatRequest(data *common.ChatRequest) error
+}
+
 type Validator struct{}
 
 func (v *Validator) ValidatorChatRequest(data *common.ChatRequest) error {

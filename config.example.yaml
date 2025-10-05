@@ -75,7 +75,7 @@ vector_db:
 ai:
   # 提示词长度限制
   max_prompt_length: 1000
-  # 设置用于匹配的短词长度限制
+  # 同步Chatwoot快捷回复时, 对 short_code 字段的长度限制
   max_short_code_length: 255
   # 关键字前缀出现该值,则加入到向量数据库中做语义匹配
   semantic_prefix: "ai@"
@@ -85,3 +85,5 @@ ai:
   transfer_keywords:
     - "人工客服"
     - "转人工"
+  # 向量搜索结果的相似度阈值(0-1), 高于此阈值才直接回复
+  vector_similarity_threshold: 0.9

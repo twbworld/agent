@@ -5,12 +5,12 @@
 # ide
 .idea/
 .project/
-.vscode/
-.vs/
+.vscode/*
 !.vscode/settings.json
 !.vscode/tasks.json
 !.vscode/launch.json
 !.vscode/extensions.json
+.vs/
 *.tmlanguage.cache
 *.tmPreferences.cache
 *.stTheme.cache
@@ -22,7 +22,6 @@ vendor/
 _vendor/
 *.ipr
 *.iml
-！
 
 #js
 node_modules/

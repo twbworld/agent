@@ -10,9 +10,11 @@ import (
 	"gitee.com/taoJie_1/chat/initialize/system"
 	"gitee.com/taoJie_1/chat/task"
 	"golang.org/x/sync/errgroup"
+	"time"
 )
 
 func main() {
+	startTime := time.Now()
 	g := initGlobal.New()
 	if err := g.InitLog(); err != nil {
 		panic(fmt.Sprintf("初始化日志失败[fbvk89]: %v", err))
@@ -53,7 +55,7 @@ func main() {
 
 	switch initGlobal.Act {
 	case "":
-		initialize.Start(taskManager)
+		initialize.Start(taskManager, startTime)
 	case "keyword":
 		if err := taskManager.KeywordReloader(); err == nil {
 			fmt.Println("...执行成功")

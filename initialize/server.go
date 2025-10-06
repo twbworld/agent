@@ -32,7 +32,7 @@ func InitializeLogger() {
 	gin.DisableConsoleColor()                                                           //将日志写入文件时不需要控制台颜色
 }
 
-func Start(taskManager *task.Manager) {
+func Start(taskManager *task.Manager, startTime time.Time) {
 	sys := system.Start(taskManager)
 	defer sys.Stop()
 
@@ -45,7 +45,7 @@ func Start(taskManager *task.Manager) {
 	//协程启动服务
 	go startServer()
 
-	logStartupInfo()
+	logStartupInfo(startTime)
 
 	waitForShutdown()
 }
@@ -77,11 +77,12 @@ func startServer() {
 }
 
 // 记录启动信息
-func logStartupInfo() {
+func logStartupInfo(startTime time.Time) {
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
+	duration := time.Since(startTime)
 
-	global.Log.Infof("已启动, version: %s, port: %s, pid: %d, mem: %gMiB", runtime.Version(), global.Config.GinAddr, syscall.Getpid(), utils.NumberFormat(float32(m.Alloc)/1024/1024))
+	global.Log.Infof("已启动, 耗时: %v, version: %s, port: %s, pid: %d, mem: %gMiB", duration, runtime.Version(), global.Config.GinAddr, syscall.Getpid(), utils.NumberFormat(float32(m.Alloc)/1024/1024))
 
 }
 

@@ -16,6 +16,7 @@ import (
 	"gitee.com/taoJie_1/chat/router"
 	"gitee.com/taoJie_1/chat/service"
 	"gitee.com/taoJie_1/chat/service/admin"
+	"gitee.com/taoJie_1/chat/service/common"
 	"gitee.com/taoJie_1/chat/service/user"
 	"gitee.com/taoJie_1/chat/utils"
 	"github.com/gin-gonic/gin"
@@ -38,6 +39,7 @@ func Start(taskManager *task.Manager, startTime time.Time) {
 
 	system.Load(taskManager)
 
+	service.Service.CommonServiceGroup = common.NewServiceGroup()
 	service.Service.UserServiceGroup = user.NewServiceGroup()
 	service.Service.AdminServiceGroup = admin.NewServiceGroup()
 
@@ -80,9 +82,8 @@ func startServer() {
 func logStartupInfo(startTime time.Time) {
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
-	duration := time.Since(startTime)
 
-	global.Log.Infof("已启动, 耗时: %v, version: %s, port: %s, pid: %d, mem: %gMiB", duration, runtime.Version(), global.Config.GinAddr, syscall.Getpid(), utils.NumberFormat(float32(m.Alloc)/1024/1024))
+	global.Log.Infof("已启动, 耗时: %v, version: %s, port: %s, pid: %d, mem: %gMiB", time.Since(startTime), runtime.Version(), global.Config.GinAddr, syscall.Getpid(), utils.NumberFormat(float32(m.Alloc)/1024/1024))
 
 }
 

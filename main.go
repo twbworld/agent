@@ -15,8 +15,8 @@ import (
 
 func main() {
 	startTime := time.Now()
-	g := initGlobal.New()
-	if err := g.InitLog(); err != nil {
+	gInit := initGlobal.New()
+	if err := gInit.InitLog(); err != nil {
 		panic(fmt.Sprintf("初始化日志失败[fbvk89]: %v", err))
 	}
 
@@ -29,7 +29,7 @@ func main() {
 	eg, _ := errgroup.WithContext(context.Background())
 
 	// 关键任务，失败会终止程序
-	eg.Go(g.InitTz)
+	eg.Go(gInit.InitTz)
 	eg.Go(system.DbStart)
 	eg.Go(initGlobal.InitChatwoot)
 

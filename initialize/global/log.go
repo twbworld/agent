@@ -11,7 +11,7 @@ import (
 	"gitee.com/taoJie_1/chat/global"
 )
 
-func (*GlobalInit) initLog() error {
+func (*GlobalInit) InitLog() error {
 	if err := utils.CreateFile(global.Config.RunLogPath); err != nil {
 		return fmt.Errorf("创建文件错误[oirdtug]: %w", err)
 	}

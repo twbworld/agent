@@ -104,11 +104,15 @@ func (m *mysql) connect() error {
 }
 
 func (*sqlite) version() (t string) {
-	dao.DB.Get(&t, `SELECT sqlite_version()`)
+	if err := dao.DB.Get(&t, `SELECT sqlite_version()`); err != nil {
+		global.Log.Warnf("查询sqlite版本失败: %v", err)
+	}
 	return
 }
 
 func (*mysql) version() (t string) {
-	dao.DB.Get(&t, `SELECT version()`)
+	if err := dao.DB.Get(&t, `SELECT version()`); err != nil {
+		global.Log.Warnf("查询mysql版本失败: %v", err)
+	}
 	return
 }

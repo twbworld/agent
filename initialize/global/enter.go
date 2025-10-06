@@ -71,21 +71,28 @@ func New(configFile ...string) *GlobalInit {
 	return &GlobalInit{}
 }
 
-func (g *GlobalInit) Start() {
-	if err := g.initLog(); err != nil {
-		panic(err)
+func InitChatwoot() error {
+	if err := initChatwoot(); err != nil {
+		global.Log.Warnf("初始化Chatwoot服务失败: %v", err)
+		return err
 	}
-	if err := g.initTz(); err != nil {
-		panic(err)
-	}
+	global.Log.Info("初始化Chatwoot服务成功")
+	return nil
+}
+
+func InitLlm() {
 	if err := initLlm(); err != nil {
 		global.Log.Warnf("初始化LLM服务失败: %v", err)
+	} else {
+		global.Log.Info("初始化LLM服务成功")
 	}
+}
+
+func InitLlmEmbedding() {
 	if err := initLlmEmbedding(); err != nil {
 		global.Log.Warnf("初始化向量化服务失败: %v", err)
-	}
-	if err := initChatwoot(); err != nil {
-		panic(err)
+	} else {
+		global.Log.Info("初始化向量化服务成功")
 	}
 }
 

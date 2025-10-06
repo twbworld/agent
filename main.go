@@ -2,21 +2,21 @@ package main
 
 import (
 	"fmt"
+	"context"
 
 	"gitee.com/taoJie_1/chat/global"
 	"gitee.com/taoJie_1/chat/initialize"
 	initGlobal "gitee.com/taoJie_1/chat/initialize/global"
 	"gitee.com/taoJie_1/chat/initialize/system"
 	"gitee.com/taoJie_1/chat/task"
+	"golang.org/x/sync/errgroup"
 )
 
 func main() {
-	initGlobal.New().Start()
-	initialize.InitializeLogger()
-	if err := system.DbStart(); err != nil {
-		global.Log.Fatalf("连接数据库失败[fbvk89]: %v", err)
+	g := initGlobal.New()
+	if err := g.InitLog(); err != nil {
+		panic(fmt.Sprintf("初始化日志失败[fbvk89]: %v", err))
 	}
-	defer system.DbClose()
 
 	defer func() {
 		if p := recover(); p != nil {
@@ -24,7 +24,31 @@ func main() {
 		}
 	}()
 
-	// 直接使用 global.EmbeddingService 创建 taskManager
+	eg, _ := errgroup.WithContext(context.Background())
+
+	// 关键任务，失败会终止程序
+	eg.Go(g.InitTz)
+	eg.Go(system.DbStart)
+	eg.Go(initGlobal.InitChatwoot)
+
+	// 非关键任务，失败只打印日志，不影响启动
+	eg.Go(func() error {
+		initGlobal.InitLlm()
+		return nil
+	})
+	eg.Go(func() error {
+		initGlobal.InitLlmEmbedding()
+		return nil
+	})
+
+	if err := eg.Wait(); err != nil {
+		global.Log.Fatalf("关键服务初始化失败，程序终止: %v", err)
+	}
+
+	defer system.DbClose()
+
+	initialize.InitializeLogger()
+
 	taskManager := task.NewManager(global.EmbeddingService)
 
 	switch initGlobal.Act {

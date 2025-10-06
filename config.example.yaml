@@ -81,9 +81,9 @@ ai:
   semantic_prefix: "ai@"
   # 关键字前缀出现该值或为空,则做精确匹配
   exact_prefix: ""
+  # 向量搜索结果的相似度阈值(0-1), 高于此阈值才直接回复
+  vector_similarity_threshold: 0.9
   # 用于触发转人工的关键词列表
   transfer_keywords:
     - "人工客服"
     - "转人工"
-  # 向量搜索结果的相似度阈值(0-1), 高于此阈值才直接回复
-  vector_similarity_threshold: 0.9

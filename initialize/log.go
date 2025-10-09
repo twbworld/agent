@@ -1,17 +1,17 @@
-package global
+package initialize
 
 import (
 	"fmt"
 	"io"
 	"os"
 
+	"gitee.com/taoJie_1/chat/global"
 	"gitee.com/taoJie_1/chat/utils"
 	"github.com/sirupsen/logrus"
-
-	"gitee.com/taoJie_1/chat/global"
 )
 
-func (*GlobalInit) InitLog() error {
+// InitLog 初始化logrus日志库
+func (i *Initializer) InitLog() error {
 	if err := utils.CreateFile(global.Config.RunLogPath); err != nil {
 		return fmt.Errorf("创建文件错误[oirdtug]: %w", err)
 	}
@@ -24,6 +24,6 @@ func (*GlobalInit) InitLog() error {
 	if err != nil {
 		return fmt.Errorf("打开文件错误[0atrpf]: %w", err)
 	}
-	global.Log.SetOutput(io.MultiWriter(os.Stdout, runfile)) //同时输出到终端和日志
+	global.Log.SetOutput(io.MultiWriter(os.Stdout, runfile))
 	return nil
 }

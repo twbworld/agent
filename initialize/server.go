@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"gitee.com/taoJie_1/chat/global"
-	"gitee.com/taoJie_1/chat/initialize/system"
 	"gitee.com/taoJie_1/chat/router"
 	"gitee.com/taoJie_1/chat/service"
 	"gitee.com/taoJie_1/chat/service/admin"
@@ -24,7 +23,7 @@ import (
 
 var server *http.Server
 
-func InitializeLogger() {
+func InitLogger() {
 	ginfile, err := os.OpenFile(global.Config.GinLogPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 	if err != nil {
 		global.Log.Fatalf("打开文件错误[fsmk89]: %v", err)
@@ -33,17 +32,14 @@ func InitializeLogger() {
 	gin.DisableConsoleColor()                                                           //将日志写入文件时不需要控制台颜色
 }
 
-func Start(taskManager *task.Manager, startTime time.Time) {
-	sys := system.Start(taskManager)
-	defer sys.Stop()
-
-	system.Load(taskManager)
+func Start(initializer *Initializer, taskManager *task.Manager, startTime time.Time) {
+	initializer.StartSystem(taskManager)
 
 	service.Service.CommonServiceGroup = common.NewServiceGroup()
 	service.Service.UserServiceGroup = user.NewServiceGroup()
 	service.Service.AdminServiceGroup = admin.NewServiceGroup()
 
-	initializeGinServer()
+	initGinServer()
 	//协程启动服务
 	go startServer()
 
@@ -52,7 +48,7 @@ func Start(taskManager *task.Manager, startTime time.Time) {
 	waitForShutdown()
 }
 
-func initializeGinServer() {
+func initGinServer() {
 	mode := gin.ReleaseMode
 	if global.Config.Debug {
 		mode = gin.DebugMode
@@ -83,7 +79,7 @@ func logStartupInfo(startTime time.Time) {
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
 
-	global.Log.Infof("已启动, 耗时: %v, version: %s, port: %s, pid: %d, mem: %gMiB", time.Since(startTime), runtime.Version(), global.Config.GinAddr, syscall.Getpid(), utils.NumberFormat(float32(m.Alloc)/1024/1024))
+	global.Log.Infof("服务已启动, 耗时: %v, Go: %s, 端口: %s, 模式: %s, PID: %d, 内存: %gMiB", time.Since(startTime), runtime.Version(), global.Config.GinAddr, gin.Mode(), syscall.Getpid(), utils.NumberFormat(float32(m.Alloc)/1024/1024))
 
 }
 
@@ -96,7 +92,7 @@ func waitForShutdown() {
 
 	//来到这 证明有关闭指令,将进行平滑优雅关闭服务
 
-	global.Log.Infof("程序关闭中..., port: %s, pid: %d", runtime.Version(), global.Config.GinAddr, syscall.Getpid())
+	global.Log.Infof("程序关闭中..., port: %s, pid: %d", global.Config.GinAddr, syscall.Getpid())
 
 	shutdownServer()
 }

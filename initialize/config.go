@@ -1,20 +1,16 @@
-package global
+package initialize
 
 import (
 	"flag"
 	"fmt"
 	"strings"
 
+	"gitee.com/taoJie_1/chat/global"
+	"gitee.com/taoJie_1/chat/model/config"
 	"github.com/fsnotify/fsnotify"
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/viper"
-
-	"gitee.com/taoJie_1/chat/global"
-	"gitee.com/taoJie_1/chat/model/config"
 )
-
-type GlobalInit struct {
-}
 
 var (
 	Conf string
@@ -26,76 +22,45 @@ func init() {
 	flag.StringVar(&Act, "a", "", `行为,默认为空,即启动服务; "clear": 清除过期数据;`)
 }
 
-func New(configFile ...string) *GlobalInit {
-	var config string
+// New 创建一个新的初始化器，并加载配置文件
+func New() *Initializer {
+	var configPath string
 	if gin.Mode() != gin.TestMode {
-		//避免 单元测试(go test)自动加参数, 导致flag报错
-		flag.Parse() //解析cli命令参数
+		flag.Parse()
 		if Conf != "" {
-			config = Conf
+			configPath = Conf
 		}
 	}
-	if config == "" && len(configFile) > 0 {
-		config = configFile[0]
-	}
-	if config == "" {
-		config = `config.yaml`
+	if configPath == "" {
+		configPath = `config.yaml`
 	}
 
-	// 初始化 viper
 	v := viper.New()
-	v.SetConfigFile(config)
+	v.SetConfigFile(configPath)
 	v.SetConfigType("yaml")
 	if err := v.ReadInConfig(); err != nil {
-		panic("读取配置失败[u9ij]: " + config + err.Error())
+		panic("读取配置失败[u9ij]: " + configPath + err.Error())
 	}
 
-	// 监听配置文件
 	v.WatchConfig()
 	v.OnConfigChange(func(e fsnotify.Event) {
 		fmt.Println("配置文件变化[djiads]: ", e.Name)
 		if err := v.Unmarshal(global.Config); err != nil {
-			if err := v.Unmarshal(global.Config); err != nil {
-				fmt.Println(err)
-			}
+			fmt.Println(err)
 		}
 		handleConfig(global.Config)
 	})
-	// 将配置赋值给全局变量(结构体需要设置mapstructure的tag)
+
 	if err := v.Unmarshal(global.Config); err != nil {
 		panic("出错[dhfal]: " + err.Error())
 	}
 
 	handleConfig(global.Config)
 
-	return &GlobalInit{}
+	return &Initializer{}
 }
 
-func InitChatwoot() error {
-	if err := initChatwoot(); err != nil {
-		global.Log.Warnf("初始化Chatwoot服务失败: %v", err)
-		return err
-	}
-	global.Log.Info("初始化Chatwoot服务成功")
-	return nil
-}
-
-func InitLlm() {
-	if err := initLlm(); err != nil {
-		global.Log.Warnf("初始化LLM服务失败: %v", err)
-	} else {
-		global.Log.Info("初始化LLM服务成功")
-	}
-}
-
-func InitLlmEmbedding() {
-	if err := initLlmEmbedding(); err != nil {
-		global.Log.Warnf("初始化向量化服务失败: %v", err)
-	} else {
-		global.Log.Info("初始化向量化服务成功")
-	}
-}
-
+// handleConfig 处理和设置配置的默认值
 func handleConfig(c *config.Config) {
 	c.StaticDir = strings.TrimRight(c.StaticDir, "/")
 

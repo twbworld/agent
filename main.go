@@ -2,21 +2,17 @@ package main
 
 import (
 	"fmt"
-	"context"
+	"time"
 
 	"gitee.com/taoJie_1/chat/global"
 	"gitee.com/taoJie_1/chat/initialize"
-	initGlobal "gitee.com/taoJie_1/chat/initialize/global"
-	"gitee.com/taoJie_1/chat/initialize/system"
 	"gitee.com/taoJie_1/chat/task"
-	"golang.org/x/sync/errgroup"
-	"time"
 )
 
 func main() {
 	startTime := time.Now()
-	gInit := initGlobal.New()
-	if err := gInit.InitLog(); err != nil {
+	initSvc := initialize.New()
+	if err := initSvc.InitLog(); err != nil {
 		panic(fmt.Sprintf("初始化日志失败[fbvk89]: %v", err))
 	}
 
@@ -26,36 +22,18 @@ func main() {
 		}
 	}()
 
-	eg, _ := errgroup.WithContext(context.Background())
-
-	// 关键任务，失败会终止程序
-	eg.Go(gInit.InitTz)
-	eg.Go(system.DbStart)
-	eg.Go(initGlobal.InitChatwoot)
-
-	// 非关键任务，失败只打印日志，不影响启动
-	eg.Go(func() error {
-		initGlobal.InitLlm()
-		return nil
-	})
-	eg.Go(func() error {
-		initGlobal.InitLlmEmbedding()
-		return nil
-	})
-
-	if err := eg.Wait(); err != nil {
+	if err := initSvc.Run(); err != nil {
 		global.Log.Fatalf("关键服务初始化失败，程序终止: %v", err)
 	}
+	defer initSvc.Close()
 
-	defer system.DbClose()
-
-	initialize.InitializeLogger()
+	initialize.InitLogger()
 
 	taskManager := task.NewManager(global.EmbeddingService)
 
-	switch initGlobal.Act {
+	switch initialize.Act {
 	case "":
-		initialize.Start(taskManager, startTime)
+		initialize.Start(initSvc, taskManager, startTime)
 	case "keyword":
 		if err := taskManager.KeywordReloader(); err == nil {
 			fmt.Println("...执行成功")
@@ -65,5 +43,4 @@ func main() {
 	default:
 		fmt.Println("参数可选: keyword")
 	}
-
 }

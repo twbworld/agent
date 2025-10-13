@@ -5,6 +5,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"unicode/utf8"
 
+	"gitee.com/taoJie_1/chat/dao"
 	"gitee.com/taoJie_1/chat/global"
 	"gitee.com/taoJie_1/chat/model/common"
 	"gitee.com/taoJie_1/chat/model/enum"
@@ -74,15 +75,16 @@ func (d *ChatApi) processMessageAsync(ctx context.Context, req common.ChatReques
 		return
 	}
 
-	// 向量数据库查询高相似度回复
-	vectorAnswer, similarity, err := service.Service.UserServiceGroup.VectorService.Search(req.Content)
+	// 向量数据库查询
+	vectorResults, err := service.Service.UserServiceGroup.VectorService.Search(ctx, req.Content)
 	if err != nil {
 		// 只记录日志，不中断流程，因为后面还有LLM作为兜底
 		global.Log.Errorf("[processMessageAsync] 向量数据库搜索错误: %v", err)
 	}
-	// 如果相似度高于阈值，则直接回复
-	if similarity >= global.Config.Ai.VectorSimilarityThreshold {
-		service.Service.UserServiceGroup.ActionService.SendMessage(req.Conversation.ConversationID, vectorAnswer)
+
+	// 检查是否有足够相似的直接回复
+	if len(vectorResults) > 0 && vectorResults[0].Similarity >= global.Config.Ai.VectorSimilarityThreshold {
+		service.Service.UserServiceGroup.ActionService.SendMessage(req.Conversation.ConversationID, vectorResults[0].Answer)
 		return
 	}
 
@@ -93,8 +95,23 @@ func (d *ChatApi) processMessageAsync(ctx context.Context, req common.ChatReques
 		go service.Service.UserServiceGroup.ActionService.ToggleTyping(req.Conversation.ConversationID, false)
 	}()
 
+	// 准备给LLM的参考资料, 并通过context传递
+	var llmReferenceDocs []dao.SearchResult
+	if len(vectorResults) > 0 {
+		for _, res := range vectorResults {
+			if res.Similarity >= global.Config.Ai.VectorSearchMinSimilarity {
+				llmReferenceDocs = append(llmReferenceDocs, res)
+			}
+		}
+	}
+
+	// 将向量搜索结果放入context中，供LLM服务使用
+	// 注意: LLM服务需要实现从context中读取此值的逻辑
+	type vectorResultsKey struct{}
+	llmCtx := context.WithValue(ctx, vectorResultsKey{}, llmReferenceDocs)
+
 	// 调用LLM服务获取回复
-	llmAnswer, err := service.Service.UserServiceGroup.LlmService.NewChat(ctx, &req)
+	llmAnswer, err := service.Service.UserServiceGroup.LlmService.NewChat(llmCtx, &req)
 	if err != nil {
 		global.Log.Errorf("[processMessageAsync] LLM错误: %v", err)
 		_ = service.Service.UserServiceGroup.ActionService.TransferToHuman(req.Conversation.ConversationID, enum.TransferToHuman2)

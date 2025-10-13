@@ -37,5 +37,7 @@ type Ai struct {
 	SemanticPrefix            string   `json:"semantic_prefix" mapstructure:"semantic_prefix" yaml:"semantic_prefix"`
 	ExactPrefix               string   `json:"exact_prefix" mapstructure:"exact_prefix" yaml:"exact_prefix"`
 	TransferKeywords          []string `json:"transfer_keywords" mapstructure:"transfer_keywords" yaml:"transfer_keywords"`
+	VectorSearchTopK          int      `json:"vector_search_top_k" mapstructure:"vector_search_top_k" yaml:"vector_search_top_k"`
 	VectorSimilarityThreshold float32  `json:"vector_similarity_threshold" mapstructure:"vector_similarity_threshold" yaml:"vector_similarity_threshold"`
+	VectorSearchMinSimilarity float32  `json:"vector_search_min_similarity" mapstructure:"vector_search_min_similarity" yaml:"vector_search_min_similarity"`
 }

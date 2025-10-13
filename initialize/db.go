@@ -42,7 +42,7 @@ func (i *Initializer) dbClose() error {
 	if dao.DB != nil {
 		return dao.DB.Close()
 	}
-	return nil
+	return  nil
 }
 
 func (s *sqlite) connect() error {

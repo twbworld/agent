@@ -17,7 +17,7 @@ var (
 
 type DbGroup struct {
 	KeywordsDb
-	RagDb
+	VectorDb
 }
 
 func Tx(fc func(tx *sqlx.Tx) error) (err error) {

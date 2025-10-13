@@ -66,7 +66,7 @@ llm_embedding:
 # 向量数据库配置
 vector_db:
   # 服务地址
-  url: "http://127.0.0.1:19530"
+  url: "http://127.0.0.1:8000"
   # 认证Token
   auth: ""
   # 集合名称
@@ -81,8 +81,12 @@ ai:
   semantic_prefix: "ai@"
   # 关键字前缀出现该值或为空,则做精确匹配
   exact_prefix: ""
+  # 向量搜索返回的条数
+  vector_search_top_k: 5
   # 向量搜索结果的相似度阈值(0-1), 高于此阈值才直接回复
   vector_similarity_threshold: 0.9
+  # 向量搜索结果的最低相似度阈值(0-1), 低于此阈值则不作为LLM的参考
+  vector_search_min_similarity: 0.7
   # 用于触发转人工的关键词列表
   transfer_keywords:
     - "人工客服"

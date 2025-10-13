@@ -1,7 +1,5 @@
 package db
 
-import "gitee.com/taoJie_1/chat/internal/chatwoot"
-
 type Keywords struct {
 	BaseField
 	ShortCode string `db:"short_code" json:"short_code" info:"关键词"`
@@ -11,10 +9,4 @@ type Keywords struct {
 
 func (Keywords) TableName() string {
 	return `keywords`
-}
-
-// 代表一条完整的关键词规则，用于内部传递
-type KeywordRule struct {
-	chatwoot.CannedResponse
-	Embedding []float32 // 文本向量
 }

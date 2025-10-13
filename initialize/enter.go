@@ -3,6 +3,7 @@ package initialize
 import (
 	"context"
 	"fmt"
+	"io"
 	"time"
 
 	"gitee.com/taoJie_1/chat/global"
@@ -13,7 +14,8 @@ import (
 
 // Initializer 统一管理项目的所有初始化工作
 type Initializer struct {
-	cron *cron.Cron
+	cron          *cron.Cron
+	logFileCloser io.Closer // 用于存储日志文件的关闭器
 }
 
 // Run 并发执行所有核心服务的初始化
@@ -27,11 +29,15 @@ func (i *Initializer) Run() error {
 
 	// 非关键任务，失败只打印日志，不影响启动
 	eg.Go(func() error {
-		i.initLlm()
+		_ = i.initVectorDb()
 		return nil
 	})
 	eg.Go(func() error {
-		i.initLlmEmbedding()
+		_ = i.initLlm()
+		return nil
+	})
+	eg.Go(func() error {
+		_ = i.initLlmEmbedding()
 		return nil
 	})
 
@@ -40,8 +46,22 @@ func (i *Initializer) Run() error {
 
 // Close 优雅地关闭和释放所有资源
 func (i *Initializer) Close() {
-	i.dbClose()
+	if i.vectorDbClose() == nil {
+		global.Log.Info("VectorDb客户端已关闭")
+	}
+	if i.dbClose() == nil {
+		global.Log.Infof("%s已关闭", global.Config.Database.Type)
+	}
 	i.timerStop()
+	_ = i.logClose()
+}
+
+// logClose 关闭或刷新日志组件
+func (i *Initializer) logClose() error {
+	if i.logFileCloser != nil {
+		return i.logFileCloser.Close()
+	}
+	return nil
 }
 
 // StartSystem 启动系统级服务，如定时器和数据加载

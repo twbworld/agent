@@ -25,5 +25,6 @@ func (i *Initializer) InitLog() error {
 		return fmt.Errorf("打开文件错误[0atrpf]: %w", err)
 	}
 	global.Log.SetOutput(io.MultiWriter(os.Stdout, runfile))
+	i.logFileCloser = runfile // 存储文件关闭器
 	return nil
 }

@@ -4,13 +4,11 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
 
 	"gitee.com/taoJie_1/chat/dao"
 	"gitee.com/taoJie_1/chat/global"
 	"gitee.com/taoJie_1/chat/internal/chatwoot"
 	"gitee.com/taoJie_1/chat/model/common"
-	"gitee.com/taoJie_1/chat/model/db"
 	"github.com/jmoiron/sqlx"
 	"golang.org/x/sync/errgroup"
 )
@@ -33,7 +31,7 @@ func (m *Manager) KeywordReloader() error {
 
 	var (
 		exactMatchRules        []chatwoot.CannedResponse //精确匹配
-		semanticRulesToProcess []db.KeywordRule          //语义匹配, 用于向量数据库
+		semanticRulesToProcess []common.KeywordRule      //语义匹配, 用于向量数据库
 		keywordsToEmbed        []string                  //存储向量化的文本
 		allSemanticIDs         []string
 	)
@@ -56,7 +54,7 @@ func (m *Manager) KeywordReloader() error {
 			exactMatchRules = append(exactMatchRules, resp)
 
 			//为文本向量化做准备
-			semanticRulesToProcess = append(semanticRulesToProcess, db.KeywordRule{
+			semanticRulesToProcess = append(semanticRulesToProcess, common.KeywordRule{
 				CannedResponse: resp,
 			})
 			keywordsToEmbed = append(keywordsToEmbed, keyword)
@@ -83,7 +81,7 @@ func (m *Manager) KeywordReloader() error {
 			return fmt.Errorf("批量创建向量失败: %w", err)
 		}
 	}
-	var semanticMatchRules []db.KeywordRule
+	var semanticMatchRules []common.KeywordRule
 	if len(vectors) == len(semanticRulesToProcess) {
 		for i, rule := range semanticRulesToProcess {
 			rule.Embedding = vectors[i]
@@ -93,10 +91,14 @@ func (m *Manager) KeywordReloader() error {
 
 	var g errgroup.Group
 	g.Go(func() error {
-		return handleDb(exactMatchRules)
+		return syncDb(exactMatchRules)
 	})
+	// syncVectorDb 失败仅记录日志，不应阻塞关键词加载
 	g.Go(func() error {
-		return handleRag(semanticMatchRules, allSemanticIDs)
+		if err := syncVectorDb(semanticMatchRules, allSemanticIDs); err != nil {
+			global.Log.Errorf("同步关键词到向量数据库时发生非阻塞错误: %v", err)
+		}
+		return nil // 确保不将错误传递给 errgroup
 	})
 	if err := g.Wait(); err != nil {
 		return err
@@ -106,7 +108,7 @@ func (m *Manager) KeywordReloader() error {
 }
 
 // 数据库处理
-func handleDb(matchRules []chatwoot.CannedResponse) error {
+func syncDb(matchRules []chatwoot.CannedResponse) error {
 	var count int64
 	err := dao.Tx(func(tx *sqlx.Tx) (e error) {
 		// 清空旧数据
@@ -132,16 +134,15 @@ func handleDb(matchRules []chatwoot.CannedResponse) error {
 }
 
 // 向量数据库处理
-func handleRag(Rules []db.KeywordRule, activeIDs []string) error {
-	upsertedCount, err := dao.App.RagDb.UpsertKeywords(context.Background(), Rules)
+func syncVectorDb(Rules []common.KeywordRule, activeIDs []string) error {
+	upsertedCount, err := dao.App.VectorDb.BatchUpsert(context.Background(), Rules)
 	if err != nil {
 		global.Log.Errorln("[gsgf4g]同步关键词到向量数据库失败:", err)
 		return fmt.Errorf("同步关键词到向量数据库失败: %w", err)
 	}
 	global.Log.Printf("成功同步 %d 条语义匹配关键词到向量数据库", upsertedCount)
 
-	// 清理已被删除的旧关键字
-	_, err = dao.App.RagDb.CleanUpStaleEntries(context.Background(), activeIDs)
+	_, err = dao.App.VectorDb.PruneStale(context.Background(), activeIDs)
 	if err != nil {
 		global.Log.Warnf("[gjsf8g]清理向量数据库中过期条目失败: %v", err)
 	}
@@ -155,7 +156,6 @@ func (m *Manager) LoadKeywords() error {
 		err          error
 		keywordslist []common.KeywordsList = make([]common.KeywordsList, 0)
 	)
-	startTime := time.Now()
 
 	if err = dao.App.KeywordsDb.GetKeywordsAllList(&keywordslist); err != nil {
 		return fmt.Errorf("加载Keywords失败: %w", err)
@@ -176,8 +176,7 @@ func (m *Manager) LoadKeywords() error {
 	global.CannedResponses.Data = tempMap
 	global.CannedResponses.Unlock()
 
-	duration := time.Since(startTime)
-	global.Log.Printf("成功加载 %d 条关键词, 耗时: %v", len(tempMap), duration)
+	global.Log.Printf("成功加载 %d 条关键词到内存", len(tempMap))
 
 	return nil
 }

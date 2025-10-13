@@ -7,6 +7,7 @@ import (
 	"gitee.com/taoJie_1/chat/internal/chatwoot"
 	"gitee.com/taoJie_1/chat/internal/embedding"
 	"gitee.com/taoJie_1/chat/internal/llm"
+	"gitee.com/taoJie_1/chat/internal/vector"
 	"gitee.com/taoJie_1/chat/model/config"
 	"github.com/sirupsen/logrus"
 )
@@ -21,6 +22,7 @@ var (
 	ChatwootService  chatwoot.Service
 	EmbeddingService embedding.Service
 	LlmService       llm.Service
+	VectorDb         vector.Service
 )
 
 type CannedResponsesMap struct {

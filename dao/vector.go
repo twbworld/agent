@@ -17,6 +17,13 @@ import (
 // 用于区分不同来源的文档，便于管理和识别
 const CannedResponseVectorIDPrefix = "cw_canned_"
 
+// 向量数据库中元数据的键名
+const (
+	VectorMetadataKeyKeyword  = "keyword"
+	VectorMetadataKeyAnswer   = "answer"
+	VectorMetadataKeySourceID = "source_id"
+)
+
 // SearchResult represents a single item returned from a vector search.
 type SearchResult struct {
 	Answer     string
@@ -43,9 +50,9 @@ func (d *VectorDb) BatchUpsert(ctx context.Context, docs []common.KeywordRule) (
 		documents[i] = vector.Document{
 			ID: fmt.Sprintf("%s%d", CannedResponseVectorIDPrefix, doc.Id),
 			Metadata: map[string]interface{}{
-				"keyword":   doc.CannedResponse.ShortCode,
-				"answer":    doc.CannedResponse.Content,
-				"source_id": int64(doc.Id),
+				VectorMetadataKeyKeyword:  doc.CannedResponse.ShortCode,
+				VectorMetadataKeyAnswer:   doc.CannedResponse.Content,
+				VectorMetadataKeySourceID: int64(doc.Id),
 			},
 			Embedding: doc.Embedding,
 		}
@@ -142,7 +149,7 @@ func (d *VectorDb) Search(ctx context.Context, query string, topK int) ([]Search
 		ctx,
 		chroma.WithQueryEmbeddings(queryEmbedding),
 		chroma.WithNResults(topK),
-		chroma.WithIncludeQuery(chroma.IncludeMetadatas),
+		chroma.WithIncludeQuery(chroma.IncludeMetadatas, chroma.IncludeDistances),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("在向量数据库中查询失败: %w", err)
@@ -150,7 +157,7 @@ func (d *VectorDb) Search(ctx context.Context, query string, topK int) ([]Search
 
 	// 4. 解析并返回结果
 	if qr.CountGroups() == 0 {
-		return nil, sql.ErrNoRows // 使用sql.ErrNoRows表示未找到匹配项
+		return nil, sql.ErrNoRows
 	}
 
 	distancesGroups := qr.GetDistancesGroups()
@@ -173,13 +180,13 @@ func (d *VectorDb) Search(ctx context.Context, query string, topK int) ([]Search
 		distance := distances[i]
 		metadata := metadatas[i]
 
-		answer, ok := metadata.GetString("answer")
+		answer, ok := metadata.GetString(VectorMetadataKeyAnswer)
 		if !ok {
 			global.Log.Warnf("无法从元数据中解析回答: %v", metadata)
 			continue
 		}
 
-		sourceID, ok := metadata.GetFloat("source_id")
+		sourceID, ok := metadata.GetFloat(VectorMetadataKeySourceID)
 		if !ok {
 			global.Log.Warnf("无法从元数据中解析 source_id: %v", metadata)
 			continue

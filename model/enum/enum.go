@@ -25,7 +25,8 @@ const (
 type SystemPrompt string
 
 const (
-	PromptNoThink SystemPrompt = `你是一个简洁、直接的AI助手。请直接提供最终答案，不要包含任何思考步骤、推理过程或解释。`
+	SystemPromptDefault           SystemPrompt = "你是一个AI商城客服助手，请直接回答用户的问题，不要包含任何额外的思考或解释过程。"
+	SystemPromptForCannedResponse SystemPrompt = "你是一个世界级的语言学家和知识库专家。你的任务是根据下面提供的'回答'内容，生成一个最能概括其核心思想的、简洁的'标准问题'。'标准问题'应该像是用户会直接提出的问题。只返回问题本身，不要包含任何额外的前缀、引号或解释，不要包含任何额外的思考或解释过程。"
 )
 
 type LlmSize string

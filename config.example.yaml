@@ -34,7 +34,7 @@ database:
   mysql_password: ""
 chatwoot:
   # Chatwoot部署地址
-  url: "http://127.0.0.1:8080"
+  url: "http://127.0.0.1:3000"
   # 店铺ID
   account_id: 1
   # Chatwoot模型秘钥
@@ -50,7 +50,7 @@ llm:
     # LLM的大小, small|medium|large
     size: "small"
     # 超时时间(秒)
-    timeout: 10
+    timeout: 30
 # 配置向量化模型, 一般使用小模型就好
 llm_embedding:
   # LLM的api地址, "v1"结尾
@@ -87,6 +87,8 @@ ai:
   vector_similarity_threshold: 0.9
   # 向量搜索结果的最低相似度阈值(0-1), 低于此阈值则不作为LLM的参考
   vector_search_min_similarity: 0.7
+  # AI处理(包括精确匹配和向量检索和LLM处理)的超时时间(秒)
+  async_job_timeout: 60
   # 用于触发转人工的关键词列表
   transfer_keywords:
     - "人工客服"

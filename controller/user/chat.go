@@ -2,8 +2,10 @@ package user
 
 import (
 	"context"
-	"github.com/gin-gonic/gin"
+	"time"
 	"unicode/utf8"
+
+	"github.com/gin-gonic/gin"
 
 	"gitee.com/taoJie_1/chat/dao"
 	"gitee.com/taoJie_1/chat/global"
@@ -46,8 +48,13 @@ func (d *ChatApi) HandleChat(ctx *gin.Context) {
 
 	// 避免`req`在HTTP返回后可能被Gin回收。
 	reqCopy := req
-	// 将原始请求的上下文传递给异步处理函数，以便在用户关闭浏览器时取消LLM请求
-	go d.processMessageAsync(ctx.Request.Context(), reqCopy)
+
+	go func() {
+		timeout := time.Duration(global.Config.Ai.AsyncJobTimeout) * time.Second
+		asyncCtx, cancel := context.WithTimeout(context.Background(), timeout)
+		defer cancel()
+		d.processMessageAsync(asyncCtx, reqCopy)
+	}()
 }
 
 func (d *ChatApi) processMessageAsync(ctx context.Context, req common.ChatRequest) {

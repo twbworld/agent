@@ -8,7 +8,6 @@ import (
 
 	"gitee.com/taoJie_1/chat/global"
 	"gitee.com/taoJie_1/chat/internal/vector"
-	"gitee.com/taoJie_1/chat/model/common"
 	chroma "github.com/amikos-tech/chroma-go/pkg/api/v2"
 	"github.com/amikos-tech/chroma-go/pkg/embeddings"
 )
@@ -19,7 +18,7 @@ const CannedResponseVectorIDPrefix = "cw_canned_"
 
 // 向量数据库中元数据的键名
 const (
-	VectorMetadataKeyKeyword  = "keyword"
+	VectorMetadataKeyQuestion = "question"
 	VectorMetadataKeyAnswer   = "answer"
 	VectorMetadataKeySourceID = "source_id"
 )
@@ -35,27 +34,13 @@ type VectorDb struct {
 	CollectionName string
 }
 
-// BatchUpsert 将关键词规则批量插入或更新到向量数据库
-func (d *VectorDb) BatchUpsert(ctx context.Context, docs []common.KeywordRule) (int, error) {
+// BatchUpsert 将文档批量插入或更新到向量数据库
+func (d *VectorDb) BatchUpsert(ctx context.Context, documents []vector.Document) (int, error) {
 	if global.VectorDb == nil {
 		return 0, fmt.Errorf("向量数据库客户端未初始化")
 	}
-	if len(docs) == 0 {
+	if len(documents) == 0 {
 		return 0, nil
-	}
-
-	// 将数据库模型 (common.KeywordRule) 转换为通用的向量文档模型 (vector.Document)
-	documents := make([]vector.Document, len(docs))
-	for i, doc := range docs {
-		documents[i] = vector.Document{
-			ID: fmt.Sprintf("%s%d", CannedResponseVectorIDPrefix, doc.Id),
-			Metadata: map[string]interface{}{
-				VectorMetadataKeyKeyword:  doc.CannedResponse.ShortCode,
-				VectorMetadataKeyAnswer:   doc.CannedResponse.Content,
-				VectorMetadataKeySourceID: int64(doc.Id),
-			},
-			Embedding: doc.Embedding,
-		}
 	}
 
 	err := global.VectorDb.Upsert(ctx, d.CollectionName, documents)
@@ -63,7 +48,7 @@ func (d *VectorDb) BatchUpsert(ctx context.Context, docs []common.KeywordRule) (
 		return 0, fmt.Errorf("批量更新/插入文档到向量数据库失败: %w", err)
 	}
 
-	return len(docs), nil
+	return len(documents), nil
 }
 
 // 清理已被删除的旧关键字

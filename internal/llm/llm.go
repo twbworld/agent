@@ -21,6 +21,7 @@ type client struct {
 type Service interface {
 	ChatCompletion(ctx context.Context, size enum.LlmSize, systemPrompt enum.SystemPrompt, content string, temperature ...float32) (string, error)
 	GetCompletion(ctx context.Context, size enum.LlmSize, systemPrompt enum.SystemPrompt, content string, temperature ...float32) (string, error)
+	GenerateStandardQuestion(ctx context.Context, prompt enum.SystemPrompt, text string) (string, error)
 }
 
 // NewClient 创建一个新的LLM客户端实例，并通过依赖注入初始化
@@ -101,6 +102,11 @@ func (c *client) ChatCompletion(ctx context.Context, size enum.LlmSize, systemPr
 		finalAnswer = parts[0]
 	}
 	return strings.TrimSpace(finalAnswer), nil
+}
+
+// GenerateStandardQuestion 根据输入文本（关键词或内容），使用小模型生成一个标准的、自然的问句
+func (c *client) GenerateStandardQuestion(ctx context.Context, prompt enum.SystemPrompt, text string) (string, error) {
+	return c.GetCompletion(ctx, enum.ModelSmall, prompt, text, 0.2)
 }
 
 // GetCompletion 执行一次性的文本生成任务，通常用于后台任务。

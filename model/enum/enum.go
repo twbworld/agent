@@ -25,8 +25,15 @@ const (
 type SystemPrompt string
 
 const (
-	SystemPromptDefault           SystemPrompt = "你是一个AI商城客服助手，请直接回答用户的问题，不要包含任何额外的思考或解释过程。"
-	SystemPromptForCannedResponse SystemPrompt = "你是一个世界级的语言学家和知识库专家。你的任务是根据下面提供的'回答'内容，生成一个最能概括其核心思想的、简洁的'标准问题'。'标准问题'应该像是用户会直接提出的问题。只返回问题本身，不要包含任何额外的前缀、引号或解释，不要包含任何额外的思考或解释过程。"
+	SystemPromptDefault                SystemPrompt = `你是一个AI商城客服助手，请直接回答用户的问题，不要包含任何额外的思考或解释过程。`
+	SystemPromptGenQuestionFromContent SystemPrompt = `你是一个逆向问题生成AI。请仔细阅读下面提供的“答案”文本，然后生成一个或多个最匹配该答案的、最自然的“用户问题”。
+- 思考：想象一个以简体中文为母语的真实用户，他会问什么样的问题，才能得到这个答案？
+- 风格：问题应该简短、口语化，就像在聊天窗口输入一样。
+- 输出：只输出最终的中文问题，不要包含任何解释、标签或引号。`
+	SystemPromptGenQuestionFromKeyword SystemPrompt = `你是一个专门优化用户查询的AI。请将用户提供的“关键词”或“种子问题”，转换成一个或多个真实用户提问习惯的“标准问题”。
+- 风格：自然、口语化、直接。
+- 目标：生成的问题将用于向量匹配，所以它必须精准地捕捉核心意图。
+- 输出：只输出最终的中文问题，不要包含任何解释、标签或引号。`
 )
 
 type LlmSize string

@@ -19,8 +19,8 @@ type client struct {
 }
 
 type Service interface {
-	ChatCompletion(ctx context.Context, size enum.LlmSize, systemPrompt enum.SystemPrompt, content string) (string, error)
-	GetCompletion(ctx context.Context, size enum.LlmSize, systemPrompt enum.SystemPrompt, content string) (string, error)
+	ChatCompletion(ctx context.Context, size enum.LlmSize, systemPrompt enum.SystemPrompt, content string, temperature ...float32) (string, error)
+	GetCompletion(ctx context.Context, size enum.LlmSize, systemPrompt enum.SystemPrompt, content string, temperature ...float32) (string, error)
 }
 
 // NewClient 创建一个新的LLM客户端实例，并通过依赖注入初始化
@@ -32,33 +32,33 @@ func NewClient(log *logrus.Logger, clients map[enum.LlmSize]*openai.Client, conf
 	}
 }
 
-// getModelName 是一个内部辅助函数，用于根据大小获取模型名称
-func (c *client) getModelName(size enum.LlmSize) string {
-	for _, cfg := range c.llmConfigs {
-		if enum.LlmSize(cfg.Size) == size {
-			return cfg.Model
+// getLlmConfig 是一个内部辅助函数，用于根据大小获取模型配置
+func (c *client) getLlmConfig(size enum.LlmSize) *config.Llm {
+	for i := range c.llmConfigs {
+		if enum.LlmSize(c.llmConfigs[i].Size) == size {
+			return &c.llmConfigs[i]
 		}
 	}
 	// 如果没找到指定大小的模型，则默认使用第一个配置的模型
 	if len(c.llmConfigs) > 0 {
-		return c.llmConfigs[0].Model
+		return &c.llmConfigs[0]
 	}
-	return ""
+	return nil
 }
 
 // ChatCompletion 调用LLM进行实时对话
-func (c *client) ChatCompletion(ctx context.Context, size enum.LlmSize, systemPrompt enum.SystemPrompt, content string) (string, error) {
+func (c *client) ChatCompletion(ctx context.Context, size enum.LlmSize, systemPrompt enum.SystemPrompt, content string, temperature ...float32) (string, error) {
 	llmClient, ok := c.llmClients[size]
 	if !ok {
 		return "", errors.New("未找到指定大小的LLM客户端实例")
 	}
-	modelName := c.getModelName(size)
-	if modelName == "" {
-		return "", errors.New("未找到指定的LLM客户端名称")
+	llmConfig := c.getLlmConfig(size)
+	if llmConfig == nil || llmConfig.Model == "" {
+		return "", errors.New("未找到指定的LLM客户端配置")
 	}
 
 	req := openai.ChatCompletionRequest{
-		Model: modelName,
+		Model: llmConfig.Model,
 		Messages: []openai.ChatCompletionMessage{
 			{
 				Role:    openai.ChatMessageRoleSystem,
@@ -69,6 +69,13 @@ func (c *client) ChatCompletion(ctx context.Context, size enum.LlmSize, systemPr
 				Content: content,
 			},
 		},
+	}
+
+	// 优先使用传入的temperature参数，其次是配置文件中的，最后使用LLM默认值
+	if len(temperature) > 0 {
+		req.Temperature = temperature[0]
+	} else if llmConfig.Temperature != nil {
+		req.Temperature = *llmConfig.Temperature
 	}
 
 	resp, err := llmClient.CreateChatCompletion(ctx, req)
@@ -97,18 +104,18 @@ func (c *client) ChatCompletion(ctx context.Context, size enum.LlmSize, systemPr
 }
 
 // GetCompletion 执行一次性的文本生成任务，通常用于后台任务。
-func (c *client) GetCompletion(ctx context.Context, size enum.LlmSize, systemPrompt enum.SystemPrompt, content string) (string, error) {
+func (c *client) GetCompletion(ctx context.Context, size enum.LlmSize, systemPrompt enum.SystemPrompt, content string, temperature ...float32) (string, error) {
 	llmClient, ok := c.llmClients[size]
 	if !ok {
 		return "", errors.New("未找到指定大小的LLM客户端实例")
 	}
-	modelName := c.getModelName(size)
-	if modelName == "" {
-		return "", errors.New("未找到指定的LLM客户端名称")
+	llmConfig := c.getLlmConfig(size)
+	if llmConfig == nil || llmConfig.Model == "" {
+		return "", errors.New("未找到指定的LLM客户端配置")
 	}
 
 	req := openai.ChatCompletionRequest{
-		Model: modelName,
+		Model: llmConfig.Model,
 		Messages: []openai.ChatCompletionMessage{
 			{
 				Role:    openai.ChatMessageRoleSystem,
@@ -119,7 +126,13 @@ func (c *client) GetCompletion(ctx context.Context, size enum.LlmSize, systemPro
 				Content: content,
 			},
 		},
-		Temperature: 0.3, // 温度值越小,输出的稳定性和准确性越高
+	}
+
+	// 优先使用传入的temperature参数，其次是配置文件中的，最后使用LLM默认值
+	if len(temperature) > 0 {
+		req.Temperature = temperature[0]
+	} else if llmConfig.Temperature != nil {
+		req.Temperature = *llmConfig.Temperature
 	}
 
 	resp, err := llmClient.CreateChatCompletion(ctx, req)

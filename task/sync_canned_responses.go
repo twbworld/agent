@@ -73,14 +73,14 @@ func (m *Manager) KeywordReloader() error {
 			resp := resp // 避免闭包陷阱
 			llmGroup.Go(func() error {
 				// 为Content生成一个最合适的“问题”作为ShortCode
-				generatedShortCode, err := global.LlmService.GetCompletion(ctx, enum.ModelSmall, enum.SystemPromptForCannedResponse, resp.Content)
+				generatedShortCode, err := global.LlmService.GetCompletion(ctx, enum.ModelSmall, enum.SystemPromptForCannedResponse, resp.Content, 0.2)
 				if err != nil {
 					global.Log.Warnf("为ID %d 的内容生成ShortCode失败: %v", resp.Id, err)
 					return nil // 即使单个失败，也不中断整个同步任务
 				}
 
 				// 清理LLM可能返回的多余字符
-				generatedShortCode = strings.Trim(generatedShortCode, `\"\'。， `)
+				generatedShortCode = strings.Trim(generatedShortCode, `"'。， `)
 				if generatedShortCode == "" {
 					return nil
 				}

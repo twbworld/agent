@@ -21,8 +21,9 @@ type Llm struct {
 	Model        string `json:"model" mapstructure:"model" yaml:"model"`
 	Auth         string `json:"auth" mapstructure:"auth" yaml:"auth"`
 	Size         string `json:"size" mapstructure:"size" yaml:"size"`
-	Timeout      int64  `json:"timeout" mapstructure:"timeout" yaml:"timeout"`
-	EmbeddingDim int64  `json:"embedding_dim" mapstructure:"embedding_dim" yaml:"embedding_dim"`
+	Timeout      int64    `json:"timeout" mapstructure:"timeout" yaml:"timeout"`
+	Temperature  *float32 `json:"temperature,omitempty" mapstructure:"temperature" yaml:"temperature,omitempty"`
+	EmbeddingDim int64    `json:"embedding_dim" mapstructure:"embedding_dim" yaml:"embedding_dim"`
 }
 
 type VectorDb struct {

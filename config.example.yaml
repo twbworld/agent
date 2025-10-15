@@ -51,6 +51,8 @@ llm:
     size: "small"
     # 超时时间(秒)
     timeout: 30
+    # LLM的温度,不设置则由LLM服务决定
+    temperature: 0.6
 # 配置向量化模型, 一般使用小模型就好
 llm_embedding:
   # LLM的api地址, "v1"结尾

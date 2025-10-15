@@ -27,5 +27,6 @@ func (s *LlmService) NewChat(ctx context.Context, param *common.ChatRequest) (st
 		enum.ModelLarge,
 		enum.SystemPromptDefault,
 		param.Content,
+		0.5,
 	)
 }

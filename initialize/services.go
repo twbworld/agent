@@ -141,7 +141,6 @@ func (i *Initializer) initLlmEmbedding() error {
 func (i *Initializer) doInitLlmEmbedding() error {
 	config := openai.DefaultConfig(global.Config.LlmEmbedding.Auth)
 	config.BaseURL = global.Config.LlmEmbedding.Url
-	config.HTTPClient = &http.Client{Timeout: time.Duration(global.Config.LlmEmbedding.Timeout) * time.Second}
 	openAIClient := openai.NewClientWithConfig(config)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

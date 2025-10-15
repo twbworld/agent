@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	"gitee.com/taoJie_1/chat/dao"
 	"gitee.com/taoJie_1/chat/global"
@@ -12,6 +13,7 @@ import (
 	"gitee.com/taoJie_1/chat/internal/vector"
 	"gitee.com/taoJie_1/chat/model/common"
 	"gitee.com/taoJie_1/chat/model/enum"
+	"github.com/gin-gonic/gin"
 	"github.com/jmoiron/sqlx"
 	"golang.org/x/sync/errgroup"
 )
@@ -27,7 +29,7 @@ func (m *Manager) KeywordReloader() error {
 	}
 
 	var (
-		exactMatchRules      []chatwoot.CannedResponse
+		exactMatchRules        []chatwoot.CannedResponse
 		semanticRulesToProcess []chatwoot.CannedResponse
 	)
 
@@ -93,6 +95,10 @@ func (m *Manager) KeywordReloader() error {
 					return nil
 				}
 
+				if gin.Mode() == gin.DebugMode {
+					fmt.Printf("LLM生成标准问题, Seed: '%s', StandardQuestion: '%s'", llmInputText, standardQuestion)
+				}
+
 				mu.Lock()
 				completedJobs = append(completedJobs, semanticJob{resp: resp, standardQuestion: standardQuestion})
 				mu.Unlock()
@@ -111,7 +117,10 @@ func (m *Manager) KeywordReloader() error {
 				questionsToEmbed = append(questionsToEmbed, job.standardQuestion)
 			}
 
-			embeddings, err := m.embeddingService.CreateEmbeddings(ctx, questionsToEmbed)
+			embedCtx, cancel := context.WithTimeout(ctx, time.Duration(global.Config.LlmEmbedding.BatchTimeout)*time.Second)
+			defer cancel()
+
+			embeddings, err := m.embeddingService.CreateEmbeddings(embedCtx, questionsToEmbed)
 			if err != nil {
 				global.Log.Errorf("批量创建向量失败: %v", err)
 			} else if len(embeddings) == len(completedJobs) {

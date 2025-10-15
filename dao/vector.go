@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
+	"time"
 
 	"gitee.com/taoJie_1/chat/global"
 	"gitee.com/taoJie_1/chat/internal/vector"
@@ -110,7 +111,9 @@ func (d *VectorDb) Search(ctx context.Context, query string, topK int) ([]Search
 	}
 
 	// 1. 为查询文本创建向量
-	queryEmbeddings, err := global.EmbeddingService.CreateEmbeddings(ctx, []string{query})
+	embedCtx, cancel := context.WithTimeout(ctx, time.Duration(global.Config.LlmEmbedding.Timeout)*time.Second)
+	defer cancel()
+	queryEmbeddings, err := global.EmbeddingService.CreateEmbeddings(embedCtx, []string{query})
 	if err != nil {
 		return nil, fmt.Errorf("为查询文本创建向量失败: %w", err)
 	}

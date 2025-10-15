@@ -58,11 +58,11 @@ llm_embedding:
   # LLM的api地址, "v1"结尾
   url: "http://127.0.0.1:11434/v1"
   # LLM模型名称
-  model: "qwen3-embedding:latest"
-  # LLM模型秘钥
-  auth: ""
-  # 超时时间(秒)
-  timeout: 100
+  model: "text-embedding-ada-002"
+  # (秒)单个字符串向量化场景的超时时间
+  timeout: 5
+  # (秒)后台批量处理场景的超时时间
+  batch_timeout: 60
   # 向量化模型的向量维度(向量数据库需要用到)
   embedding_dim: 1024
 # 向量数据库配置

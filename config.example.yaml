@@ -53,7 +53,7 @@ llm:
     size: "small"
     # LLM的温度,不设置则由LLM服务决定
     temperature: 0.6
-# 配置向量化模型, 一般使用小模型就好
+# 配置向量化模型;中途更换模型可能因dim不同而报错
 llm_embedding:
   # LLM的api地址, "v1"结尾
   url: "http://127.0.0.1:11434/v1"
@@ -65,8 +65,6 @@ llm_embedding:
   timeout: 5
   # (秒)后台批量处理场景的超时时间
   batch_timeout: 60
-  # 向量化模型的向量维度(向量数据库需要用到)
-  embedding_dim: 1024
 # 向量数据库配置
 vector_db:
   # 服务地址

@@ -112,13 +112,8 @@ func (d *ChatApi) processMessageAsync(ctx context.Context, req common.ChatReques
 		}
 	}
 
-	// 将向量搜索结果放入context中，供LLM服务使用
-	// 注意: LLM服务需要实现从context中读取此值的逻辑
-	type vectorResultsKey struct{}
-	llmCtx := context.WithValue(ctx, vectorResultsKey{}, llmReferenceDocs)
-
-	// 调用LLM服务获取回复
-	llmAnswer, err := service.Service.UserServiceGroup.LlmService.NewChat(llmCtx, &req)
+	// 调用LLM服务获取回复, 显式传递参考资料
+	llmAnswer, err := service.Service.UserServiceGroup.LlmService.NewChat(ctx, &req, llmReferenceDocs)
 	if err != nil {
 		global.Log.Errorf("[processMessageAsync] LLM错误: %v", err)
 		_ = service.Service.UserServiceGroup.ActionService.TransferToHuman(req.Conversation.ConversationID, enum.TransferToHuman2)

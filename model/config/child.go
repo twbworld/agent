@@ -32,7 +32,6 @@ type Llm struct {
 type LlmEmbedding struct {
 	modelConfig  `mapstructure:",squash"`
 	BatchTimeout int64 `mapstructure:"batch_timeout" json:"batch_timeout" yaml:"batch_timeout"`
-	EmbeddingDim int64 `json:"embedding_dim" mapstructure:"embedding_dim" yaml:"embedding_dim"`
 }
 
 type VectorDb struct {

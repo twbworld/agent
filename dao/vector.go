@@ -24,7 +24,7 @@ const (
 	VectorMetadataKeySourceID = "source_id"
 )
 
-// SearchResult represents a single item returned from a vector search.
+
 type SearchResult struct {
 	Answer     string
 	Similarity float32
@@ -174,11 +174,11 @@ func (d *VectorDb) Search(ctx context.Context, query string, topK int) ([]Search
 			continue
 		}
 
-		sourceID, ok := metadata.GetFloat(VectorMetadataKeySourceID)
-		if !ok {
-			global.Log.Warnf("无法从元数据中解析 source_id: %v", metadata)
-			continue
-		}
+		// sourceID, ok := metadata.GetInt(VectorMetadataKeySourceID)
+		// if !ok {
+		// 	global.Log.Warnf("无法从元数据中解析 source_id: %v", metadata)
+		// 	continue
+		// }
 
 		// Chroma返回的是距离（如L2距离），值越小越相似。
 		// 将其转换为一个0到1之间的相似度分数，值越大越相似。
@@ -187,7 +187,7 @@ func (d *VectorDb) Search(ctx context.Context, query string, topK int) ([]Search
 		results = append(results, SearchResult{
 			Answer:     answer,
 			Similarity: similarity,
-			SourceID:   int64(sourceID),
+			// SourceID:   sourceID,
 		})
 	}
 

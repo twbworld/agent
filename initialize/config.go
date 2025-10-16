@@ -108,9 +108,6 @@ func handleConfig(c *config.Config) {
 	if c.LlmEmbedding.BatchTimeout == 0 {
 		c.LlmEmbedding.BatchTimeout = 60
 	}
-	if c.LlmEmbedding.EmbeddingDim == 0 {
-		c.LlmEmbedding.EmbeddingDim = 1024
-	}
 	if c.VectorDb.CollectionName == "" {
 		c.VectorDb.CollectionName = "chatwoot_keywords"
 	}

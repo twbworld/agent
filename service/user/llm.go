@@ -3,14 +3,16 @@ package user
 import (
 	"context"
 	"fmt"
+	"strings"
 
+	"gitee.com/taoJie_1/chat/dao"
 	"gitee.com/taoJie_1/chat/global"
 	"gitee.com/taoJie_1/chat/model/common"
 	"gitee.com/taoJie_1/chat/model/enum"
 )
 
 type ILlmService interface {
-	NewChat(ctx context.Context, param *common.ChatRequest) (string, error)
+	NewChat(ctx context.Context, param *common.ChatRequest, referenceDocs []dao.SearchResult) (string, error)
 }
 
 type LlmService struct {
@@ -21,16 +23,37 @@ func NewLlmService() *LlmService {
 }
 
 // 负责业务层面的决策，例如决定使用哪个模型、哪个Prompt
-func (s *LlmService) NewChat(ctx context.Context, param *common.ChatRequest) (string, error) {
+func (s *LlmService) NewChat(ctx context.Context, param *common.ChatRequest, referenceDocs []dao.SearchResult) (string, error) {
 	if global.LlmService == nil {
-		return  "", fmt.Errorf("LLM客户端未初始化")
+		return "", fmt.Errorf("LLM客户端未初始化")
 	}
+
+	var finalContent strings.Builder
+	var systemPrompt enum.SystemPrompt = enum.SystemPromptDefault
+
+	// 如果有参考文档，则构建一个包含上下文的prompt
+	if len(referenceDocs) > 0 {
+		systemPrompt = enum.SystemPromptRAG
+		finalContent.WriteString(`
+--- 参考资料 ---
+`)
+		for _, doc := range referenceDocs {
+			finalContent.WriteString(doc.Answer)
+			finalContent.WriteString(`
+`)
+		}
+		finalContent.WriteString(`
+--- 用户问题 ---
+`)
+	}
+
+	finalContent.WriteString(param.Content)
 
 	return global.LlmService.ChatCompletion(
 		ctx,
 		enum.ModelLarge,
-		enum.SystemPromptDefault,
-		param.Content,
+		systemPrompt,
+		finalContent.String(),
 		0.5,
 	)
 }

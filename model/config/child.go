@@ -16,25 +16,29 @@ type Chatwoot struct {
 	Auth      string `json:"auth" mapstructure:"auth" yaml:"auth"`
 }
 
+type modelConfig struct {
+	Url     string `json:"url" mapstructure:"url" yaml:"url"`
+	Model   string `json:"model" mapstructure:"model" yaml:"model"`
+	Auth    string `json:"auth" mapstructure:"auth" yaml:"auth"`
+	Timeout int64  `json:"timeout" mapstructure:"timeout" yaml:"timeout"`
+}
+
 type Llm struct {
-	Url          string   `json:"url" mapstructure:"url" yaml:"url"`
-	Model        string   `json:"model" mapstructure:"model" yaml:"model"`
-	Auth         string   `json:"auth" mapstructure:"auth" yaml:"auth"`
-	Size         string   `json:"size" mapstructure:"size" yaml:"size"`
-	Timeout      int64    `json:"timeout" mapstructure:"timeout" yaml:"timeout"`
-	Temperature  *float32 `json:"temperature,omitempty" mapstructure:"temperature" yaml:"temperature,omitempty"`
-	EmbeddingDim int64    `json:"embedding_dim" mapstructure:"embedding_dim" yaml:"embedding_dim"`
+	modelConfig `mapstructure:",squash"`
+	Size        string   `json:"size" mapstructure:"size" yaml:"size"`
+	Temperature *float32 `json:"temperature,omitempty" mapstructure:"temperature" yaml:"temperature,omitempty"`
+}
+
+type LlmEmbedding struct {
+	modelConfig  `mapstructure:",squash"`
+	BatchTimeout int64 `mapstructure:"batch_timeout" json:"batch_timeout" yaml:"batch_timeout"`
+	EmbeddingDim int64 `json:"embedding_dim" mapstructure:"embedding_dim" yaml:"embedding_dim"`
 }
 
 type VectorDb struct {
 	Url            string `json:"url" mapstructure:"url" yaml:"url"`
 	Auth           string `json:"auth" mapstructure:"auth" yaml:"auth"`
 	CollectionName string `json:"collection_name" mapstructure:"collection_name" yaml:"collection_name"`
-}
-
-type LlmEmbedding struct {
-	Llm          `mapstructure:",squash"`
-	BatchTimeout int64 `mapstructure:"batch_timeout" json:"batch_timeout" yaml:"batch_timeout"`
 }
 
 type Ai struct {

@@ -47,10 +47,10 @@ llm:
     model: "qwen3:latest"
     # LLM模型秘钥
     auth: ""
-    # LLM的大小, small|medium|large
-    size: "small"
     # 超时时间(秒)
     timeout: 30
+    # LLM的大小, small|medium|large
+    size: "small"
     # LLM的温度,不设置则由LLM服务决定
     temperature: 0.6
 # 配置向量化模型, 一般使用小模型就好
@@ -58,7 +58,9 @@ llm_embedding:
   # LLM的api地址, "v1"结尾
   url: "http://127.0.0.1:11434/v1"
   # LLM模型名称
-  model: "text-embedding-ada-002"
+  model: "qwen3-embedding:latest"
+    # LLM模型秘钥
+  auth: ""
   # (秒)单个字符串向量化场景的超时时间
   timeout: 5
   # (秒)后台批量处理场景的超时时间
@@ -81,7 +83,7 @@ ai:
   max_short_code_length: 255
   # 关键字前缀出现该值,则加入到向量数据库中做语义匹配
   semantic_prefix: "ai@"
-  # 关键字前缀出现该值或为空,则做精确匹配
+  # 关键字前缀出现该值或为空,则做精确匹配(弃用)
   exact_prefix: ""
   # 向量搜索返回的条数
   vector_search_top_k: 5

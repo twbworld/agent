@@ -2,6 +2,7 @@ package user
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"gitee.com/taoJie_1/chat/global"
@@ -36,6 +37,9 @@ func NewActionService() *ActionService {
 
 // 转接人工客服
 func (d *ActionService) TransferToHuman(ConversationID uint, remark enum.TransferToHuman) error {
+	if global.ChatwootService == nil {
+		return fmt.Errorf("Chatwoot客户端未初始化")
+	}
 	g, _ := errgroup.WithContext(context.Background())
 
 	// 创建私信备注
@@ -67,6 +71,9 @@ func (d *ActionService) TransferToHuman(ConversationID uint, remark enum.Transfe
 
 // 切换输入状态
 func (d *ActionService) ToggleTyping(conversationID uint, status bool) {
+	if global.ChatwootService == nil {
+		return
+	}
 	statusStr := "off"
 	if status {
 		statusStr = "on"
@@ -78,6 +85,9 @@ func (d *ActionService) ToggleTyping(conversationID uint, status bool) {
 
 // 发送消息
 func (d *ActionService) SendMessage(conversationID uint, content string) {
+	if global.ChatwootService == nil {
+		return
+	}
 	if err := global.ChatwootService.CreateMessage(conversationID, content); err != nil {
 		global.Log.Errorf("[action]向会话 %d 发送消息失败: %v", conversationID, err)
 	}

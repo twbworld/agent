@@ -3,7 +3,7 @@ module gitee.com/taoJie_1/chat
 go 1.25
 
 require (
-	github.com/amikos-tech/chroma-go v0.2.6-0.20251007061736-cb5186244289
+	github.com/amikos-tech/chroma-go v0.2.6-0.20251015171331-4605156e9e3f
 	github.com/fsnotify/fsnotify v1.9.0
 	github.com/gin-contrib/cors v1.7.6
 	github.com/gin-gonic/gin v1.11.0

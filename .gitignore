@@ -71,7 +71,7 @@ ehthumbs_vista.db
 .eslintcache
 /config.yaml
 /*.db
-
+__debug*
 
 /worktree*/
 .phpunit.result.cache

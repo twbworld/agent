@@ -10,8 +10,8 @@ github.com/Masterminds/semver/v3 v3.4.0 h1:Zog+i5UMtVoCU8oKka5P7i9q9HgrJeGzI9SA1
 github.com/Masterminds/semver/v3 v3.4.0/go.mod h1:4V+yj/TJE1HU9XfppCwVMZq3I84lprf4nC11bSS5beM=
 github.com/Microsoft/go-winio v0.6.2 h1:F2VQgta7ecxGYO8k3ZZz3RS8fVIXVxONVUPlNERoyfY=
 github.com/Microsoft/go-winio v0.6.2/go.mod h1:yd8OoFMLzJbo9gZq8j5qaps8bJ9aShtEA8Ipt1oGCvU=
-github.com/amikos-tech/chroma-go v0.2.6-0.20251007061736-cb5186244289 h1:C/elkfrpGMOsZU+3kLoIBHutISHiu2qm7kcH095s6XE=
-github.com/amikos-tech/chroma-go v0.2.6-0.20251007061736-cb5186244289/go.mod h1:GCNrlG9te3O4yN3E9kn1YZKtfyUiAN5nhfhQDzz+ask=
+github.com/amikos-tech/chroma-go v0.2.6-0.20251015171331-4605156e9e3f h1:/YLuqGkotx1Y+Hm/H0lxfzfgavYk9m7RVbBvNxOjMA0=
+github.com/amikos-tech/chroma-go v0.2.6-0.20251015171331-4605156e9e3f/go.mod h1:GCNrlG9te3O4yN3E9kn1YZKtfyUiAN5nhfhQDzz+ask=
 github.com/amikos-tech/pure-tokenizers v0.1.1 h1:AOPMW+GLd7/FapGiyBV7CGKj766zd1VDFbv+0wqGOWA=
 github.com/amikos-tech/pure-tokenizers v0.1.1/go.mod h1:o0ICQtz7tM7pukqwfybBk6FvWKFZLyIWs4uFYbH+CG4=
 github.com/bytedance/gopkg v0.1.3 h1:TPBSwH8RsouGCBcMBktLt1AymVo2TVsBVCY4b6TnZ/M=

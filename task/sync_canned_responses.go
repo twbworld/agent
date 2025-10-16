@@ -23,6 +23,10 @@ func (m *Manager) KeywordReloader() error {
 	ctx := context.Background()
 	global.Log.Println("开始同步Chatwoot关键词...")
 
+	if global.ChatwootService == nil {
+		return fmt.Errorf("Chatwoot客户端未初始化")
+	}
+
 	responses, err := global.ChatwootService.GetCannedResponses()
 	if err != nil {
 		return fmt.Errorf("从Chatwoot获取预设回复失败: %w", err)
@@ -57,6 +61,9 @@ func (m *Manager) KeywordReloader() error {
 
 	if len(semanticRulesToProcess) > 0 {
 		// 2. 并发处理所有语义匹配规则（仅LLM生成问题）
+		if global.LlmService == nil {
+			return fmt.Errorf("LLM客户端未初始化")
+		}
 		type semanticJob struct {
 			resp             chatwoot.CannedResponse
 			standardQuestion string
@@ -96,7 +103,7 @@ func (m *Manager) KeywordReloader() error {
 				}
 
 				if gin.Mode() == gin.DebugMode {
-					fmt.Printf("LLM生成标准问题, Seed: '%s', StandardQuestion: '%s'", llmInputText, standardQuestion)
+					fmt.Printf("==========LLM生成标准问题, Seed: '%s', StandardQuestion: '%s'", llmInputText, standardQuestion)
 				}
 
 				mu.Lock()

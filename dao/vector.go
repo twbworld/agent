@@ -26,6 +26,7 @@ const (
 
 
 type SearchResult struct {
+	Question   string
 	Answer     string
 	Similarity float32
 	SourceID   int64
@@ -174,10 +175,18 @@ func (d *VectorDb) Search(ctx context.Context, query string, topK int) ([]Search
 			continue
 		}
 
-		// sourceID, ok := metadata.GetInt(VectorMetadataKeySourceID)
+		question, ok := metadata.GetString(VectorMetadataKeyQuestion)
+		if !ok {
+			global.Log.Warnf("无法从元数据中解析问题: %v", metadata)
+			// 即使没有问题，答案本身仍然有用，因此不 'continue'
+			question = ""
+		}
+
+		// sourceID, ok := metadata.GetFloat(VectorMetadataKeySourceID)
 		// if !ok {
 		// 	global.Log.Warnf("无法从元数据中解析 source_id: %v", metadata)
-		// 	continue
+		// 	// 同样，不中断流程
+		// 	sourceID = 0
 		// }
 
 		// Chroma返回的是距离（如L2距离），值越小越相似。
@@ -185,9 +194,10 @@ func (d *VectorDb) Search(ctx context.Context, query string, topK int) ([]Search
 		similarity := float32(1.0 / (1.0 + distance))
 
 		results = append(results, SearchResult{
+			Question:   question,
 			Answer:     answer,
 			Similarity: similarity,
-			// SourceID:   sourceID,
+			// SourceID:   int64(sourceID),
 		})
 	}
 

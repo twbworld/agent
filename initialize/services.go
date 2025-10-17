@@ -2,10 +2,8 @@ package initialize
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/http"
-	"sync"
 	"time"
 
 	"gitee.com/taoJie_1/chat/dao"
@@ -14,9 +12,9 @@ import (
 	"gitee.com/taoJie_1/chat/internal/embedding"
 	"gitee.com/taoJie_1/chat/internal/llm"
 	"gitee.com/taoJie_1/chat/internal/vector"
-	"gitee.com/taoJie_1/chat/model/config"
 	"gitee.com/taoJie_1/chat/model/enum"
 	"github.com/sashabaranov/go-openai"
+	"golang.org/x/sync/errgroup"
 )
 
 func (i *Initializer) initVectorDb() error {
@@ -90,35 +88,28 @@ func (i *Initializer) doInitLlm() error {
 		llmClients[enum.LlmSize(cfg.Size)] = openai.NewClientWithConfig(config)
 	}
 
-	var (
-		wg   sync.WaitGroup
-		mu   sync.Mutex
-		errs []error
-	)
+	g, gCtx := errgroup.WithContext(context.Background())
 	// 并发地对所有配置的LLM服务进行连接测试
-	wg.Add(len(global.Config.Llm))
 	for _, cfg := range global.Config.Llm {
-		go func(c config.Llm) {
-			defer wg.Done()
-			size := enum.LlmSize(c.Size)
+		cfg := cfg // 避免闭包陷阱
+		g.Go(func() error {
+			size := enum.LlmSize(cfg.Size)
 			client := llmClients[size]
 
-			reqCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			// 使用 errgroup 的 context，以便在任何一个 goroutine 失败时可以取消其他的
+			reqCtx, cancel := context.WithTimeout(gCtx, 5*time.Second)
 			defer cancel()
 
 			// 通过ListModels接口验证服务是否可用
 			if _, err := client.ListModels(reqCtx); err != nil {
-				mu.Lock()
-				err_msg := fmt.Errorf("无法连接到LLM服务 (size: %s, url: %s): %w", size, c.Url, err)
-				errs = append(errs, err_msg)
-				mu.Unlock()
+				return fmt.Errorf("无法连接到LLM服务 (size: %s, url: %s): %w", size, cfg.Url, err)
 			}
-		}(cfg)
+			return nil
+		})
 	}
-	wg.Wait()
 
-	if len(errs) > 0 {
-		return errors.Join(errs...)
+	if err := g.Wait(); err != nil {
+		return err
 	}
 
 	global.LlmService = llm.NewClient(

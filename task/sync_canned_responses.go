@@ -125,10 +125,11 @@ func (m *Manager) KeywordReloader() error {
 				keywordToEmbed = append(keywordToEmbed, job.standardQuestion)
 			}
 
+			// 批量为所有生成的标准问题创建向量。
 			embedCtx, cancel := context.WithTimeout(ctx, time.Duration(global.Config.LlmEmbedding.BatchTimeout)*time.Second)
 			defer cancel()
 
-			embeddings, err := m.embeddingService.CreateEmbeddings(embedCtx, keywordToEmbed)
+			embeddings, err := global.EmbeddingService.CreateEmbeddings(embedCtx, keywordToEmbed)
 			if err != nil {
 				global.Log.Errorf("批量创建向量失败: %v", err)
 			} else if len(embeddings) == len(completedJobs) {

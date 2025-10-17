@@ -6,6 +6,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/gin-gonic/gin"
+	"golang.org/x/sync/errgroup"
 
 	"gitee.com/taoJie_1/chat/dao"
 	"gitee.com/taoJie_1/chat/global"
@@ -60,36 +61,55 @@ func (d *ChatApi) HandleChat(ctx *gin.Context) {
 func (d *ChatApi) processMessageAsync(ctx context.Context, req common.ChatRequest) {
 	defer func() {
 		if p := recover(); p != nil {
-			global.Log.Errorf("[processMessageAsync]: %v", p)
+			global.Log.Errorf("[processMessageAsync] panic: %v", p)
 			_ = service.Service.UserServiceGroup.ActionService.TransferToHuman(req.Conversation.ConversationID, enum.TransferToHuman2)
 		}
 	}()
 
-	// 关键词匹配和预设回复
-	answer, isAction, err := service.Service.UserServiceGroup.ActionService.CannedResponses(&req)
-	if err != nil {
-		global.Log.Errorf("[processMessageAsync] 匹配关键字错误: %v", err)
+	var (
+		cannedAnswer  string
+		isAction      bool
+		vectorResults []dao.SearchResult
+	)
+
+	g, gCtx := errgroup.WithContext(ctx)
+	// 1. 关键词匹配
+	g.Go(func() error {
+		var err error
+		cannedAnswer, isAction, err = service.Service.UserServiceGroup.ActionService.CannedResponses(&req)
+		if err != nil {
+			global.Log.Errorf("[processMessageAsync] 匹配关键字失败: %v", err)
+			return err
+		}
+		return nil
+	})
+	// 2. 向量搜索
+	g.Go(func() error {
+		var err error
+		vectorResults, err = service.Service.UserServiceGroup.VectorService.Search(gCtx, req.Content)
+		if err != nil {
+			// 向量搜索失败是可接受的，LLM可以作为兜底
+			global.Log.Warnf("[processMessageAsync] 向量数据库搜索失败: %v", err)
+		}
+		return nil
+	})
+	// 等待快速路径搜索完成
+	if err := g.Wait(); err != nil {
+		// 如果是关键词匹配的错误，则转人工
 		_ = service.Service.UserServiceGroup.ActionService.TransferToHuman(req.Conversation.ConversationID, enum.TransferToHuman2)
 		return
 	}
+
+	// 1. 检查是否触发了动作（如转人工）
 	if isAction {
-		// 动作已执行（如转人工），流程结束
 		return
 	}
-	if answer != "" {
-		// 匹配到预设回复，直接发送消息
-		service.Service.UserServiceGroup.ActionService.SendMessage(req.Conversation.ConversationID, answer)
+	// 2. 检查是否有精确匹配的答案
+	if cannedAnswer != "" {
+		service.Service.UserServiceGroup.ActionService.SendMessage(req.Conversation.ConversationID, cannedAnswer)
 		return
 	}
-
-	// 向量数据库查询
-	vectorResults, err := service.Service.UserServiceGroup.VectorService.Search(ctx, req.Content)
-	if err != nil {
-		// 只记录日志，不中断流程，因为后面还有LLM作为兜底
-		global.Log.Errorf("[processMessageAsync] 向量数据库搜索错误: %v", err)
-	}
-
-	// 检查是否有足够相似的直接回复
+	// 3. 检查是否有高相似度的向量搜索结果
 	if len(vectorResults) > 0 && vectorResults[0].Similarity >= global.Config.Ai.VectorSimilarityThreshold {
 		service.Service.UserServiceGroup.ActionService.SendMessage(req.Conversation.ConversationID, vectorResults[0].Answer)
 		return
@@ -97,22 +117,22 @@ func (d *ChatApi) processMessageAsync(ctx context.Context, req common.ChatReques
 
 	// 告诉用户“机器人正在输入中...”
 	go service.Service.UserServiceGroup.ActionService.ToggleTyping(req.Conversation.ConversationID, true)
-	// 在完成后,关闭“输入中”状态
 	defer func() {
 		go service.Service.UserServiceGroup.ActionService.ToggleTyping(req.Conversation.ConversationID, false)
 	}()
 
-	// 准备给LLM的参考资料, 并通过context传递
+	// 准备给LLM的参考资料
 	var llmReferenceDocs []dao.SearchResult
 	if len(vectorResults) > 0 {
 		for _, res := range vectorResults {
+			// 只使用相似度高于配置阈值的文档作为参考
 			if res.Similarity >= global.Config.Ai.VectorSearchMinSimilarity {
 				llmReferenceDocs = append(llmReferenceDocs, res)
 			}
 		}
 	}
 
-	// 调用LLM服务获取回复, 显式传递参考资料
+	// 调用LLM服务获取回复
 	llmAnswer, err := service.Service.UserServiceGroup.LlmService.NewChat(ctx, &req, llmReferenceDocs)
 	if err != nil {
 		global.Log.Errorf("[processMessageAsync] LLM错误: %v", err)
@@ -121,8 +141,7 @@ func (d *ChatApi) processMessageAsync(ctx context.Context, req common.ChatReques
 	}
 
 	if llmAnswer == "" {
-		// 如果LLM没有返回任何内容，也可能是一个需要转人工的情况
-		global.Log.Warnf("[processMessageAsync] LLM返回空回复 %d", req.Conversation.ConversationID)
+		global.Log.Warnf("[processMessageAsync] LLM返回空回复，转人工, 会话ID: %d", req.Conversation.ConversationID)
 		_ = service.Service.UserServiceGroup.ActionService.TransferToHuman(req.Conversation.ConversationID, enum.TransferToHuman5)
 		return
 	}

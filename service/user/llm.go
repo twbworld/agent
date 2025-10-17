@@ -34,17 +34,11 @@ func (s *LlmService) NewChat(ctx context.Context, param *common.ChatRequest, ref
 	// 如果有参考文档，则构建一个包含上下文的prompt
 	if len(referenceDocs) > 0 {
 		systemPrompt = enum.SystemPromptRAG
-		finalContent.WriteString(`
---- 参考资料 ---
-`)
+		finalContent.WriteString("--- 参考资料 ---\n")
 		for _, doc := range referenceDocs {
-			finalContent.WriteString(doc.Answer)
-			finalContent.WriteString(`
-`)
+			fmt.Fprintf(&finalContent, "[问题]: %s\n[回答]: %s\n---\n", doc.Question, doc.Answer)
 		}
-		finalContent.WriteString(`
---- 用户问题 ---
-`)
+		finalContent.WriteString("\n--- 用户问题 ---\n")
 	}
 
 	finalContent.WriteString(param.Content)

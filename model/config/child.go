@@ -44,7 +44,7 @@ type Ai struct {
 	MaxPromptLength           uint     `json:"max_prompt_length" mapstructure:"max_prompt_length" yaml:"max_prompt_length"`
 	MaxShortCodeLength        uint     `json:"max_short_code_length" mapstructure:"max_short_code_length" yaml:"max_short_code_length"`
 	SemanticPrefix            string   `json:"semantic_prefix" mapstructure:"semantic_prefix" yaml:"semantic_prefix"`
-	ExactPrefix               string   `json:"exact_prefix" mapstructure:"exact_prefix" yaml:"exact_prefix"`
+	HybridPrefix              string   `json:"hybrid_prefix" mapstructure:"hybrid_prefix" yaml:"hybrid_prefix"`
 	TransferKeywords          []string `json:"transfer_keywords" mapstructure:"transfer_keywords" yaml:"transfer_keywords"`
 	VectorSearchTopK          int      `json:"vector_search_top_k" mapstructure:"vector_search_top_k" yaml:"vector_search_top_k"`
 	VectorSimilarityThreshold float32  `json:"vector_similarity_threshold" mapstructure:"vector_similarity_threshold" yaml:"vector_similarity_threshold"`

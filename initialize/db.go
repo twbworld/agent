@@ -6,6 +6,7 @@ import (
 
 	"gitee.com/taoJie_1/mall-agent/dao"
 	"gitee.com/taoJie_1/mall-agent/global"
+	"gitee.com/taoJie_1/mall-agent/model/db"
 	"gitee.com/taoJie_1/mall-agent/model/enum"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"
@@ -19,6 +20,7 @@ type sqlite struct{}
 func (i *Initializer) dbStart() error {
 	var dbRes interface {
 		connect() error
+		createTable() error
 		version() string
 	}
 
@@ -34,6 +36,11 @@ func (i *Initializer) dbStart() error {
 	if err := dbRes.connect(); err != nil {
 		return err
 	}
+
+	if err := dbRes.createTable(); err != nil {
+		return fmt.Errorf("创建数据表失败: %w", err)
+	}
+
 	return nil
 }
 
@@ -42,7 +49,7 @@ func (i *Initializer) dbClose() error {
 	if dao.DB != nil {
 		return dao.DB.Close()
 	}
-	return  nil
+	return nil
 }
 
 func (s *sqlite) connect() error {
@@ -107,4 +114,36 @@ func (*mysql) version() (t string) {
 		global.Log.Warnf("查询mysql版本失败: %v", err)
 	}
 	return
+}
+
+func (s *sqlite) createTable() error {
+	tableName := db.Keywords{}.TableName()
+
+	createTableSQL := fmt.Sprintf(`CREATE TABLE IF NOT EXISTS "%s" (
+		"id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+		"created_at" INTEGER NOT NULL DEFAULT 0,
+		"updated_at" INTEGER NOT NULL DEFAULT 0,
+		"short_code" TEXT NOT NULL DEFAULT ''	,
+		"content" TEXT NOT NULL,
+		"account_id" INTEGER NOT NULL DEFAULT 0
+	);`, tableName)
+	if _, err := dao.DB.Exec(createTableSQL); err != nil {
+		return fmt.Errorf("创建表 '%s' 失败: %w", tableName, err)
+	}
+
+	createIndexSQL := fmt.Sprintf(`CREATE INDEX IF NOT EXISTS "idx_%s_short_code" ON "%s" ("short_code");`, tableName, tableName)
+	if _, err := dao.DB.Exec(createIndexSQL); err != nil {
+		return fmt.Errorf("为表 '%s' 创建索引失败: %w", tableName, err)
+	}
+
+	return nil
+}
+
+func (m *mysql) createTable() error {
+	tableName := db.Keywords{}.TableName()
+	sql := fmt.Sprintf("CREATE TABLE IF NOT EXISTS `%s` (`id` INT UNSIGNED NOT NULL AUTO_INCREMENT, `created_at` BIGINT NOT NULL DEFAULT 0, `updated_at` BIGINT NOT NULL DEFAULT 0, `short_code` VARCHAR(255) NOT NULL DEFAULT '', `content` TEXT NOT NULL, `account_id` INT UNSIGNED NOT NULL DEFAULT 0, PRIMARY KEY (`id`), INDEX `idx_short_code` (`short_code`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;", tableName)
+	if _, err := dao.DB.Exec(sql); err != nil {
+		return fmt.Errorf("创建表 '%s' 失败: %w", tableName, err)
+	}
+	return nil
 }

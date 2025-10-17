@@ -120,6 +120,9 @@ func handleConfig(c *config.Config) {
 	if c.Ai.SemanticPrefix == "" {
 		c.Ai.SemanticPrefix = "ai@"
 	}
+	if c.Ai.HybridPrefix == "" {
+		c.Ai.HybridPrefix = "ai+@"
+	}
 	if len(c.Ai.TransferKeywords) == 0 {
 		c.Ai.TransferKeywords = []string{"人工客服", "转人工"}
 	}

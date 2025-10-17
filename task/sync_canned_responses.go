@@ -38,6 +38,7 @@ func (m *Manager) KeywordReloader() error {
 	)
 
 	semanticPrefix := global.Config.Ai.SemanticPrefix
+	hybridPrefix := global.Config.Ai.HybridPrefix
 
 	// 1. 根据规则进行分类
 	for _, resp := range responses {
@@ -45,9 +46,22 @@ func (m *Manager) KeywordReloader() error {
 			continue
 		}
 
-		if strings.HasPrefix(resp.ShortCode, semanticPrefix) {
+		if hybridPrefix != "" && strings.HasPrefix(resp.ShortCode, hybridPrefix) {
+			// 混合模式: 同时用于语义匹配和精确匹配
+			semanticRulesToProcess = append(semanticRulesToProcess, resp)
+
+			// 提取关键字用于精确匹配
+			exactMatchRule := resp
+			keyword := strings.TrimSpace(strings.TrimPrefix(resp.ShortCode, hybridPrefix))
+			if keyword != "" {
+				exactMatchRule.ShortCode = strings.ToLower(keyword)
+				exactMatchRules = append(exactMatchRules, exactMatchRule)
+			}
+		} else if strings.HasPrefix(resp.ShortCode, semanticPrefix) {
+			// 仅语义匹配
 			semanticRulesToProcess = append(semanticRulesToProcess, resp)
 		} else {
+			// 仅精确匹配
 			resp.ShortCode = strings.ToLower(resp.ShortCode)
 			exactMatchRules = append(exactMatchRules, resp)
 		}
@@ -82,7 +96,13 @@ func (m *Manager) KeywordReloader() error {
 				var llmInputText string
 				var promptToUse enum.SystemPrompt
 
-				seedQuestion := strings.TrimSpace(strings.TrimPrefix(resp.ShortCode, semanticPrefix))
+				var seedQuestion string
+				if hybridPrefix != "" && strings.HasPrefix(resp.ShortCode, hybridPrefix) {
+					seedQuestion = strings.TrimSpace(strings.TrimPrefix(resp.ShortCode, hybridPrefix))
+				} else {
+					seedQuestion = strings.TrimSpace(strings.TrimPrefix(resp.ShortCode, semanticPrefix))
+				}
+
 				if seedQuestion != "" {
 					llmInputText = seedQuestion
 					promptToUse = enum.SystemPromptGenQuestionFromKeyword
@@ -103,7 +123,7 @@ func (m *Manager) KeywordReloader() error {
 				}
 
 				if gin.Mode() == gin.DebugMode {
-					fmt.Printf("==========LLM生成标准问题, Seed: '%s', StandardQuestion: '%s'", llmInputText, standardQuestion)
+					fmt.Printf("==========LLM生成标准问题: '%s'", llmInputText)
 				}
 
 				mu.Lock()

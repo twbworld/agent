@@ -81,8 +81,8 @@ ai:
   max_short_code_length: 255
   # 关键字前缀出现该值,则加入到向量数据库中做语义匹配
   semantic_prefix: "ai@"
-  # 关键字前缀出现该值或为空,则做精确匹配(弃用)
-  exact_prefix: ""
+  # 关键字前缀出现该值,则同时用于精确匹配和语义匹配
+  hybrid_prefix: "ai+@"
   # 向量搜索返回的条数
   vector_search_top_k: 5
   # 向量搜索结果的相似度阈值(0-1), 高于此阈值才直接回复

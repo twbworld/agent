@@ -30,6 +30,13 @@ func (d *ChatApi) HandleChat(ctx *gin.Context) {
 		return
 	}
 
+	// 如果消息包含附件（图片、音视频等），则直接转人工
+	if len(req.Attachments) > 0 {
+		_ = service.Service.UserServiceGroup.ActionService.TransferToHuman(req.Conversation.ConversationID, enum.TransferToHuman3)
+		common.Fail(ctx, "您发送的消息暂不支持AI处理，已为您转接人工客服")
+		return
+	}
+
 	// 提示词长度校验
 	if utf8.RuneCountInString(req.Content) > int(global.Config.Ai.MaxPromptLength) {
 		global.Log.Warnf("用户 %d 提问内容过长，已转人工", req.Conversation.ConversationID)

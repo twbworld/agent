@@ -92,16 +92,17 @@ func (m *Manager) KeywordReloader() error {
 
 		for _, resp := range semanticRulesToProcess {
 			resp := resp // 避免闭包陷阱
+
+			var seedQuestion string
+			if hybridPrefix != "" && strings.HasPrefix(resp.ShortCode, hybridPrefix) {
+				seedQuestion = strings.TrimSpace(strings.TrimPrefix(resp.ShortCode, hybridPrefix))
+			} else {
+				seedQuestion = strings.TrimSpace(strings.TrimPrefix(resp.ShortCode, semanticPrefix))
+			}
+
 			llmGroup.Go(func() error {
 				var llmInputText string
 				var promptToUse enum.SystemPrompt
-
-				var seedQuestion string
-				if hybridPrefix != "" && strings.HasPrefix(resp.ShortCode, hybridPrefix) {
-					seedQuestion = strings.TrimSpace(strings.TrimPrefix(resp.ShortCode, hybridPrefix))
-				} else {
-					seedQuestion = strings.TrimSpace(strings.TrimPrefix(resp.ShortCode, semanticPrefix))
-				}
 
 				if seedQuestion != "" {
 					llmInputText = seedQuestion
@@ -259,8 +260,12 @@ func (m *Manager) LoadKeywords() error {
 	tempMap := make(map[string]string)
 
 	if len(keywordslist) > 0 {
+		// 确保当存在重复的 short_code 时，我们只保留最新（id最大）的那条记录
 		for _, v := range keywordslist {
-			tempMap[strings.ToLower(v.ShortCode)] = v.Content
+			lowerShortCode := strings.ToLower(v.ShortCode)
+			if _, exists := tempMap[lowerShortCode]; !exists {
+				tempMap[lowerShortCode] = v.Content
+			}
 		}
 	}
 

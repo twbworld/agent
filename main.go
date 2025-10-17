@@ -31,16 +31,28 @@ func main() {
 
 	taskManager := task.NewManager(global.EmbeddingService)
 
-	switch initialize.Act {
-	case "":
-		initialize.Start(initSvc, taskManager, startTime)
+	if initialize.Act != "" {
+		dispatchAction(initialize.Act, taskManager)
+		return
+	}
+
+	initialize.Start(initSvc, taskManager, startTime)
+}
+
+func dispatchAction(action string, taskManager *task.Manager) {
+	global.Log.Infof("开始执行后台任务: %s", action)
+	var err error
+	switch action {
 	case "keyword":
-		if err := taskManager.KeywordReloader(); err == nil {
-			fmt.Println("...执行成功")
-		} else {
-			fmt.Println("...执行失败: ", err)
-		}
+		err = taskManager.KeywordReloader()
 	default:
-		fmt.Println("参数可选: keyword")
+		fmt.Println("未知的任务参数, 可选值: keyword")
+		return
+	}
+
+	if err == nil {
+		global.Log.Infof("后台任务 '%s' 执行成功", action)
+	} else {
+		global.Log.Errorf("后台任务 '%s' 执行失败: %v", action, err)
 	}
 }

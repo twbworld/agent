@@ -18,7 +18,7 @@ type KeywordsDb struct{}
 
 // 获取所有数据
 func (d *KeywordsDb) GetKeywordsAllList(list *[]common.KeywordsList, tx ...*sqlx.Tx) error {
-	sql := fmt.Sprintf("SELECT `short_code`, `content` FROM `%s` GROUP BY `short_code` ORDER BY id DESC;", db.Keywords{}.TableName())
+	sql := fmt.Sprintf("SELECT `short_code`, `content` FROM `%s` ORDER BY id DESC;", db.Keywords{}.TableName())
 
 	if len(tx) > 0 && tx[0] != nil {
 		return tx[0].Select(list, sql)

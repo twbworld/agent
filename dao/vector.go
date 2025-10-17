@@ -182,12 +182,14 @@ func (d *VectorDb) Search(ctx context.Context, query string, topK int) ([]Search
 			question = ""
 		}
 
-		// sourceID, ok := metadata.GetFloat(VectorMetadataKeySourceID)
-		// if !ok {
-		// 	global.Log.Warnf("无法从元数据中解析 source_id: %v", metadata)
-		// 	// 同样，不中断流程
-		// 	sourceID = 0
-		// }
+		var sourceID int64
+		sourceIDFloat, ok := metadata.GetFloat(VectorMetadataKeySourceID)
+		if !ok {
+			global.Log.Warnf("无法从元数据中解析 source_id: %v", metadata)
+			// 同样，不中断流程
+		} else {
+			sourceID = int64(sourceIDFloat)
+		}
 
 		// Chroma返回的是距离（如L2距离），值越小越相似。
 		// 将其转换为一个0到1之间的相似度分数，值越大越相似。
@@ -197,7 +199,7 @@ func (d *VectorDb) Search(ctx context.Context, query string, topK int) ([]Search
 			Question:   question,
 			Answer:     answer,
 			Similarity: similarity,
-			// SourceID:   int64(sourceID),
+			SourceID:   sourceID,
 		})
 	}
 

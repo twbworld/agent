@@ -141,7 +141,16 @@ func (s *sqlite) createTable() error {
 
 func (m *mysql) createTable() error {
 	tableName := db.Keywords{}.TableName()
-	sql := fmt.Sprintf("CREATE TABLE IF NOT EXISTS `%s` (`id` INT UNSIGNED NOT NULL AUTO_INCREMENT, `created_at` BIGINT NOT NULL DEFAULT 0, `updated_at` BIGINT NOT NULL DEFAULT 0, `short_code` VARCHAR(255) NOT NULL DEFAULT '', `content` TEXT NOT NULL, `account_id` INT UNSIGNED NOT NULL DEFAULT 0, PRIMARY KEY (`id`), INDEX `idx_short_code` (`short_code`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;", tableName)
+	sql := fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s (
+		id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+		created_at BIGINT NOT NULL DEFAULT 0,
+		updated_at BIGINT NOT NULL DEFAULT 0,
+		short_code VARCHAR(255) NOT NULL DEFAULT '',
+		content TEXT NOT NULL,
+		account_id INT UNSIGNED NOT NULL DEFAULT 0,
+		PRIMARY KEY (id),
+		INDEX idx_short_code (short_code)
+	) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`, "`"+tableName+"`")
 	if _, err := dao.DB.Exec(sql); err != nil {
 		return fmt.Errorf("创建表 '%s' 失败: %w", tableName, err)
 	}

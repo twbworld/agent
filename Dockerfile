@@ -1,5 +1,5 @@
 ##编译
-FROM golang:1.24 AS builder
+FROM golang:1.25 AS builder
 WORKDIR /app
 ARG TARGETARCH
 ENV GO111MODULE=on
@@ -16,8 +16,8 @@ RUN CGO_ENABLED=1 GOOS=linux GOARCH=$TARGETARCH go build -ldflags "-s -w --extld
 FROM alpine:latest
 LABEL org.opencontainers.image.vendor="淘街"
 LABEL org.opencontainers.image.authors="1174865138@qq.com"
-LABEL org.opencontainers.image.description="AI编排服务"
-LABEL org.opencontainers.image.source="https://gitee.com/taoJie_1/chat"
+LABEL org.opencontainers.image.description="AI调度服务"
+LABEL org.opencontainers.image.source="https://gitee.com/taoJie_1/mall-agent"
 WORKDIR /app
 COPY --from=builder /app/static/ static/
 RUN set -xe && \

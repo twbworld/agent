@@ -1,7 +1,7 @@
 package task
 
 import (
-	"gitee.com/taoJie_1/chat/internal/embedding"
+	"gitee.com/taoJie_1/mall-agent/internal/embedding"
 )
 
 type Manager struct {

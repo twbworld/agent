@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"gitee.com/taoJie_1/chat/global"
+	"gitee.com/taoJie_1/mall-agent/global"
 )
 
 type timeNumber interface {

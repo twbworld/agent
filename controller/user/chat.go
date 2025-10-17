@@ -8,11 +8,11 @@ import (
 	"github.com/gin-gonic/gin"
 	"golang.org/x/sync/errgroup"
 
-	"gitee.com/taoJie_1/chat/dao"
-	"gitee.com/taoJie_1/chat/global"
-	"gitee.com/taoJie_1/chat/model/common"
-	"gitee.com/taoJie_1/chat/model/enum"
-	"gitee.com/taoJie_1/chat/service"
+	"gitee.com/taoJie_1/mall-agent/dao"
+	"gitee.com/taoJie_1/mall-agent/global"
+	"gitee.com/taoJie_1/mall-agent/model/common"
+	"gitee.com/taoJie_1/mall-agent/model/enum"
+	"gitee.com/taoJie_1/mall-agent/service"
 )
 
 type ChatApi struct{}

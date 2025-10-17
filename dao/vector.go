@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"gitee.com/taoJie_1/chat/global"
-	"gitee.com/taoJie_1/chat/internal/vector"
+	"gitee.com/taoJie_1/mall-agent/global"
+	"gitee.com/taoJie_1/mall-agent/internal/vector"
 	chroma "github.com/amikos-tech/chroma-go/pkg/api/v2"
 	"github.com/amikos-tech/chroma-go/pkg/embeddings"
 )

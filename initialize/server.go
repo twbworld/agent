@@ -2,7 +2,7 @@ package initialize
 
 import (
 	"context"
-	"gitee.com/taoJie_1/chat/task"
+	"gitee.com/taoJie_1/mall-agent/task"
 	"io"
 	"net/http"
 	"os"
@@ -11,13 +11,13 @@ import (
 	"syscall"
 	"time"
 
-	"gitee.com/taoJie_1/chat/global"
-	"gitee.com/taoJie_1/chat/router"
-	"gitee.com/taoJie_1/chat/service"
-	"gitee.com/taoJie_1/chat/service/admin"
-	"gitee.com/taoJie_1/chat/service/common"
-	"gitee.com/taoJie_1/chat/service/user"
-	"gitee.com/taoJie_1/chat/utils"
+	"gitee.com/taoJie_1/mall-agent/global"
+	"gitee.com/taoJie_1/mall-agent/router"
+	"gitee.com/taoJie_1/mall-agent/service"
+	"gitee.com/taoJie_1/mall-agent/service/admin"
+	"gitee.com/taoJie_1/mall-agent/service/common"
+	"gitee.com/taoJie_1/mall-agent/service/user"
+	"gitee.com/taoJie_1/mall-agent/utils"
 	"github.com/gin-gonic/gin"
 )
 

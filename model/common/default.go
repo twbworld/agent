@@ -1,6 +1,6 @@
 package common
 
-import "gitee.com/taoJie_1/chat/internal/chatwoot"
+import "gitee.com/taoJie_1/mall-agent/internal/chatwoot"
 
 type KeywordsList struct {
 	ShortCode string `db:"short_code" json:"short_code"`

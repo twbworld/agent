@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"sync"
 
-	"gitee.com/taoJie_1/chat/utils"
+	"gitee.com/taoJie_1/mall-agent/utils"
 )
 
 // 所有数据库结构体 都需实现的接口

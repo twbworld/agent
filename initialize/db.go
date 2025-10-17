@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"time"
 
-	"gitee.com/taoJie_1/chat/dao"
-	"gitee.com/taoJie_1/chat/global"
-	"gitee.com/taoJie_1/chat/model/enum"
+	"gitee.com/taoJie_1/mall-agent/dao"
+	"gitee.com/taoJie_1/mall-agent/global"
+	"gitee.com/taoJie_1/mall-agent/model/enum"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/mattn/go-sqlite3"

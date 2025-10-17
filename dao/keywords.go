@@ -6,11 +6,11 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"gitee.com/taoJie_1/chat/global"
-	"gitee.com/taoJie_1/chat/internal/chatwoot"
-	"gitee.com/taoJie_1/chat/model/common"
-	"gitee.com/taoJie_1/chat/model/db"
-	"gitee.com/taoJie_1/chat/model/enum"
+	"gitee.com/taoJie_1/mall-agent/global"
+	"gitee.com/taoJie_1/mall-agent/internal/chatwoot"
+	"gitee.com/taoJie_1/mall-agent/model/common"
+	"gitee.com/taoJie_1/mall-agent/model/db"
+	"gitee.com/taoJie_1/mall-agent/model/enum"
 	"github.com/jmoiron/sqlx"
 )
 

@@ -3,10 +3,10 @@ package router
 import (
 	"net/http"
 
-	"gitee.com/taoJie_1/chat/controller"
-	"gitee.com/taoJie_1/chat/global"
-	"gitee.com/taoJie_1/chat/middleware"
-	"gitee.com/taoJie_1/chat/model/common"
+	"gitee.com/taoJie_1/mall-agent/controller"
+	"gitee.com/taoJie_1/mall-agent/global"
+	"gitee.com/taoJie_1/mall-agent/middleware"
+	"gitee.com/taoJie_1/mall-agent/model/common"
 
 	"github.com/gin-gonic/gin"
 )

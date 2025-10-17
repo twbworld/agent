@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"gitee.com/taoJie_1/chat/model/db"
+	"gitee.com/taoJie_1/mall-agent/model/db"
 )
 
 type dbUtils struct{}

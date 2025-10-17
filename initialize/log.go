@@ -5,8 +5,8 @@ import (
 	"io"
 	"os"
 
-	"gitee.com/taoJie_1/chat/global"
-	"gitee.com/taoJie_1/chat/utils"
+	"gitee.com/taoJie_1/mall-agent/global"
+	"gitee.com/taoJie_1/mall-agent/utils"
 	"github.com/sirupsen/logrus"
 )
 

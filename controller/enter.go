@@ -1,7 +1,7 @@
 package controller
 
-import "gitee.com/taoJie_1/chat/controller/user"
-import "gitee.com/taoJie_1/chat/controller/admin"
+import "gitee.com/taoJie_1/mall-agent/controller/user"
+import "gitee.com/taoJie_1/mall-agent/controller/admin"
 
 var Api = new(ApiGroup)
 

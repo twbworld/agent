@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"gitee.com/taoJie_1/chat/global"
-	"gitee.com/taoJie_1/chat/model/config"
+	"gitee.com/taoJie_1/mall-agent/global"
+	"gitee.com/taoJie_1/mall-agent/model/config"
 	"github.com/fsnotify/fsnotify"
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/viper"

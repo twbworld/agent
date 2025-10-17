@@ -5,8 +5,8 @@ import (
 	"errors"
 	"strings"
 
-	"gitee.com/taoJie_1/chat/model/config"
-	"gitee.com/taoJie_1/chat/model/enum"
+	"gitee.com/taoJie_1/mall-agent/model/config"
+	"gitee.com/taoJie_1/mall-agent/model/enum"
 	"github.com/sashabaranov/go-openai"
 	"github.com/sirupsen/logrus"
 )

@@ -1,4 +1,4 @@
-module gitee.com/taoJie_1/chat
+module gitee.com/taoJie_1/mall-agent
 
 go 1.25
 

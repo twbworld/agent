@@ -1,6 +1,6 @@
 debug: false
 #本项目名称
-project_name: "淘街Chat"
+project_name: "mall-agent"
 #gin监听的地址
 gin_addr: ":80"
 #访问项目的域名,端口默认80(如webhook所用)

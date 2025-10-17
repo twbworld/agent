@@ -1,8 +1,8 @@
 package initialize
 
 import (
-	"gitee.com/taoJie_1/chat/global"
-	"gitee.com/taoJie_1/chat/task"
+	"gitee.com/taoJie_1/mall-agent/global"
+	"gitee.com/taoJie_1/mall-agent/task"
 	"github.com/robfig/cron/v3"
 )
 

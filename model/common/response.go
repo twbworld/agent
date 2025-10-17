@@ -3,7 +3,7 @@ package common
 import (
 	"net/http"
 
-	"gitee.com/taoJie_1/chat/model/enum"
+	"gitee.com/taoJie_1/mall-agent/model/enum"
 	"github.com/gin-gonic/gin"
 )
 

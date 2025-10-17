@@ -4,8 +4,8 @@ import (
 	"context"
 	"database/sql"
 
-	"gitee.com/taoJie_1/chat/dao"
-	"gitee.com/taoJie_1/chat/global"
+	"gitee.com/taoJie_1/mall-agent/dao"
+	"gitee.com/taoJie_1/mall-agent/global"
 )
 
 type IVectorService interface {

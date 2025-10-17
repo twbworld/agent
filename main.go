@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"time"
 
-	"gitee.com/taoJie_1/chat/global"
-	"gitee.com/taoJie_1/chat/initialize"
-	"gitee.com/taoJie_1/chat/task"
+	"gitee.com/taoJie_1/mall-agent/global"
+	"gitee.com/taoJie_1/mall-agent/initialize"
+	"gitee.com/taoJie_1/mall-agent/task"
 )
 
 func main() {

@@ -18,24 +18,6 @@ import (
 type ChatApi struct{}
 
 func (d *ChatApi) HandleChat(ctx *gin.Context) {
-    // bodyBytes, err := io.ReadAll(ctx.Request.Body)
-    // if err != nil {
-    //     ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to read request body"})
-    //     return
-    // }
-    // var requestBody map[string]interface{}
-    // if err := json.Unmarshal(bodyBytes, &requestBody); err != nil {
-    //     ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid JSON format"})
-    //     return
-    // }
-
-    // prettyJSON, _ := json.MarshalIndent(requestBody, "", "  ")
-    // fmt.Println(string(prettyJSON))
-
-
-
-
-
 	var req common.ChatRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		common.Fail(ctx, "参数无效")
@@ -53,10 +35,16 @@ func (d *ChatApi) HandleChat(ctx *gin.Context) {
 		return
 	}
 
+	// 如果会话状态为 "pending"，说明正在等待人工, AI不进行任何处理
+	if req.Conversation.Status == string(enum.ConversationStatusPending) {
+		common.Success(ctx, nil)
+		return
+	}
+
 	// 如果消息包含附件（图片、音视频等），则直接转人工
 	if len(req.Attachments) > 0 {
-		_ = service.Service.UserServiceGroup.ActionService.TransferToHuman(req.Conversation.ConversationID, enum.TransferToHuman3)
-		common.Fail(ctx, "您发送的消息暂不支持AI处理，已为您转接人工客服")
+		_ = service.Service.UserServiceGroup.ActionService.TransferToHuman(req.Conversation.ConversationID, enum.TransferToHuman3, string(enum.ReplyMsgUnsupportedAttachment))
+		common.Fail(ctx, string(enum.ReplyMsgUnsupportedAttachment))
 		return
 	}
 
@@ -64,8 +52,8 @@ func (d *ChatApi) HandleChat(ctx *gin.Context) {
 	if utf8.RuneCountInString(req.Content) > int(global.Config.Ai.MaxPromptLength) {
 		global.Log.Warnf("用户 %d 提问内容过长，已转人工", req.Conversation.ConversationID)
 		// 触发转人工
-		_ = service.Service.UserServiceGroup.ActionService.TransferToHuman(req.Conversation.ConversationID, enum.TransferToHuman3)
-		common.Fail(ctx, "提问内容过长，已为您转接人工客服")
+		_ = service.Service.UserServiceGroup.ActionService.TransferToHuman(req.Conversation.ConversationID, enum.TransferToHuman3, string(enum.ReplyMsgPromptTooLong))
+		common.Fail(ctx, string(enum.ReplyMsgPromptTooLong))
 		return
 	}
 
@@ -93,7 +81,7 @@ func (d *ChatApi) processMessageAsync(ctx context.Context, req common.ChatReques
 	defer func() {
 		if p := recover(); p != nil {
 			global.Log.Errorf("[processMessageAsync] panic: %v", p)
-			_ = service.Service.UserServiceGroup.ActionService.TransferToHuman(req.Conversation.ConversationID, enum.TransferToHuman2)
+			_ = service.Service.UserServiceGroup.ActionService.TransferToHuman(req.Conversation.ConversationID, enum.TransferToHuman2, string(enum.ReplyMsgSystemError))
 		}
 	}()
 
@@ -127,7 +115,7 @@ func (d *ChatApi) processMessageAsync(ctx context.Context, req common.ChatReques
 	// 等待快速路径搜索完成
 	if err := g.Wait(); err != nil {
 		// 如果是关键词匹配的错误，则转人工
-		_ = service.Service.UserServiceGroup.ActionService.TransferToHuman(req.Conversation.ConversationID, enum.TransferToHuman2)
+		_ = service.Service.UserServiceGroup.ActionService.TransferToHuman(req.Conversation.ConversationID, enum.TransferToHuman2, string(enum.ReplyMsgSystemError))
 		return
 	}
 
@@ -167,13 +155,13 @@ func (d *ChatApi) processMessageAsync(ctx context.Context, req common.ChatReques
 	llmAnswer, err := service.Service.UserServiceGroup.LlmService.NewChat(ctx, &req, llmReferenceDocs)
 	if err != nil {
 		global.Log.Errorf("[processMessageAsync] LLM错误: %v", err)
-		_ = service.Service.UserServiceGroup.ActionService.TransferToHuman(req.Conversation.ConversationID, enum.TransferToHuman2)
+		_ = service.Service.UserServiceGroup.ActionService.TransferToHuman(req.Conversation.ConversationID, enum.TransferToHuman2, string(enum.ReplyMsgLlmError))
 		return
 	}
 
 	if llmAnswer == "" {
 		global.Log.Warnf("[processMessageAsync] LLM返回空回复，转人工, 会话ID: %d", req.Conversation.ConversationID)
-		_ = service.Service.UserServiceGroup.ActionService.TransferToHuman(req.Conversation.ConversationID, enum.TransferToHuman5)
+		_ = service.Service.UserServiceGroup.ActionService.TransferToHuman(req.Conversation.ConversationID, enum.TransferToHuman5, string(enum.ReplyMsgLlmEmpty))
 		return
 	}
 

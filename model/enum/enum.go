@@ -72,3 +72,23 @@ const (
 	// 对话中的最终用户。
 	SenderTypeContact ChatwootWebhook = "contact"
 )
+
+type ConversationStatus string
+
+const (
+	ConversationStatusOpen    ConversationStatus = "open"
+	ConversationStatusPending ConversationStatus = "pending"
+	ConversationStatusBot     ConversationStatus = "bot"
+)
+
+type ReplyMessage string
+
+const (
+	ReplyMsgTransferSuccess       ReplyMessage = "已为您转接人工客服，请稍候。"
+	ReplyMsgAlreadyTransferred    ReplyMessage = "正在为您联系人工客服，请耐心等待，无需重复发送消息。"
+	ReplyMsgUnsupportedAttachment ReplyMessage = "您发送的消息暂不支持AI处理，已为您转接人工客服。"
+	ReplyMsgPromptTooLong         ReplyMessage = "提问内容过长，已为您转接人工客服。"
+	ReplyMsgLlmError              ReplyMessage = "抱歉，AI服务暂时遇到问题，已为您转接人工客服。"
+	ReplyMsgLlmEmpty              ReplyMessage = "抱歉，AI暂时无法回答您的问题，已为您转接人工客服。"
+	ReplyMsgSystemError           ReplyMessage = "系统繁忙，请稍后再试或联系人工客服。"
+)

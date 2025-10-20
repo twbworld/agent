@@ -22,10 +22,11 @@ type Account struct {
 
 // Conversation 代表会话信息
 type Conversation struct {
-	ConversationID uint `json:"id"`
-	AccountID      uint `json:"account_id"` // 该字段将由 ChatRequest.Account.ID 手动填充
-	InboxID        uint `json:"inbox_id"`
-	Meta           Meta `json:"meta"`
+	ConversationID uint   `json:"id"`
+	AccountID      uint   `json:"account_id"` // 该字段将由 ChatRequest.Account.ID 手动填充
+	InboxID        uint   `json:"inbox_id"`
+	Status         string `json:"status"`
+	Meta           Meta   `json:"meta"`
 }
 
 // Meta 存放会话的元数据

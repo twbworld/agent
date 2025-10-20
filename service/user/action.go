@@ -12,7 +12,7 @@ import (
 )
 
 type IActionService interface {
-	TransferToHuman(ConversationID uint, remark enum.TransferToHuman) error
+	TransferToHuman(ConversationID uint, remark enum.TransferToHuman, message ...string) error
 	ToggleTyping(conversationID uint, status bool)
 	SendMessage(conversationID uint, content string)
 	CannedResponses(chatRequest *common.ChatRequest) (string, bool, error)
@@ -36,13 +36,13 @@ func NewActionService() *ActionService {
 }
 
 // 转接人工客服
-func (d *ActionService) TransferToHuman(ConversationID uint, remark enum.TransferToHuman) error {
+func (d *ActionService) TransferToHuman(ConversationID uint, remark enum.TransferToHuman, message ...string) error {
 	if global.ChatwootService == nil {
 		return fmt.Errorf("Chatwoot客户端未初始化")
 	}
 	g, _ := errgroup.WithContext(context.Background())
 
-	// 创建私信备注
+	// 创建私信备注（内部使用）
 	if remark != "" {
 		g.Go(func() error {
 			if err := global.ChatwootService.CreatePrivateNote(ConversationID, string(remark)); err != nil {
@@ -52,7 +52,6 @@ func (d *ActionService) TransferToHuman(ConversationID uint, remark enum.Transfe
 		})
 	}
 
-	// 切换会话状态
 	g.Go(func() error {
 		if err := global.ChatwootService.ToggleConversationStatus(ConversationID); err != nil {
 			global.Log.Errorf("[action]转接会话 %d 至人工客服失败: %v", ConversationID, err)
@@ -60,6 +59,15 @@ func (d *ActionService) TransferToHuman(ConversationID uint, remark enum.Transfe
 		}
 		return nil
 	})
+
+	if len(message) > 0 && message[0] != "" {
+		g.Go(func() error {
+			if err := global.ChatwootService.CreateMessage(ConversationID, message[0]); err != nil {
+				global.Log.Warnf("[action]为会话 %d 发送转人工提示失败: %v", ConversationID, err)
+			}
+			return nil
+		})
+	}
 
 	// 等待所有任务完成，并返回遇到的第一个错误
 	if err := g.Wait(); err != nil {
@@ -108,7 +116,7 @@ func (d *ActionService) CannedResponses(chatRequest *common.ChatRequest) (string
 	// 判断是否是"转人工"等关键字
 	if _, isTransfer := d.transferKeywords[content]; isTransfer {
 		//(可后期判断多次关键字才转人工)
-		if err := d.TransferToHuman(chatRequest.Conversation.ConversationID, enum.TransferToHuman1); err != nil {
+		if err := d.TransferToHuman(chatRequest.Conversation.ConversationID, enum.TransferToHuman1, string(enum.ReplyMsgTransferSuccess)); err != nil {
 			return "", false, err
 		}
 		return "", true, nil

@@ -5,25 +5,44 @@ type ChatRequest struct {
 	ID           uint         `json:"id"`
 	Content      string       `json:"content"`
 	MessageType  string       `json:"message_type"`
-	CreatedAt    int64        `json:"created_at"`
+	CreatedAt    string       `json:"created_at"` // 时间戳
+	Event        string       `json:"event"`      // 事件类型, 例如: message_created
+	Private      bool         `json:"private"`    // 是否是私密消息
 	Conversation Conversation `json:"conversation"`
 	Sender       Sender       `json:"sender"`
+	Account      Account      `json:"account"`
 	Attachments  []Attachment `json:"attachments"`
+}
+
+// Account 代表账户信息
+type Account struct {
+	ID   uint   `json:"id"`
+	Name string `json:"name"`
 }
 
 // Conversation 代表会话信息
 type Conversation struct {
 	ConversationID uint `json:"id"`
-	AccountID      uint `json:"account_id"`
+	AccountID      uint `json:"account_id"` // 该字段将由 ChatRequest.Account.ID 手动填充
 	InboxID        uint `json:"inbox_id"`
+	Meta           Meta `json:"meta"`
 }
 
-// Sender 代表发送者信息
+// Meta 存放会话的元数据
+type Meta struct {
+	Sender SenderInfo `json:"sender"`
+}
+
+// SenderInfo 代表元数据中的发送者信息
+type SenderInfo struct {
+	Type string `json:"type"` // "contact", "agent_bot", "user"
+}
+
+// Sender 代表消息的直接发送者信息
 type Sender struct {
-	ID    uint   `json:"id"`
-	Name  string `json:"name"`
-	Email string `json:"email"`
-	Type  string `json:"type"` // "contact", "agent_bot", "user"
+	ID    uint    `json:"id"`
+	Name  string  `json:"name"`
+	Email *string `json:"email"`
 }
 
 // Attachment 代表附件信息

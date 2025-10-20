@@ -33,6 +33,10 @@ func Start(ginServer *gin.Engine) {
 		})
 	}
 
+	ginServer.GET("/", func(ctx *gin.Context) {
+		ctx.HTML(http.StatusOK, "index.html", nil)
+	})
+
 	ginServer.NoRoute(func(ctx *gin.Context) {
 		//内部重定向
 		ctx.Request.URL.Path = "/404.html"

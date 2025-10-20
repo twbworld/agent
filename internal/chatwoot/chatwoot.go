@@ -105,7 +105,7 @@ func (c *Client) CreatePrivateNote(conversationID uint, content string) error {
 	noteURL := fmt.Sprintf("%s/api/v1/accounts/%d/conversations/%d/messages", c.BaseURL, c.AccountID, conversationID)
 	notePayload := CreatePrivateNoteRequest{
 		Content:     content,
-		MessageType: "private",
+		MessageType: string(enum.MessageTypeOutgoing),
 		Private:     true,
 	}
 	noteBody, err := json.Marshal(notePayload)

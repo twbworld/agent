@@ -18,10 +18,33 @@ import (
 type ChatApi struct{}
 
 func (d *ChatApi) HandleChat(ctx *gin.Context) {
+    // bodyBytes, err := io.ReadAll(ctx.Request.Body)
+    // if err != nil {
+    //     ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to read request body"})
+    //     return
+    // }
+    // var requestBody map[string]interface{}
+    // if err := json.Unmarshal(bodyBytes, &requestBody); err != nil {
+    //     ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid JSON format"})
+    //     return
+    // }
+
+    // prettyJSON, _ := json.MarshalIndent(requestBody, "", "  ")
+    // fmt.Println(string(prettyJSON))
+
+
+
+
+
 	var req common.ChatRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		common.Fail(ctx, "参数无效")
 		return
+	}
+
+	// 兼容; 新版 webhook 结构中, account_id 不在 conversation 内, 在根对象上
+	if req.Account.ID != 0 {
+		req.Conversation.AccountID = req.Account.ID
 	}
 
 	// 调用验证器验证请求
@@ -46,7 +69,8 @@ func (d *ChatApi) HandleChat(ctx *gin.Context) {
 		return
 	}
 
-	if req.MessageType != string(enum.MessageTypeIncoming) || req.Sender.Type != string(enum.SenderTypeContact) {
+	// 只处理来自用户的、消息类型为 "incoming" 的消息
+	if req.MessageType != string(enum.MessageTypeIncoming) || req.Conversation.Meta.Sender.Type != string(enum.SenderTypeContact) {
 		common.Success(ctx, nil)
 		return
 	}

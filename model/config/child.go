@@ -10,6 +10,14 @@ type Database struct {
 	MysqlPassword string `json:"mysql_password" mapstructure:"mysql_password" yaml:"mysql_password"`
 }
 
+type Redis struct {
+	Addr       string `mapstructure:"addr" json:"addr" yaml:"addr"`
+	Password   string `mapstructure:"password" json:"password" yaml:"password"`
+	DB         int    `mapstructure:"db" json:"db" yaml:"db"`
+	LockPrefix string `mapstructure:"lock_prefix" json:"lock_prefix" yaml:"lock_prefix"`
+	LockExpiry int    `mapstructure:"lock_expiry" json:"lock_expiry" yaml:"lock_expiry"`
+}
+
 type Chatwoot struct {
 	Url       string `json:"url" mapstructure:"url" yaml:"url"`
 	AccountId int64  `json:"account_id" mapstructure:"account_id" yaml:"account_id"`

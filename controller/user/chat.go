@@ -2,6 +2,7 @@ package user
 
 import (
 	"context"
+	"fmt"
 	"time"
 	"unicode/utf8"
 
@@ -128,6 +129,11 @@ func (d *ChatApi) processMessageAsync(ctx context.Context, req common.ChatReques
 		service.Service.UserServiceGroup.ActionService.SendMessage(req.Conversation.ConversationID, cannedAnswer)
 		return
 	}
+
+	if gin.Mode() == gin.DebugMode && len(vectorResults) > 0 {
+		fmt.Println(vectorResults[0].Similarity, "==============", vectorResults[0].Question)
+	}
+
 	// 3. 检查是否有高相似度的向量搜索结果
 	if len(vectorResults) > 0 && vectorResults[0].Similarity >= global.Config.Ai.VectorSimilarityThreshold {
 		service.Service.UserServiceGroup.ActionService.SendMessage(req.Conversation.ConversationID, vectorResults[0].Answer)

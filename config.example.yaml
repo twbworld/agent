@@ -32,6 +32,15 @@ database:
   mysql_username: ""
   # mysql密码
   mysql_password: ""
+# Redis配置
+redis:
+  addr: "127.0.0.1:6379"
+  password: ""
+  db: 0
+  # 分布式锁的Key前缀
+  lock_prefix: "agent:lock:"
+  # 分布式锁的过期时间(秒)
+  lock_expiry: 30
 chatwoot:
   # Chatwoot部署地址
   url: "http://127.0.0.1:3000"

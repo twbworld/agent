@@ -1,97 +1,136 @@
 package dao
 
 import (
+	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
-	"strings"
+	"time"
 	"unicode/utf8"
 
 	"gitee.com/taoJie_1/mall-agent/global"
 	"gitee.com/taoJie_1/mall-agent/internal/chatwoot"
-	"gitee.com/taoJie_1/mall-agent/model/common"
-	"gitee.com/taoJie_1/mall-agent/model/db"
-	"gitee.com/taoJie_1/mall-agent/model/enum"
-	"github.com/jmoiron/sqlx"
+	"github.com/go-redis/redis/v8" // 引入go-redis
+)
+
+const (
+	RedisCannedResponsesKey = "canned_responses:hash"      // Redis中存储快捷回复的Hash Key
+	RedisSyncLockKey        = "canned_responses:sync_lock" // Redis分布式锁Key的后缀
 )
 
 type KeywordsDb struct{}
 
-// 获取所有数据
-func (d *KeywordsDb) GetKeywordsAllList(list *[]common.KeywordsList, tx ...*sqlx.Tx) error {
-	sql := fmt.Sprintf("SELECT `short_code`, `content` FROM `%s` ORDER BY id DESC;", db.Keywords{}.TableName())
-
-	if len(tx) > 0 && tx[0] != nil {
-		return tx[0].Select(list, sql)
-	}
-	return DB.Select(list, sql)
-}
-
-// 清空表
-func (d *KeywordsDb) CleanTable(tx *sqlx.Tx) error {
-	if tx == nil {
-		return errors.New("请使用事务[ioddfsaa]")
+// LoadAllKeywordsFromRedis 从Redis加载所有快捷回复
+func (d *KeywordsDb) LoadAllKeywordsFromRedis(ctx context.Context) ([]chatwoot.CannedResponse, error) {
+	if global.RedisClient == nil {
+		return nil, errors.New("Redis客户端未初始化")
 	}
 
-	switch global.Config.Database.Type {
-	case string(enum.SQLITE):
-		sql := fmt.Sprintf("DELETE FROM `%s`", db.Keywords{}.TableName())
-		_, err := tx.Exec(sql)
-
-		if err != nil {
-			return err
-		}
-		// 重置自增ID
-		sql = fmt.Sprintf("DELETE FROM sqlite_sequence WHERE name='%s'", db.Keywords{}.TableName())
-		_, err = tx.Exec(sql)
-		return err
-	case string(enum.MYSQL):
-		sql := fmt.Sprintf("TRUNCATE TABLE `%s`", db.Keywords{}.TableName())
-		_, err := tx.Exec(sql)
-		return err
-	}
-
-	return errors.New("数据库类型错误[rjfsos]")
-}
-
-// 插入数据
-func (d *KeywordsDb) BatchInsert(data []chatwoot.CannedResponse, tx *sqlx.Tx) (int64, error) {
-	if tx == nil {
-		return 0, errors.New("请使用事务[ioddfsaa]")
+	data, err := global.RedisClient.HGetAll(ctx, RedisCannedResponsesKey).Result()
+	if err != nil {
+		return nil, fmt.Errorf("从Redis获取快捷回复失败: %w", err)
 	}
 
 	if len(data) == 0 {
+		return nil, nil
+	}
+
+	var responses []chatwoot.CannedResponse
+	for _, v := range data {
+		var resp chatwoot.CannedResponse
+		if err := json.Unmarshal([]byte(v), &resp); err != nil {
+			global.Log.Warnf("反序列化Redis中的快捷回复失败: %v, 数据: %s", err, v)
+			continue
+		}
+		responses = append(responses, resp)
+	}
+	return responses, nil
+}
+
+// SaveKeywordsToRedis 将快捷回复批量保存到Redis
+// 使用HSet一次性设置多个字段，覆盖现有数据
+func (d *KeywordsDb) SaveKeywordsToRedis(ctx context.Context, responses []chatwoot.CannedResponse) (int, error) {
+	if global.RedisClient == nil {
+		return 0, errors.New("Redis客户端未初始化")
+	}
+	if len(responses) == 0 {
 		return 0, nil
 	}
 
-	var sqlData []map[string]interface{}
-	for _, resp := range data {
-		resp.ShortCode = strings.TrimSpace(resp.ShortCode)
-		if resp.ShortCode == "" || resp.Content == "" {
-			continue // 跳过无效数据
-		}
-		// 检查 short_code 是否超出配置的长度限制 (来自 Chatwoot 的快捷回复关键词)
+	// 使用HSet一次性设置多个字段
+	// HSet key field1 value1 field2 value2 ...
+	args := make([]interface{}, 0, len(responses)*2)
+	for _, resp := range responses {
+		// 检查 short_code 是否超出配置的长度限制
 		if utf8.RuneCountInString(resp.ShortCode) > int(global.Config.Ai.MaxShortCodeLength) {
 			global.Log.Warnf("short_code 超出长度限制，已跳过: %s", resp.ShortCode)
 			continue
 		}
 
-		sqlData = append(sqlData, map[string]interface{}{
-			"short_code": resp.ShortCode,
-			"content":    resp.Content,
-			"account_id": resp.AccountId,
-		})
+		jsonBytes, err := json.Marshal(resp)
+		if err != nil {
+			global.Log.Warnf("序列化快捷回复失败: %v, 数据: %+v", err, resp)
+			continue
+		}
+		args = append(args, resp.ShortCode, string(jsonBytes))
 	}
 
-	sql, args, err := utils.getBatchInsertSql(db.Keywords{}, sqlData)
+	if len(args) == 0 {
+		return 0, nil
+	}
+
+	err := global.RedisClient.HSet(ctx, RedisCannedResponsesKey, args...).Err()
 	if err != nil {
-		return 0, fmt.Errorf("构建批量插入SQL失败: %w", err)
+		return 0, fmt.Errorf("批量保存快捷回复到Redis失败: %w", err)
+	}
+	return len(responses), nil
+}
+
+// DeleteKeywordsFromRedis 从Redis删除指定的快捷回复
+func (d *KeywordsDb) DeleteKeywordsFromRedis(ctx context.Context, shortCodes []string) (int, error) {
+	if global.RedisClient == nil {
+		return 0, errors.New("Redis客户端未初始化")
+	}
+	if len(shortCodes) == 0 {
+		return 0, nil
 	}
 
-	sql = tx.Rebind(sql)
-	result, err := tx.Exec(sql, args...)
+	fields := make([]string, len(shortCodes))
+	for i, sc := range shortCodes {
+		fields[i] = sc
+	}
+
+	count, err := global.RedisClient.HDel(ctx, RedisCannedResponsesKey, fields...).Result()
 	if err != nil {
-		return 0, fmt.Errorf("批量插入数据失败: %w", err)
+		return 0, fmt.Errorf("从Redis删除快捷回复失败: %w", err)
 	}
+	return int(count), nil
+}
 
-	return result.RowsAffected()
+// AcquireSyncLock 尝试获取Redis分布式锁
+func (d *KeywordsDb) AcquireSyncLock(ctx context.Context, agentID string) (bool, error) {
+	if global.RedisClient == nil {
+		return false, errors.New("Redis客户端未初始化")
+	}
+	lockKey := global.Config.Redis.LockPrefix + RedisSyncLockKey
+	expiry := time.Duration(global.Config.Redis.LockExpiry) * time.Second
+	return global.RedisClient.SetNX(ctx, lockKey, agentID, expiry).Result()
+}
+
+// ReleaseSyncLock 释放Redis分布式锁
+func (d *KeywordsDb) ReleaseSyncLock(ctx context.Context, agentID string) error {
+	if global.RedisClient == nil {
+		return errors.New("Redis客户端未初始化")
+	}
+	lockKey := global.Config.Redis.LockPrefix + RedisSyncLockKey
+
+	// 确保只有持有锁的实例才能释放锁
+	val, err := global.RedisClient.Get(ctx, lockKey).Result()
+	if err != nil && err != redis.Nil {
+		return fmt.Errorf("获取锁值失败: %w", err)
+	}
+	if val == agentID {
+		return global.RedisClient.Del(ctx, lockKey).Err()
+	}
+	return nil // 不是当前实例持有的锁，无需释放
 }

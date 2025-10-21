@@ -6,7 +6,6 @@ import (
 
 	"gitee.com/taoJie_1/mall-agent/dao"
 	"gitee.com/taoJie_1/mall-agent/global"
-	"gitee.com/taoJie_1/mall-agent/model/db"
 	"gitee.com/taoJie_1/mall-agent/model/enum"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"
@@ -37,9 +36,11 @@ func (i *Initializer) dbStart() error {
 		return err
 	}
 
-	if err := dbRes.createTable(); err != nil {
-		return fmt.Errorf("创建数据表失败: %w", err)
-	}
+	// 如果未来有其他表需要SQL数据库，可以在dbRes.createTable()中添加相应的创建逻辑
+	// 目前只保留通用方法，但其内部不再处理Keywords表
+	// if err := dbRes.createTable(); err != nil {
+	// 	return fmt.Errorf("创建数据表失败: %w", err)
+	// }
 
 	return nil
 }
@@ -117,42 +118,22 @@ func (*mysql) version() (t string) {
 }
 
 func (s *sqlite) createTable() error {
-	tableName := db.Keywords{}.TableName()
-
-	createTableSQL := fmt.Sprintf(`CREATE TABLE IF NOT EXISTS "%s" (
-		"id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-		"created_at" INTEGER NOT NULL DEFAULT 0,
-		"updated_at" INTEGER NOT NULL DEFAULT 0,
-		"short_code" TEXT NOT NULL DEFAULT ''	,
-		"content" TEXT NOT NULL,
-		"account_id" INTEGER NOT NULL DEFAULT 0
-	);`, tableName)
-	if _, err := dao.DB.Exec(createTableSQL); err != nil {
-		return fmt.Errorf("创建表 '%s' 失败: %w", tableName, err)
-	}
-
-	createIndexSQL := fmt.Sprintf(`CREATE INDEX IF NOT EXISTS "idx_%s_short_code" ON "%s" ("short_code");`, tableName, tableName)
-	if _, err := dao.DB.Exec(createIndexSQL); err != nil {
-		return fmt.Errorf("为表 '%s' 创建索引失败: %w", tableName, err)
-	}
-
+	// 如果未来有其他表需要SQLite，可以在这里添加创建逻辑
+	// 例如:
+	// tableName := db.OtherTable{}.TableName()
+	// createTableSQL := fmt.Sprintf(`CREATE TABLE IF NOT EXISTS "%s" (...)`, tableName)
+	// if _, err := dao.DB.Exec(createTableSQL); err != nil {
+	// 	return fmt.Errorf("创建表 '%s' 失败: %w", tableName, err)
+	// }
 	return nil
 }
 
 func (m *mysql) createTable() error {
-	tableName := db.Keywords{}.TableName()
-	sql := fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s (
-		id INT UNSIGNED NOT NULL AUTO_INCREMENT,
-		created_at BIGINT NOT NULL DEFAULT 0,
-		updated_at BIGINT NOT NULL DEFAULT 0,
-		short_code VARCHAR(255) NOT NULL DEFAULT '',
-		content TEXT NOT NULL,
-		account_id INT UNSIGNED NOT NULL DEFAULT 0,
-		PRIMARY KEY (id),
-		INDEX idx_short_code (short_code)
-	) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`, "`"+tableName+"`")
-	if _, err := dao.DB.Exec(sql); err != nil {
-		return fmt.Errorf("创建表 '%s' 失败: %w", tableName, err)
-	}
+	// 示例：如果未来有其他表需要MySQL，可以在这里添加创建逻辑
+	// tableName := db.OtherTable{}.TableName()
+	// sql := fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s (...)`, "`"+tableName+"`")
+	// if _, err := dao.DB.Exec(sql); err != nil {
+	// 	return fmt.Errorf("创建表 '%s' 失败: %w", tableName, err)
+	// }
 	return nil
 }

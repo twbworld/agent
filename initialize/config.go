@@ -91,6 +91,21 @@ func handleConfig(c *config.Config) {
 	if c.Database.SqlitePath == "" {
 		c.Database.SqlitePath = "data.db"
 	}
+	if c.Redis.Addr == "" {
+		c.Redis.Addr = "127.0.0.1:6379"
+	}
+	if c.Redis.Password == "" {
+		c.Redis.Password = ""
+	}
+	if c.Redis.DB == 0 {
+		c.Redis.DB = 0
+	}
+	if c.Redis.LockPrefix == "" {
+		c.Redis.LockPrefix = "agent:lock:"
+	}
+	if c.Redis.LockExpiry == 0 {
+		c.Redis.LockExpiry = 30
+	}
 	if c.Chatwoot.Url == "" {
 		c.Chatwoot.Url = "http://127.0.0.1:8080"
 	}

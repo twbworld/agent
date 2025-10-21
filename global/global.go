@@ -7,6 +7,7 @@ import (
 	"gitee.com/taoJie_1/mall-agent/internal/chatwoot"
 	"gitee.com/taoJie_1/mall-agent/internal/embedding"
 	"gitee.com/taoJie_1/mall-agent/internal/llm"
+	"gitee.com/taoJie_1/mall-agent/internal/redis"
 	"gitee.com/taoJie_1/mall-agent/internal/vector"
 	"gitee.com/taoJie_1/mall-agent/model/config"
 	"github.com/sirupsen/logrus"
@@ -23,6 +24,7 @@ var (
 	EmbeddingService embedding.Service
 	LlmService       llm.Service
 	VectorDb         vector.Service
+	RedisClient      redis.Service
 )
 
 type CannedResponsesMap struct {

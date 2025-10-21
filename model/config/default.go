@@ -1,6 +1,5 @@
 package config
 
-// viper要用到mapstructure/yaml
 type Config struct {
 	Debug        bool         `json:"debug" mapstructure:"debug" yaml:"debug"`
 	ProjectName  string       `json:"project_name" mapstructure:"project_name" yaml:"project_name"`
@@ -12,6 +11,7 @@ type Config struct {
 	Tz           string       `json:"tz" mapstructure:"tz" yaml:"tz"`
 	Cors         []string     `json:"cors" mapstructure:"cors" yaml:"cors"`
 	Database     Database     `json:"database" mapstructure:"database" yaml:"database"`
+	Redis        Redis        `json:"redis" mapstructure:"redis" yaml:"redis"`
 	Chatwoot     Chatwoot     `json:"chatwoot" mapstructure:"chatwoot" yaml:"chatwoot"`
 	Llm          []Llm        `json:"llm" mapstructure:"llm" yaml:"llm"`
 	LlmEmbedding LlmEmbedding `json:"llm_embedding" mapstructure:"llm_embedding" yaml:"llm_embedding"`

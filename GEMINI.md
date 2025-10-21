@@ -33,6 +33,8 @@
 -   **交互**: 通过 WebSocket 与前端通信，通过 Webhook 将消息事件推送给AI编排服务。
 
 ### 4.2. AI编排服务 (Go + Gin)
+> **说明**: 在本文档及日常交流中，`AI编排服务`、`AI调度服务`、`Agent服务` 等名称均指代此核心服务。
+
 -   **角色**: 智能调度与决策中枢。
 -   **作用**:
     -   接收并解析来自 Chatwoot 的所有消息。
@@ -51,32 +53,20 @@
 ### 4.4. 底层技术与数据支持
 -   **LLM**: 本地部署 `Ollama` (开发环境) 与 `vllm` (生产环境)，运行 `Qwen3` 模型（小模型用于意图规划，大模型用于生成回复）。
 -   **向量数据库**: 使用 `chroma` 进行RAG语义检索。
--   **配置与数据存储**: 使用 `SQLite` 存储从 Chatwoot 同步的 `canned_responses` (快捷回复) 数据，并作为关键词匹配的数据源, 选择`SQLite`而不是`Mysql`是因为能保证项目为无状态的特性。
+-   **配置与数据存储**: 使用 `Redis` 存储从 Chatwoot 同步的 `canned_responses` (快捷回复) 数据，并作为关键词匹配的数据源。选择 `Redis` 是为了在无状态容器环境中保证数据持久化和快速访问，同时支持分布式锁机制。内存 `map` 仍作为一级缓存，用于快速查找。
 
 ## 5. 核心业务逻辑与数据流
 
 ### 数据同步
 
 -   一个定时任务每30分钟从 Chatwoot 的 `canned_responses` 接口同步数据。
--   数据同时写入 `SQLite` (用于关键词匹配) 和 `chroma` (用于语义相似度搜索)。
--   SQLite 表结构:
-    ```sql
-    CREATE TABLE "canned_responses" (
-        "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-        "short_code" TEXT NOT NULL DEFAULT '', -- 关键词
-        "content" TEXT NOT NULL DEFAULT '',    -- 回复内容
-        "account_id" INTEGER NOT NULL DEFAULT 0,
-        "created_at" TEXT(10) NOT NULL DEFAULT '',
-        "updated_at" TEXT(10) NOT NULL DEFAULT ''
-    );
-    CREATE INDEX IF NOT EXISTS "idx_short_code" ON "canned_responses" ("short_code" ASC);
-    ```
+-   数据同时写入 `Redis` (用于关键词匹配) 和 `chroma` (用于语义相似度搜索)。
 
 ### 对话处理流程 (Webhook 触发)
 
 1.  **接收消息**: AI编排服务接收到来自 Chatwoot 的用户消息。
 2.  **快速路径判断**:
-    -   **关键词匹配**: 在内存中的 `map` (来自SQLite) 中查找。如果匹配到“您好”或“转人工”等关键词，立即执行相应操作（回复或转接）并结束流程。
+    -   **关键词匹配**: 在内存中的 `map` (来自Redis) 中查找。如果匹配到“您好”或“转人工”等关键词，立即执行相应操作（回复或转接）并结束流程。
     -   **高相似度匹配**: 如果无关键词匹配，则在 `chroma` 中进行向量搜索。若相似度 > 90%，直接返回匹配到的答案，流程结束。
 3.  **复杂路径 (LLM编排)**:
     -   **意图规划 (Qwen3:4B)**: 将用户问题、对话历史和工具列表（MCP工具、RAG工具）发送给小参数的Qwen模型，让其决策下一步行动。
@@ -123,7 +113,7 @@
     *   **处理流程**:
         1.  **精确匹配部分**:
             *   系统提取 `<keyword>` (例如: "公司文化")。
-            *   将提取的 `keyword` 和对应的 `content` 存入用于精确匹配的内存缓存 (`map`) 和 `SQLite` 数据库中。
+            *   将提取的 `keyword` 和对应的 `content` 存入用于精确匹配的内存缓存 (`map`) 和 `Redis` 数据库中。
         2.  **AI语义匹配部分**:
             *   系统同样提取 `<keyword>` (例如: "公司文化") 作为种子问题。
             *   调用**小参数LLM**将种子问题生成一个“标准问题” (例如: "你们的公司文化是什么?")。

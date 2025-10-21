@@ -7,6 +7,7 @@ import (
 
 	"gitee.com/taoJie_1/mall-agent/global"
 	"gitee.com/taoJie_1/mall-agent/utils"
+	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 )
 
@@ -18,7 +19,11 @@ func (i *Initializer) InitLog() error {
 
 	global.Log = logrus.New()
 	global.Log.SetFormatter(&logrus.JSONFormatter{})
-	global.Log.SetLevel(logrus.InfoLevel)
+	if gin.Mode() == gin.DebugMode {
+		global.Log.SetLevel(logrus.DebugLevel)
+	} else {
+		global.Log.SetLevel(logrus.InfoLevel)
+	}
 
 	runfile, err := os.OpenFile(global.Config.RunLogPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 	if err != nil {

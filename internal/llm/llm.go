@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 
+	"gitee.com/taoJie_1/mall-agent/model/common"
 	"gitee.com/taoJie_1/mall-agent/model/config"
 	"gitee.com/taoJie_1/mall-agent/model/enum"
 	"github.com/sashabaranov/go-openai"
@@ -20,6 +21,7 @@ type client struct {
 
 type Service interface {
 	ChatCompletion(ctx context.Context, size enum.LlmSize, systemPrompt enum.SystemPrompt, content string, temperature ...float32) (string, error)
+	ChatCompletionWithHistory(ctx context.Context, size enum.LlmSize, systemPrompt enum.SystemPrompt, content string, history []common.LlmMessage, temperature ...float32) (string, error) // 新增方法
 	GetCompletion(ctx context.Context, size enum.LlmSize, systemPrompt enum.SystemPrompt, content string, temperature ...float32) (string, error)
 	GenerateStandardQuestion(ctx context.Context, prompt enum.SystemPrompt, text string) (string, error)
 }
@@ -49,6 +51,11 @@ func (c *client) getLlmConfig(size enum.LlmSize) *config.Llm {
 
 // ChatCompletion 调用LLM进行实时对话
 func (c *client) ChatCompletion(ctx context.Context, size enum.LlmSize, systemPrompt enum.SystemPrompt, content string, temperature ...float32) (string, error) {
+	return c.ChatCompletionWithHistory(ctx, size, systemPrompt, content, nil, temperature...)
+}
+
+// ChatCompletionWithHistory 调用LLM进行实时对话，并支持传入历史消息
+func (c *client) ChatCompletionWithHistory(ctx context.Context, size enum.LlmSize, systemPrompt enum.SystemPrompt, content string, history []common.LlmMessage, temperature ...float32) (string, error) {
 	llmClient, ok := c.llmClients[size]
 	if !ok {
 		return "", errors.New("未找到指定大小的LLM客户端实例")
@@ -58,18 +65,30 @@ func (c *client) ChatCompletion(ctx context.Context, size enum.LlmSize, systemPr
 		return "", errors.New("未找到指定的LLM客户端配置")
 	}
 
-	req := openai.ChatCompletionRequest{
-		Model: llmConfig.Model,
-		Messages: []openai.ChatCompletionMessage{
-			{
-				Role:    openai.ChatMessageRoleSystem,
-				Content: string(systemPrompt),
-			},
-			{
-				Role:    openai.ChatMessageRoleUser,
-				Content: content,
-			},
+	messages := []openai.ChatCompletionMessage{
+		{
+			Role:    openai.ChatMessageRoleSystem,
+			Content: string(systemPrompt),
 		},
+	}
+
+	// 添加历史消息
+	for _, msg := range history {
+		messages = append(messages, openai.ChatCompletionMessage{
+			Role:    msg.Role,
+			Content: msg.Content,
+		})
+	}
+
+	// 添加当前用户消息
+	messages = append(messages, openai.ChatCompletionMessage{
+		Role:    openai.ChatMessageRoleUser,
+		Content: content,
+	})
+
+	req := openai.ChatCompletionRequest{
+		Model:    llmConfig.Model,
+		Messages: messages,
 	}
 
 	// 优先使用传入的temperature参数，其次是配置文件中的，最后使用LLM默认值
@@ -120,18 +139,20 @@ func (c *client) GetCompletion(ctx context.Context, size enum.LlmSize, systemPro
 		return "", errors.New("未找到指定的LLM客户端配置")
 	}
 
-	req := openai.ChatCompletionRequest{
-		Model: llmConfig.Model,
-		Messages: []openai.ChatCompletionMessage{
-			{
-				Role:    openai.ChatMessageRoleSystem,
-				Content: string(systemPrompt),
-			},
-			{
-				Role:    openai.ChatMessageRoleUser,
-				Content: content,
-			},
+	messages := []openai.ChatCompletionMessage{
+		{
+			Role:    openai.ChatMessageRoleSystem,
+			Content: string(systemPrompt),
 		},
+		{
+			Role:    openai.ChatMessageRoleUser,
+			Content: content,
+		},
+	}
+
+	req := openai.ChatCompletionRequest{
+		Model:    llmConfig.Model,
+		Messages: messages,
 	}
 
 	// 优先使用传入的temperature参数，其次是配置文件中的，最后使用LLM默认值

@@ -92,3 +92,13 @@ const (
 	ReplyMsgLlmEmpty              ReplyMessage = "抱歉，AI暂时无法回答您的问题，已为您转接人工客服。"
 	ReplyMsgSystemError           ReplyMessage = "系统繁忙，请稍后再试或联系人工客服。"
 )
+
+type ChatwootEvent string
+
+const (
+	EventMessageCreated            ChatwootEvent = "message_created"
+	EventMessageUpdated            ChatwootEvent = "message_updated"
+	EventConversationCreated       ChatwootEvent = "conversation_created"
+	EventConversationStatusChanged ChatwootEvent = "conversation_status_changed"
+	EventConversationUpdated       ChatwootEvent = "conversation_updated"
+)

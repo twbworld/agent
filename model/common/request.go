@@ -44,6 +44,7 @@ type Sender struct {
 	ID    uint    `json:"id"`
 	Name  string  `json:"name"`
 	Email *string `json:"email"`
+	Type  string  `json:"type"`
 }
 
 // Attachment 代表附件信息

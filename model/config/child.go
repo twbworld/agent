@@ -11,17 +11,19 @@ type Database struct {
 }
 
 type Redis struct {
-	Addr       string `mapstructure:"addr" json:"addr" yaml:"addr"`
-	Password   string `mapstructure:"password" json:"password" yaml:"password"`
-	DB         int    `mapstructure:"db" json:"db" yaml:"db"`
-	LockPrefix string `mapstructure:"lock_prefix" json:"lock_prefix" yaml:"lock_prefix"`
-	LockExpiry int    `mapstructure:"lock_expiry" json:"lock_expiry" yaml:"lock_expiry"`
+	Addr                   string `json:"addr" mapstructure:"addr" yaml:"addr"`
+	Password               string `json:"password" mapstructure:"password" yaml:"password"`
+	DB                     int    `json:"db" mapstructure:"db" yaml:"db"`
+	LockPrefix             string `json:"lock_prefix" mapstructure:"lock_prefix" yaml:"lock_prefix"`
+	LockExpiry             int    `json:"lock_expiry" mapstructure:"lock_expiry" yaml:"lock_expiry"`
+	ConversationHistoryTTL int    `json:"conversation_history_ttl" mapstructure:"conversation_history_ttl" yaml:"conversation_history_ttl"`
 }
 
 type Chatwoot struct {
-	Url       string `json:"url" mapstructure:"url" yaml:"url"`
-	AccountId int64  `json:"account_id" mapstructure:"account_id" yaml:"account_id"`
-	Auth      string `json:"auth" mapstructure:"auth" yaml:"auth"`
+	Url         string `json:"url" mapstructure:"url" yaml:"url"`
+	AccountId   int64  `json:"account_id" mapstructure:"account_id" yaml:"account_id"`
+	Auth        string `json:"auth" mapstructure:"auth" yaml:"auth"`
+	AgentUserID uint   `json:"agent_user_id" mapstructure:"agent_user_id" yaml:"agent_user_id"`
 }
 
 type modelConfig struct {

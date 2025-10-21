@@ -12,7 +12,7 @@ import (
 )
 
 type ILlmService interface {
-	NewChat(ctx context.Context, param *common.ChatRequest, referenceDocs []dao.SearchResult) (string, error)
+	NewChat(ctx context.Context, param *common.ChatRequest, referenceDocs []dao.SearchResult, history []common.LlmMessage) (string, error) // 修改方法签名
 }
 
 type LlmService struct {
@@ -23,7 +23,7 @@ func NewLlmService() *LlmService {
 }
 
 // 负责业务层面的决策，例如决定使用哪个模型、哪个Prompt
-func (s *LlmService) NewChat(ctx context.Context, param *common.ChatRequest, referenceDocs []dao.SearchResult) (string, error) {
+func (s *LlmService) NewChat(ctx context.Context, param *common.ChatRequest, referenceDocs []dao.SearchResult, history []common.LlmMessage) (string, error) { // 修改方法签名
 	if global.LlmService == nil {
 		return "", fmt.Errorf("LLM客户端未初始化")
 	}
@@ -43,11 +43,12 @@ func (s *LlmService) NewChat(ctx context.Context, param *common.ChatRequest, ref
 
 	finalContent.WriteString(param.Content)
 
-	return global.LlmService.ChatCompletion(
+	return global.LlmService.ChatCompletionWithHistory( // 调用新的ChatCompletionWithHistory
 		ctx,
 		enum.ModelLarge,
 		systemPrompt,
 		finalContent.String(),
+		history, // 传递历史记录
 		0.5,
 	)
 }

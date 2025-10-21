@@ -106,11 +106,17 @@ func handleConfig(c *config.Config) {
 	if c.Redis.LockExpiry == 0 {
 		c.Redis.LockExpiry = 30
 	}
+	if c.Redis.ConversationHistoryTTL == 0 { // 新增
+		c.Redis.ConversationHistoryTTL = 3600 // 默认1小时
+	}
 	if c.Chatwoot.Url == "" {
 		c.Chatwoot.Url = "http://127.0.0.1:8080"
 	}
 	if c.Chatwoot.AccountId == 0 {
 		c.Chatwoot.AccountId = 1
+	}
+	if c.Chatwoot.AgentUserID == 0 {
+		c.Chatwoot.AgentUserID = 2
 	}
 	for i := range c.Llm {
 		if c.Llm[i].Timeout == 0 {

@@ -12,3 +12,9 @@ type KeywordRule struct {
 	chatwoot.CannedResponse
 	Embedding []float32 // 文本向量
 }
+
+// LlmMessage 结构体定义了发送给LLM的聊天消息格式
+type LlmMessage struct {
+	Role    string `json:"role"`    // 消息角色，例如 "user", "assistant", "system"
+	Content string `json:"content"` // 消息内容
+}

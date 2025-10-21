@@ -19,12 +19,42 @@ type CannedResponse struct {
 	Content   string `json:"content"`
 }
 
+// ConversationMessagesResponse 定义了会话消息列表API的响应结构
+type ConversationMessagesResponse struct {
+	Payload []Message `json:"payload"`
+}
+
+// Message 结构体定义了Chatwoot API返回的单条消息结构
+type Message struct {
+	ID          uint      `json:"id"`
+	Content     string    `json:"content"`
+	MessageType int       `json:"message_type"` // 0: incoming, 1: outgoing
+	CreatedAt   int64     `json:"created_at"`
+	Sender      Sender    `json:"sender"`
+	Private     bool      `json:"private"` // 是否是私信备注
+	Attachments []Attachment `json:"attachments"` // 附件列表
+}
+
+// Sender 结构体定义了消息发送者的信息
+type Sender struct {
+	ID   uint   `json:"id"`
+	Type string `json:"type"` // "contact", "agent"
+}
+
+// Attachment 结构体定义了消息附件的信息
+type Attachment struct {
+	ID   uint   `json:"id"`
+	FileType string `json:"file_type"`
+	FileUrl  string `json:"file_url"`
+}
+
 type Service interface {
 	GetCannedResponses() ([]CannedResponse, error)
 	CreatePrivateNote(conversationID uint, content string) error
 	ToggleConversationStatus(conversationID uint) error
 	ToggleTypingStatus(conversationID uint, status string) error
 	CreateMessage(conversationID uint, content string) error
+	GetConversationMessages(accountID, conversationID uint) ([]Message, error)
 }
 
 // TransferToHumanRequest 定义了转人工API的请求体
@@ -247,4 +277,40 @@ func (c *Client) CreateMessage(conversationID uint, content string) error {
 		return fmt.Errorf("创建消息API请求返回非200状态码: %d, 响应: %s", resp.StatusCode, string(bodyBytes))
 	}
 	return nil
+}
+
+// GetConversationMessages 从Chatwoot API获取指定会话的历史消息
+func (c *Client) GetConversationMessages(accountID, conversationID uint) ([]Message, error) {
+	url := fmt.Sprintf("%s/api/v1/accounts/%d/conversations/%d/messages", c.BaseURL, accountID, conversationID)
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("创建获取会话消息请求失败: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json; charset=utf-8")
+	req.Header.Set("api_access_token", c.ApiToken)
+
+	resp, err := c.HttpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("发送获取会话消息API请求失败: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("获取会话消息API请求返回非200状态码: %d, 响应: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("读取获取会话消息响应体失败: %w", err)
+	}
+
+	var response ConversationMessagesResponse
+	if err := json.Unmarshal(body, &response); err != nil {
+		return nil, fmt.Errorf("解析获取会话消息JSON响应失败: %w", err)
+	}
+
+	return response.Payload, nil
 }

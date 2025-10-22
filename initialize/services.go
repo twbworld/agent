@@ -3,7 +3,9 @@ package initialize
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
+	"os"
 	"time"
 
 	"gitee.com/taoJie_1/mall-agent/dao"
@@ -11,11 +13,70 @@ import (
 	"gitee.com/taoJie_1/mall-agent/internal/chatwoot"
 	"gitee.com/taoJie_1/mall-agent/internal/embedding"
 	"gitee.com/taoJie_1/mall-agent/internal/llm"
+	"gitee.com/taoJie_1/mall-agent/internal/redis"
 	"gitee.com/taoJie_1/mall-agent/internal/vector"
 	"gitee.com/taoJie_1/mall-agent/model/enum"
+	"gitee.com/taoJie_1/mall-agent/utils"
+	"github.com/gin-gonic/gin"
 	"github.com/sashabaranov/go-openai"
+	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 )
+
+// InitLog 初始化logrus日志库
+func (i *Initializer) InitLog() error {
+	if err := utils.CreateFile(global.Config.RunLogPath); err != nil {
+		return fmt.Errorf("创建文件错误[oirdtug]: %w", err)
+	}
+
+	global.Log = logrus.New()
+	global.Log.SetFormatter(&logrus.JSONFormatter{})
+	if gin.Mode() == gin.DebugMode {
+		global.Log.SetLevel(logrus.DebugLevel)
+	} else {
+		global.Log.SetLevel(logrus.InfoLevel)
+	}
+
+	runfile, err := os.OpenFile(global.Config.RunLogPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if err != nil {
+		return fmt.Errorf("打开文件错误[0atrpf]: %w", err)
+	}
+	global.Log.SetOutput(io.MultiWriter(os.Stdout, runfile))
+	i.logFileCloser = runfile // 存储文件关闭器
+	return nil
+}
+
+func (i *Initializer) initTz() error {
+	Location, err := time.LoadLocation(global.Config.Tz)
+	if err != nil {
+		return fmt.Errorf("时区配置失败[siortuj]: %w", err)
+	}
+	global.Tz = Location
+	return nil
+}
+
+// initRedis 初始化Redis客户端
+func (i *Initializer) initRedis() error {
+	client, err := redis.NewClient(
+		global.Config.Redis.Addr,
+		global.Config.Redis.Password,
+		global.Config.Redis.DB,
+	)
+	if err != nil {
+		return fmt.Errorf("初始化Redis客户端失败: %w", err)
+	}
+	global.RedisClient = client
+	global.Log.Info("初始化Redis服务成功")
+	return nil
+}
+
+// redisClose 关闭Redis客户端连接
+func (i *Initializer) redisClose() error {
+	if global.RedisClient != nil {
+		return global.RedisClient.Close()
+	}
+	return nil
+}
 
 func (i *Initializer) initVectorDb() error {
 	client, err := vector.NewClient(

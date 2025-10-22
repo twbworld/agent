@@ -27,6 +27,7 @@ type Service interface {
 	GetConversationHistory(ctx context.Context, conversationID uint) ([]common.LlmMessage, error)
 	SetConversationHistory(ctx context.Context, conversationID uint, history []common.LlmMessage, ttl time.Duration) error
 	AppendToConversationHistory(ctx context.Context, conversationID uint, ttl time.Duration, newMessages ...common.LlmMessage) error
+	Close() error
 }
 
 type client struct {
@@ -51,6 +52,10 @@ func NewClient(addr, password string, db int) (Service, error) {
 	}
 
 	return &client{rdb: rdb}, nil
+}
+
+func (c *client) Close() error {
+	return c.rdb.Close()
 }
 
 func (c *client) Get(ctx context.Context, key string) *redis.StringCmd {

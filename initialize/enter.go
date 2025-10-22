@@ -2,12 +2,9 @@ package initialize
 
 import (
 	"context"
-	"fmt"
 	"io"
-	"time"
 
 	"gitee.com/taoJie_1/mall-agent/global"
-	"gitee.com/taoJie_1/mall-agent/internal/redis"
 	"gitee.com/taoJie_1/mall-agent/task"
 	"github.com/robfig/cron/v3"
 	"golang.org/x/sync/errgroup"
@@ -51,6 +48,9 @@ func (i *Initializer) Close() {
 	if i.vectorDbClose() == nil {
 		global.Log.Info("VectorDb客户端已关闭")
 	}
+	if i.redisClose() == nil {
+		global.Log.Info("Redis客户端已关闭")
+	}
 	if i.dbClose() == nil {
 		global.Log.Infof("%s已关闭", global.Config.Database.Type)
 	}
@@ -72,28 +72,4 @@ func (i *Initializer) StartSystem(taskManager *task.Manager) {
 		panic(err)
 	}
 	i.loadData(taskManager)
-}
-
-func (i *Initializer) initTz() error {
-	Location, err := time.LoadLocation(global.Config.Tz)
-	if err != nil {
-		return fmt.Errorf("时区配置失败[siortuj]: %w", err)
-	}
-	global.Tz = Location
-	return nil
-}
-
-// initRedis 初始化Redis客户端
-func (i *Initializer) initRedis() error {
-	client, err := redis.NewClient(
-		global.Config.Redis.Addr,
-		global.Config.Redis.Password,
-		global.Config.Redis.DB,
-	)
-	if err != nil {
-		return fmt.Errorf("初始化Redis客户端失败: %w", err)
-	}
-	global.RedisClient = client
-	global.Log.Info("初始化Redis服务成功")
-	return nil
 }

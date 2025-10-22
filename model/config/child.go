@@ -20,10 +20,10 @@ type Redis struct {
 }
 
 type Chatwoot struct {
-	Url         string `json:"url" mapstructure:"url" yaml:"url"`
-	AccountId   int64  `json:"account_id" mapstructure:"account_id" yaml:"account_id"`
-	Auth        string `json:"auth" mapstructure:"auth" yaml:"auth"`
-	AgentUserID uint   `json:"agent_user_id" mapstructure:"agent_user_id" yaml:"agent_user_id"`
+	Url       string `yaml:"url" mapstructure:"url" json:"url"`
+	AccountId uint   `yaml:"account_id" mapstructure:"account_id" json:"account_id"`
+	Auth      string `yaml:"auth" mapstructure:"auth" json:"auth"`
+	BotAuth   string `yaml:"bot_auth" mapstructure:"bot_auth" json:"bot_auth"`
 }
 
 type modelConfig struct {

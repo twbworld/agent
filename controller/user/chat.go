@@ -1,9 +1,11 @@
 package user
 
 import (
+	// "bytes"
 	"context"
 	"errors"
 	"fmt"
+	// "io"
 	"time"
 	"unicode/utf8"
 
@@ -22,6 +24,11 @@ type ChatApi struct{}
 var ErrVectorMatchFound = errors.New("vector match found")
 
 func (d *ChatApi) HandleChat(ctx *gin.Context) {
+
+	// bodyBytes, _ := io.ReadAll(ctx.Request.Body)
+	// fmt.Println(string(bodyBytes))
+	// ctx.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+
 	var req common.ChatRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		common.Fail(ctx, "参数无效")
@@ -40,8 +47,9 @@ func (d *ChatApi) HandleChat(ctx *gin.Context) {
 	}
 
 	// 处理"人工客服"消息: 将其计入Redis历史
-	if req.MessageType == string(enum.MessageTypeOutgoing) && req.Sender.Type == "user" && req.Sender.ID != global.Config.Chatwoot.AgentUserID {
-		common.Success(ctx, nil) // 快速响应 webhook
+	if req.MessageType == string(enum.MessageTypeOutgoing) && req.Sender.Type == "user" {
+		//理论上不会进入此处, 因为转人工后不需要用到LLM,也就不需要历史记录;以防万一
+		common.Success(ctx, nil)
 		reqCopy := req
 		go d.updateHistoryWithHumanMessage(reqCopy)
 		return
@@ -56,12 +64,6 @@ func (d *ChatApi) HandleChat(ctx *gin.Context) {
 	// 调用验证器验证请求
 	if err := service.Service.UserServiceGroup.Validator.ValidatorChatRequest(&req); err != nil {
 		common.Fail(ctx, err.Error())
-		return
-	}
-
-	// 如果会话状态为 "pending"，说明正在等待人工, AI不进行任何处理
-	if req.Conversation.Status == string(enum.ConversationStatusPending) {
-		common.Success(ctx, nil)
 		return
 	}
 
@@ -121,6 +123,11 @@ func (d *ChatApi) processMessageAsync(ctx context.Context, req common.ChatReques
 	if cannedAnswer != "" {
 		service.Service.UserServiceGroup.ActionService.SendMessage(req.Conversation.ConversationID, cannedAnswer)
 		go d.updateConversationHistory(req.Conversation.ConversationID, req.Content, cannedAnswer)
+		return
+	}
+
+	// 如果会话状态为 "open"，且未匹配到任何快捷回复，则AI不继续处理，交由人工跟进
+	if req.Conversation.Status == string(enum.ConversationStatusOpen) {
 		return
 	}
 

@@ -48,10 +48,10 @@ chatwoot:
   url: "http://127.0.0.1:3000"
   # 店铺ID
   account_id: 1
-  # Chatwoot模型秘钥
+  # 秘钥 (用于需要客服权限的操作, 如获取快捷回复, 转接人工等)
   auth: ""
-  # AI机器人客服在Chatwoot中的User ID
-  agent_user_id: 2
+  # 机器人秘钥 (用于机器人回复消息, 切换输入状态等)
+  bot_auth: ""
 # LLM配置, 最多可配3个, 小模型在前排序
 llm:
   - # LLM的api地址, "v1"结尾

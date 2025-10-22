@@ -115,9 +115,6 @@ func handleConfig(c *config.Config) {
 	if c.Chatwoot.AccountId == 0 {
 		c.Chatwoot.AccountId = 1
 	}
-	if c.Chatwoot.AgentUserID == 0 {
-		c.Chatwoot.AgentUserID = 2
-	}
 	for i := range c.Llm {
 		if c.Llm[i].Timeout == 0 {
 			c.Llm[i].Timeout = 10

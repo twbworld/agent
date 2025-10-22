@@ -12,6 +12,11 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+type AccountDetails struct {
+	ID   int    `json:"id"`
+	Name string `json:"name"`
+}
+
 type CannedResponse struct {
 	Id        int    `json:"id"`
 	AccountId int    `json:"account_id"`
@@ -26,12 +31,12 @@ type ConversationMessagesResponse struct {
 
 // Message 结构体定义了Chatwoot API返回的单条消息结构
 type Message struct {
-	ID          uint      `json:"id"`
-	Content     string    `json:"content"`
-	MessageType int       `json:"message_type"` // 0: incoming, 1: outgoing
-	CreatedAt   int64     `json:"created_at"`
-	Sender      Sender    `json:"sender"`
-	Private     bool      `json:"private"` // 是否是私信备注
+	ID          uint         `json:"id"`
+	Content     string       `json:"content"`
+	MessageType int          `json:"message_type"` // 0: incoming, 1: outgoing
+	CreatedAt   int64        `json:"created_at"`
+	Sender      Sender       `json:"sender"`
+	Private     bool         `json:"private"`     // 是否是私信备注
 	Attachments []Attachment `json:"attachments"` // 附件列表
 }
 
@@ -43,13 +48,14 @@ type Sender struct {
 
 // Attachment 结构体定义了消息附件的信息
 type Attachment struct {
-	ID   uint   `json:"id"`
+	ID       uint   `json:"id"`
 	FileType string `json:"file_type"`
 	FileUrl  string `json:"file_url"`
 }
 
 type Service interface {
 	GetCannedResponses() ([]CannedResponse, error)
+	GetAccountDetails() (*AccountDetails, error)
 	CreatePrivateNote(conversationID uint, content string) error
 	ToggleConversationStatus(conversationID uint) error
 	ToggleTypingStatus(conversationID uint, status string) error
@@ -66,19 +72,21 @@ type TransferToHumanRequest struct {
 
 // Client 是Chatwoot API的客户端
 type Client struct {
-	BaseURL    string
-	AccountID  int
-	ApiToken   string
-	HttpClient *http.Client
-	Logger     *logrus.Logger
+	BaseURL       string
+	AccountID     int
+	AgentApiToken string
+	BotApiToken   string
+	HttpClient    *http.Client
+	Logger        *logrus.Logger
 }
 
 // NewClient 创建一个新的Chatwoot客户端实例
-func NewClient(baseURL string, accountID int, apiToken string, logger *logrus.Logger) Service {
+func NewClient(baseURL string, accountID int, agentApiToken, botApiToken string, logger *logrus.Logger) Service {
 	return &Client{
-		BaseURL:   baseURL,
-		AccountID: accountID,
-		ApiToken:  apiToken,
+		BaseURL:       baseURL,
+		AccountID:     accountID,
+		AgentApiToken: agentApiToken,
+		BotApiToken:   botApiToken,
 		HttpClient: &http.Client{
 			Timeout: 10 * time.Second, // 设置10秒超时
 		},
@@ -86,39 +94,77 @@ func NewClient(baseURL string, accountID int, apiToken string, logger *logrus.Lo
 	}
 }
 
-// 获取所有的预设回复
-func (c *Client) GetCannedResponses() ([]CannedResponse, error) {
-	url := fmt.Sprintf("%s/api/v1/accounts/%d/canned_responses", c.BaseURL, c.AccountID)
+type tokenType int
 
-	req, err := http.NewRequest("GET", url, nil)
+const (
+	agentToken tokenType = iota //==0
+	botToken 					//==1
+)
+
+// sendRequest 是一个通用的请求发送函数，用于处理所有与Chatwoot API的交互
+func (c *Client) sendRequest(method, path string, token tokenType, requestBody, responsePayload interface{}) error {
+	url := fmt.Sprintf("%s%s", c.BaseURL, path)
+
+	var bodyReader io.Reader
+	if requestBody != nil {
+		jsonData, err := json.Marshal(requestBody)
+		if err != nil {
+			return fmt.Errorf("序列化请求体失败: %w", err)
+		}
+		bodyReader = bytes.NewBuffer(jsonData)
+	}
+
+	req, err := http.NewRequest(method, url, bodyReader)
 	if err != nil {
-		return nil, fmt.Errorf("创建请求失败: %w", err)
+		return fmt.Errorf("创建请求失败: %w", err)
 	}
 
 	req.Header.Set("Content-Type", "application/json; charset=utf-8")
-	req.Header.Set("api_access_token", c.ApiToken)
+	if token == agentToken {
+		req.Header.Set("api_access_token", c.AgentApiToken)
+	} else {
+		req.Header.Set("api_access_token", c.BotApiToken)
+	}
 
-	// 发送请求
 	resp, err := c.HttpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("发送API请求失败: %w", err)
+		return fmt.Errorf("发送API请求失败: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("API请求返回非200状态码: %d", resp.StatusCode)
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("API请求返回非200状态码: %d, Path: %s, 响应: %s", resp.StatusCode, path, string(bodyBytes))
 	}
 
-	body, err := io.ReadAll(resp.Body)
+	if responsePayload != nil {
+		if err := json.NewDecoder(resp.Body).Decode(responsePayload); err != nil {
+			return fmt.Errorf("解析JSON响应失败: %w", err)
+		}
+	}
+
+	return nil
+}
+
+//获取用户信息
+func (c *Client) GetAccountDetails() (*AccountDetails, error) {
+	path := fmt.Sprintf("/api/v1/accounts/%d", c.AccountID)
+	var accountDetails AccountDetails
+	err := c.sendRequest("GET", path, agentToken, nil, &accountDetails)
 	if err != nil {
-		return nil, fmt.Errorf("读取响应体失败: %w", err)
+		return nil, err
 	}
+	return &accountDetails, nil
+}
 
+// 获取所有的预设回复
+func (c *Client) GetCannedResponses() ([]CannedResponse, error) {
+	path := fmt.Sprintf("/api/v1/accounts/%d/canned_responses", c.AccountID)
 	var responses []CannedResponse
-	if err := json.Unmarshal(body, &responses); err != nil {
-		return nil, fmt.Errorf("解析JSON响应失败: %w", err)
+	err := c.sendRequest("GET", path, agentToken, nil, &responses)
+	if err != nil {
+		return nil, err
 	}
-
 	return responses, nil
 }
 
@@ -131,72 +177,22 @@ type CreatePrivateNoteRequest struct {
 
 // 在指定的对话中创建一条私信备注
 func (c *Client) CreatePrivateNote(conversationID uint, content string) error {
-
-	noteURL := fmt.Sprintf("%s/api/v1/accounts/%d/conversations/%d/messages", c.BaseURL, c.AccountID, conversationID)
+	path := fmt.Sprintf("/api/v1/accounts/%d/conversations/%d/messages", c.AccountID, conversationID)
 	notePayload := CreatePrivateNoteRequest{
 		Content:     content,
 		MessageType: string(enum.MessageTypeOutgoing),
 		Private:     true,
 	}
-	noteBody, err := json.Marshal(notePayload)
-	if err != nil {
-		return fmt.Errorf("序列化私信备注请求体失败: %w", err)
-	}
-
-	req, err := http.NewRequest("POST", noteURL, bytes.NewBuffer(noteBody))
-	if err != nil {
-		return fmt.Errorf("创建私信备注请求失败: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("api_access_token", c.ApiToken)
-
-	resp, err := c.HttpClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("发送私信备注API请求失败: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		bodyBytes, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("私信备注API请求返回非200状态码: %d, 响应: %s", resp.StatusCode, string(bodyBytes))
-	}
-	return nil
+	return c.sendRequest("POST", path, botToken, notePayload, nil)
 }
 
 // 将会话状态切换为 "open", 转接人工客服
 func (c *Client) ToggleConversationStatus(conversationID uint) error {
-	// `POST /api/v1/conversations/{id}/assign`：将会话分配给一个具体的人工客服团队（Inbox）
-
-	toggleURL := fmt.Sprintf("%s/api/v1/accounts/%d/conversations/%d/toggle_status", c.BaseURL, c.AccountID, conversationID)
-
+	path := fmt.Sprintf("/api/v1/accounts/%d/conversations/%d/toggle_status", c.AccountID, conversationID)
 	payload := TransferToHumanRequest{
 		Status: "open",
 	}
-	body, err := json.Marshal(payload)
-	if err != nil {
-		return fmt.Errorf("序列化转人工请求体失败: %w", err)
-	}
-
-	req, err := http.NewRequest("POST", toggleURL, bytes.NewBuffer(body))
-	if err != nil {
-		return fmt.Errorf("创建转人工请求失败: %w", err)
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("api_access_token", c.ApiToken)
-
-	resp, err := c.HttpClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("发送转人工API请求失败: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		bodyBytes, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("转人工API请求返回非200状态码: %d, 响应: %s", resp.StatusCode, string(bodyBytes))
-	}
-
-	return nil
+	return c.sendRequest("POST", path, botToken, payload, nil)
 }
 
 // ToggleTypingRequest 定义了切换输入状态API的请求体
@@ -209,34 +205,11 @@ func (c *Client) ToggleTypingStatus(conversationID uint, status string) error {
 	if status != "on" && status != "off" {
 		return fmt.Errorf("无效的输入状态: %s", status)
 	}
-
-	url := fmt.Sprintf("%s/api/v1/accounts/%d/conversations/%d/toggle_typing_status", c.BaseURL, c.AccountID, conversationID)
+	path := fmt.Sprintf("/api/v1/accounts/%d/conversations/%d/toggle_typing_status", c.AccountID, conversationID)
 	payload := ToggleTypingRequest{
 		TypingStatus: status,
 	}
-	body, err := json.Marshal(payload)
-	if err != nil {
-		return fmt.Errorf("序列化输入状态请求体失败: %w", err)
-	}
-
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(body))
-	if err != nil {
-		return fmt.Errorf("创建切换输入状态请求失败: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("api_access_token", c.ApiToken)
-
-	resp, err := c.HttpClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("发送切换输入状态API请求失败: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		bodyBytes, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("切换输入状态API请求返回非200状态码: %d, 响应: %s", resp.StatusCode, string(bodyBytes))
-	}
-	return nil
+	return c.sendRequest("POST", path, agentToken, payload, nil)
 }
 
 // CreateMessageRequest 定义了创建消息API的请求体
@@ -244,73 +217,28 @@ type CreateMessageRequest struct {
 	Content     string `json:"content"`
 	MessageType string `json:"message_type"`
 	Private     bool   `json:"private"`
+	ContentType string `json:"content_type"`
 }
 
 // 在指定对话中创建一条新消息 (通常是回复)
 func (c *Client) CreateMessage(conversationID uint, content string) error {
-	url := fmt.Sprintf("%s/api/v1/accounts/%d/conversations/%d/messages", c.BaseURL, c.AccountID, conversationID)
+	path := fmt.Sprintf("/api/v1/accounts/%d/conversations/%d/messages", c.AccountID, conversationID)
 	payload := CreateMessageRequest{
 		Content:     content,
 		MessageType: string(enum.MessageTypeOutgoing), // 代表是机器人或客服发出的消息
 		Private:     false,
+		ContentType: "text",
 	}
-	body, err := json.Marshal(payload)
-	if err != nil {
-		return fmt.Errorf("序列化创建消息请求体失败: %w", err)
-	}
-
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(body))
-	if err != nil {
-		return fmt.Errorf("创建消息请求失败: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("api_access_token", c.ApiToken)
-
-	resp, err := c.HttpClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("发送创建消息API请求失败: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		bodyBytes, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("创建消息API请求返回非200状态码: %d, 响应: %s", resp.StatusCode, string(bodyBytes))
-	}
-	return nil
+	return c.sendRequest("POST", path, botToken, payload, nil)
 }
 
 // GetConversationMessages 从Chatwoot API获取指定会话的历史消息
 func (c *Client) GetConversationMessages(accountID, conversationID uint) ([]Message, error) {
-	url := fmt.Sprintf("%s/api/v1/accounts/%d/conversations/%d/messages", c.BaseURL, accountID, conversationID)
-
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return nil, fmt.Errorf("创建获取会话消息请求失败: %w", err)
-	}
-
-	req.Header.Set("Content-Type", "application/json; charset=utf-8")
-	req.Header.Set("api_access_token", c.ApiToken)
-
-	resp, err := c.HttpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("发送获取会话消息API请求失败: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		bodyBytes, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("获取会话消息API请求返回非200状态码: %d, 响应: %s", resp.StatusCode, string(bodyBytes))
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("读取获取会话消息响应体失败: %w", err)
-	}
-
+	path := fmt.Sprintf("/api/v1/accounts/%d/conversations/%d/messages", accountID, conversationID)
 	var response ConversationMessagesResponse
-	if err := json.Unmarshal(body, &response); err != nil {
-		return nil, fmt.Errorf("解析获取会话消息JSON响应失败: %w", err)
+	err := c.sendRequest("GET", path, agentToken, nil, &response)
+	if err != nil {
+		return nil, err
 	}
-
 	return response.Payload, nil
 }

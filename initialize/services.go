@@ -114,12 +114,12 @@ func (i *Initializer) initChatwoot() error {
 		global.Config.Chatwoot.Url,
 		int(global.Config.Chatwoot.AccountId),
 		global.Config.Chatwoot.Auth,
+		global.Config.Chatwoot.BotAuth,
 		global.Log,
 	)
 
-	// 通过尝试获取预设回复来验证与Chatwoot服务的连接和认证
-	if _, err := client.GetCannedResponses(); err != nil {
-		return fmt.Errorf("无法连接到Chatwoot服务 (url: %s): %w", global.Config.Chatwoot.Url, err)
+	if _, err := client.GetAccountDetails(); err != nil {
+		return fmt.Errorf("无法连接到Chatwoot服务 (url: %s, token: AgentApiToken): %w", global.Config.Chatwoot.Url, err)
 	}
 
 	global.ChatwootService = client

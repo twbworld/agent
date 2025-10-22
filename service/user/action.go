@@ -104,8 +104,8 @@ func (d *ActionService) SendMessage(conversationID uint, content string) {
 // 匹配预设回复或执行特殊动作（如转人工）
 // 返回值: (answer string, isAction bool, err error)
 // answer: 如果是普通回复，则为回复内容
-// isAction: 如果执行了动作（如转人工），则为true，表示Controller无需再响应
-// err: 如果执行动作时发生错误
+// isAction: 如果匹配到特殊动作（如转人工），则为true
+// err: 如果在匹配过程中发生错误
 func (d *ActionService) CannedResponses(chatRequest *common.ChatRequest) (string, bool, error) {
 	content := strings.ToLower(strings.TrimSpace(chatRequest.Content))
 
@@ -115,10 +115,6 @@ func (d *ActionService) CannedResponses(chatRequest *common.ChatRequest) (string
 
 	// 判断是否是"转人工"等关键字
 	if _, isTransfer := d.transferKeywords[content]; isTransfer {
-		//(可后期判断多次关键字才转人工)
-		if err := d.TransferToHuman(chatRequest.Conversation.ConversationID, enum.TransferToHuman1, string(enum.ReplyMsgTransferSuccess)); err != nil {
-			return "", false, err
-		}
 		return "", true, nil
 	}
 

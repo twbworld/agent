@@ -2,6 +2,7 @@ package user
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 	"unicode/utf8"
@@ -17,6 +18,8 @@ import (
 )
 
 type ChatApi struct{}
+
+var ErrVectorMatchFound = errors.New("vector match found")
 
 func (d *ChatApi) HandleChat(ctx *gin.Context) {
 	var req common.ChatRequest
@@ -100,72 +103,85 @@ func (d *ChatApi) processMessageAsync(ctx context.Context, req common.ChatReques
 		}
 	}()
 
-	var (
-		cannedAnswer        string
-		isAction            bool
-		vectorResults       []dao.SearchResult
-		conversationHistory []common.LlmMessage
-	)
-
-	g, gCtx := errgroup.WithContext(ctx)
-	// 1. 关键词匹配
-	g.Go(func() error {
-		var err error
-		cannedAnswer, isAction, err = service.Service.UserServiceGroup.ActionService.CannedResponses(&req)
-		if err != nil {
-			global.Log.Errorf("[processMessageAsync] 匹配关键字失败: %v", err)
-			return err
-		}
-		return nil
-	})
-	// 2. 向量搜索
-	g.Go(func() error {
-		var err error
-		vectorResults, err = service.Service.UserServiceGroup.VectorService.Search(gCtx, req.Content)
-		if err != nil {
-			// 向量搜索失败是可接受的，LLM可以作为兜底
-			global.Log.Warnf("[processMessageAsync] 向量数据库搜索失败: %v", err)
-		}
-		return nil
-	})
-	// 3. 获取会话历史记录
-	g.Go(func() error {
-		var err error
-		conversationHistory, err = d.getConversationHistory(gCtx, req.Conversation.AccountID, req.Conversation.ConversationID, req.Content)
-		if err != nil {
-			global.Log.Errorf("[processMessageAsync] 获取会话历史记录失败: %v", err)
-			return err
-		}
-		return nil
-	})
-
-	// 等待快速路径搜索和历史记录获取完成
-	if err := g.Wait(); err != nil {
-		// 如果是关键词匹配的错误，则转人工
+	// 1. 快速路径优先：同步执行关键词匹配
+	cannedAnswer, isAction, err := service.Service.UserServiceGroup.ActionService.CannedResponses(&req)
+	if err != nil {
+		global.Log.Errorf("[processMessageAsync] 匹配关键字失败: %v", err)
 		_ = service.Service.UserServiceGroup.ActionService.TransferToHuman(req.Conversation.ConversationID, enum.TransferToHuman2, string(enum.ReplyMsgSystemError))
 		return
 	}
 
-	// 1. 检查是否触发了动作（如转人工）
+	// 转人工
 	if isAction {
-		// 如果是转人工，则不需要更新Redis中的历史记录，因为后续会由人工处理
+		_ = service.Service.UserServiceGroup.ActionService.TransferToHuman(req.Conversation.ConversationID, enum.TransferToHuman1, string(enum.ReplyMsgTransferSuccess))
 		return
 	}
-	// 2. 检查是否有精确匹配的答案
+
+	// 匹配到快捷回复
 	if cannedAnswer != "" {
 		service.Service.UserServiceGroup.ActionService.SendMessage(req.Conversation.ConversationID, cannedAnswer)
 		go d.updateConversationHistory(req.Conversation.ConversationID, req.Content, cannedAnswer)
 		return
 	}
 
-	global.Log.Debugln(vectorResults[0].Similarity, "==============", vectorResults[0].Question)
+	// --- 快速路径未命中，进入慢速路径 --- //
+	var (
+		vectorResults       []dao.SearchResult
+		conversationHistory []common.LlmMessage
+		chosenVectorAnswer  string
+	)
 
-	// 3. 检查是否有高相似度的向量搜索结果
-	if len(vectorResults) > 0 && vectorResults[0].Similarity >= global.Config.Ai.VectorSimilarityThreshold {
-		service.Service.UserServiceGroup.ActionService.SendMessage(req.Conversation.ConversationID, vectorResults[0].Answer)
-		go d.updateConversationHistory(req.Conversation.ConversationID, req.Content, vectorResults[0].Answer)
-		return
+	g, gCtx := errgroup.WithContext(ctx)
+
+	// 2. 慢速路径：并发执行向量搜索和历史记录获取
+	g.Go(func() error {
+		var currentVectorResults []dao.SearchResult
+		var searchErr error
+		currentVectorResults, searchErr = service.Service.UserServiceGroup.VectorService.Search(gCtx, req.Content)
+		if searchErr != nil {
+			global.Log.Warnf("[processMessageAsync] 向量数据库搜索失败: %v", searchErr)
+			return nil
+		}
+
+		if len(currentVectorResults) > 0 {
+			vectorResults = currentVectorResults
+			// 检查是否有高相似度的向量搜索结果，并触发快速响应
+			if currentVectorResults[0].Similarity >= global.Config.Ai.VectorSimilarityThreshold {
+				chosenVectorAnswer = currentVectorResults[0].Answer
+				return ErrVectorMatchFound
+			}
+		}
+		return nil
+	})
+
+	g.Go(func() error {
+		var historyErr error
+		conversationHistory, historyErr = d.getConversationHistory(gCtx, req.Conversation.AccountID, req.Conversation.ConversationID, req.Content)
+		if historyErr != nil {
+			global.Log.Errorf("[processMessageAsync] 获取会话历史记录失败: %v", historyErr)
+			return historyErr
+		}
+		return nil
+	})
+
+	// 等待所有goroutine完成或被中断
+	if err := g.Wait(); err != nil && !errors.Is(err, context.Canceled) {
+		switch {
+		case errors.Is(err, ErrVectorMatchFound):
+			// 向量搜索高相似度匹配，提前响应
+			global.Log.Debugf("[processMessageAsync] 向量搜索高相似度匹配，提前响应, 相似度: %.4f, 会话ID: %d", vectorResults[0].Similarity, req.Conversation.ConversationID)
+			service.Service.UserServiceGroup.ActionService.SendMessage(req.Conversation.ConversationID, chosenVectorAnswer)
+			go d.updateConversationHistory(req.Conversation.ConversationID, req.Content, chosenVectorAnswer)
+			return // 回复已发送，终止流程
+
+		default:
+			global.Log.Errorf("[processMessageAsync] errgroup执行失败: %v", err)
+			_ = service.Service.UserServiceGroup.ActionService.TransferToHuman(req.Conversation.ConversationID, enum.TransferToHuman2, string(enum.ReplyMsgSystemError))
+			return
+		}
 	}
+
+	// --- 如果代码能执行到这里，说明没有任何快速路径被命中 --- //
 
 	// 告诉用户“机器人正在输入中...”
 	go service.Service.UserServiceGroup.ActionService.ToggleTyping(req.Conversation.ConversationID, true)

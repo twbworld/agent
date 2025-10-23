@@ -102,7 +102,7 @@ func (c *client) ChatCompletionWithHistory(ctx context.Context, size enum.LlmSiz
 
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
-			return "", errors.New("请求已被用户取消")
+			return "", context.Canceled
 		}
 		c.log.Errorf("LLM API调用失败: %v", err)
 		return "", errors.New("LLM服务暂不可用, 请稍后再试")

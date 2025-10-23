@@ -2,12 +2,19 @@ package user
 
 import (
 	// "bytes"
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+
 	// "io"
 	"time"
 	"unicode/utf8"
+
+	"gitee.com/taoJie_1/mall-agent/internal/redis"
+	redisv8 "github.com/go-redis/redis/v8"
 
 	"github.com/gin-gonic/gin"
 	"golang.org/x/sync/errgroup"
@@ -24,26 +31,48 @@ type ChatApi struct{}
 var ErrVectorMatchFound = errors.New("vector match found")
 
 func (d *ChatApi) HandleChat(ctx *gin.Context) {
-
-	// bodyBytes, _ := io.ReadAll(ctx.Request.Body)
+	bodyBytes, err := io.ReadAll(ctx.Request.Body)
+	if err != nil {
+		common.Fail(ctx, "参数无效")
+		return
+	}
 	// fmt.Println(string(bodyBytes))
-	// ctx.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+	ctx.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 
-	var req common.ChatRequest
-	if err := ctx.ShouldBindJSON(&req); err != nil {
+	var eventFinder common.Event
+	if err := json.Unmarshal(bodyBytes, &eventFinder); err != nil {
 		common.Fail(ctx, "参数无效")
 		return
 	}
 
+	switch eventFinder.Event {
+	case enum.EventMessageCreated:
+		var req common.ChatRequest
+		if err := json.Unmarshal(bodyBytes, &req); err != nil {
+			common.Fail(ctx, "参数无效")
+			return
+		}
+		d.handleMessageCreated(ctx, req)
+
+	case enum.EventConversationResolved:
+		var req common.ConversationResolvedRequest
+		if err := json.Unmarshal(bodyBytes, &req); err != nil {
+			common.Fail(ctx, "参数无效")
+			return
+		}
+		go d.handleConversationResolved(req.ID)
+		common.Success(ctx, nil)
+
+	default:
+		// For any other event we don't handle, just acknowledge it.
+		common.Success(ctx, nil)
+	}
+}
+
+func (d *ChatApi) handleMessageCreated(ctx *gin.Context, req common.ChatRequest) {
 	// 兼容; 新版 webhook 结构中, account_id 不在 conversation 内, 在根对象上
 	if req.Account.ID != 0 {
 		req.Conversation.AccountID = req.Account.ID
-	}
-
-	// 仅处理 message_created 事件, 忽略其他事件如 conversation_status_changed 等
-	if req.Event != string(enum.EventMessageCreated) {
-		common.Success(ctx, nil)
-		return
 	}
 
 	// 处理"人工客服"消息: 将其计入Redis历史
@@ -93,6 +122,11 @@ func (d *ChatApi) HandleChat(ctx *gin.Context) {
 		timeout := time.Duration(global.Config.Ai.AsyncJobTimeout) * time.Second
 		asyncCtx, cancel := context.WithTimeout(context.Background(), timeout)
 		defer cancel()
+
+		// 注册任务，以便在会话解决时可以取消
+		d.storeTask(reqCopy.Conversation.ConversationID, cancel)
+		defer d.removeTask(reqCopy.Conversation.ConversationID)
+
 		d.processMessageAsync(asyncCtx, reqCopy)
 	}()
 }
@@ -128,7 +162,25 @@ func (d *ChatApi) processMessageAsync(ctx context.Context, req common.ChatReques
 
 	// 如果会话状态为 "open"，且未匹配到任何快捷回复，则AI不继续处理，交由人工跟进
 	if req.Conversation.Status == string(enum.ConversationStatusOpen) {
-		return
+		// 检查是否存在"转人工宽限期"
+		gracePeriodKey := fmt.Sprintf("%s%d", redis.KeyPrefixTransferGracePeriod, req.Conversation.ConversationID)
+		err := global.RedisClient.Get(ctx, gracePeriodKey).Err()
+
+		if err == nil {
+			// 标志存在，说明在宽限期内，AI继续处理
+			global.Log.Debugf("会话 %d 处于转人工宽限期，AI将继续处理新消息", req.Conversation.ConversationID)
+			// 消费掉该标志
+			if delErr := global.RedisClient.Del(context.Background(), gracePeriodKey).Err(); delErr != nil {
+				global.Log.Warnf("删除会话 %d 的宽限期标志失败: %v", req.Conversation.ConversationID, delErr)
+			}
+		} else if err == redisv8.Nil {
+			// 标志不存在，正常退出，交由人工处理
+			return
+		} else {
+			// 查询Redis时发生其他错误，为安全起见，直接退出
+			global.Log.Errorf("检查会话 %d 的转人工宽限期标志失败: %v", req.Conversation.ConversationID, err)
+			return
+		}
 	}
 
 	// --- 快速路径未命中，进入慢速路径 --- //
@@ -200,6 +252,7 @@ func (d *ChatApi) processMessageAsync(ctx context.Context, req common.ChatReques
 	var llmReferenceDocs []dao.SearchResult
 	if len(vectorResults) > 0 {
 		for _, res := range vectorResults {
+			global.Log.Debugln(res.Similarity, "================相似度")
 			// 只使用相似度高于配置阈值的文档作为参考
 			if res.Similarity >= global.Config.Ai.VectorSearchMinSimilarity {
 				llmReferenceDocs = append(llmReferenceDocs, res)
@@ -207,9 +260,15 @@ func (d *ChatApi) processMessageAsync(ctx context.Context, req common.ChatReques
 		}
 	}
 
+	global.Log.Debugln("=================开始进入LLM")
+
 	// 调用LLM服务获取回复
 	llmAnswer, err := service.Service.UserServiceGroup.LlmService.NewChat(ctx, &req, llmReferenceDocs, conversationHistory)
 	if err != nil {
+		if errors.Is(err, context.Canceled) {
+			global.Log.Debugf("会话 %d 的AI任务被取消。", req.Conversation.ConversationID)
+			return
+		}
 		global.Log.Errorf("[processMessageAsync] LLM错误: %v", err)
 		_ = service.Service.UserServiceGroup.ActionService.TransferToHuman(req.Conversation.ConversationID, enum.TransferToHuman2, string(enum.ReplyMsgLlmError))
 		return
@@ -329,4 +388,41 @@ func (d *ChatApi) updateHistoryWithHumanMessage(req common.ChatRequest) {
 	if err := global.RedisClient.AppendToConversationHistory(context.Background(), req.Conversation.ConversationID, ttl, messageToAppend); err != nil {
 		global.Log.Errorf("追加人工客服消息到会话 %d 历史记录失败: %v", req.Conversation.ConversationID, err)
 	}
+}
+
+// handleConversationResolved 处理会话解决事件，取消正在进行的AI任务
+func (d *ChatApi) handleConversationResolved(conversationID uint) {
+	// 对于 conversation_resolved 事件, conversation ID 在根对象的 ID 字段
+	if conversationID == 0 {
+		global.Log.Warnf("从 conversation_resolved 事件中未能获取到有效的 conversation_id")
+		return
+	}
+
+	global.ActiveLLMTasks.Lock()
+	defer global.ActiveLLMTasks.Unlock()
+
+	if cancel, exists := global.ActiveLLMTasks.Data[conversationID]; exists {
+		cancel() // 调用取消函数
+		delete(global.ActiveLLMTasks.Data, conversationID)
+		global.Log.Debugf("会话%d已解决，已终止正在进行的AI任务。", conversationID)
+	}
+}
+
+// storeTask 存储一个异步任务的取消函数
+func (d *ChatApi) storeTask(conversationID uint, cancel context.CancelFunc) {
+	global.ActiveLLMTasks.Lock()
+	defer global.ActiveLLMTasks.Unlock()
+	// 如果该会话已有任务在运行，先取消旧的
+	if oldCancel, exists := global.ActiveLLMTasks.Data[conversationID]; exists {
+		oldCancel()
+		global.Log.Debugf("会话 %d 的旧AI任务已被新任务取代并取消。", conversationID)
+	}
+	global.ActiveLLMTasks.Data[conversationID] = cancel
+}
+
+// removeTask 移除一个已完成或已取消的异步任务
+func (d *ChatApi) removeTask(conversationID uint) {
+	global.ActiveLLMTasks.Lock()
+	defer global.ActiveLLMTasks.Unlock()
+	delete(global.ActiveLLMTasks.Data, conversationID)
 }

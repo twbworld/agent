@@ -1,6 +1,7 @@
 package global
 
 import (
+	"context"
 	"sync"
 	"time"
 
@@ -25,9 +26,16 @@ var (
 	LlmService       llm.Service
 	VectorDb         vector.Service
 	RedisClient      redis.Service
+	ActiveLLMTasks *ActiveTasksMap = &ActiveTasksMap{Data: make(map[uint]context.CancelFunc)}
 )
 
 type CannedResponsesMap struct {
 	sync.RWMutex
 	Data map[string]string
+}
+
+// ActiveTasksMap 用于存储正在进行的异步任务的取消函数
+type ActiveTasksMap struct {
+	sync.RWMutex
+	Data map[uint]context.CancelFunc
 }

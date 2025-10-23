@@ -101,4 +101,5 @@ const (
 	EventConversationCreated       ChatwootEvent = "conversation_created"
 	EventConversationStatusChanged ChatwootEvent = "conversation_status_changed"
 	EventConversationUpdated       ChatwootEvent = "conversation_updated"
+	EventConversationResolved      ChatwootEvent = "conversation_resolved"
 )

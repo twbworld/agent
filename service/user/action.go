@@ -4,10 +4,13 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"gitee.com/taoJie_1/mall-agent/global"
+	"gitee.com/taoJie_1/mall-agent/internal/redis"
 	"gitee.com/taoJie_1/mall-agent/model/common"
 	"gitee.com/taoJie_1/mall-agent/model/enum"
+	"gitee.com/taoJie_1/mall-agent/utils"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -20,6 +23,13 @@ type IActionService interface {
 
 type ActionService struct {
 	transferKeywords map[string]struct{}
+}
+
+// noGracePeriodReasons 定义了哪些转人工原因不需要设置宽限期，应立即转接
+var noGracePeriodReasons = []enum.TransferToHuman{
+	enum.TransferToHuman1, // 用户要求[转人工]
+	enum.TransferToHuman4, // 用户情绪激动[转人工]
+	enum.TransferToHuman6, // 金额过大[转人工]
 }
 
 func NewActionService() *ActionService {
@@ -41,6 +51,20 @@ func (d *ActionService) TransferToHuman(ConversationID uint, remark enum.Transfe
 		return fmt.Errorf("Chatwoot客户端未初始化")
 	}
 	g, _ := errgroup.WithContext(context.Background())
+
+	// 如果转接原因不在“立即转接”列表中，则设置宽限期
+	if utils.InSlice(noGracePeriodReasons, remark) == -1 {
+		g.Go(func() error {
+			if global.RedisClient != nil {
+				const gracePeriod = 5 * time.Second
+				key := fmt.Sprintf("%s%d", redis.KeyPrefixTransferGracePeriod, ConversationID)
+				if err := global.RedisClient.Set(context.Background(), key, "1", gracePeriod).Err(); err != nil {
+					global.Log.Warnf("[action]为会话 %d 设置转人工宽限期标志失败: %v", ConversationID, err)
+				}
+			}
+			return nil
+		})
+	}
 
 	// 创建私信备注（内部使用）
 	if remark != "" {

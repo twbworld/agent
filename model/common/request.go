@@ -1,17 +1,28 @@
 package common
 
+import "gitee.com/taoJie_1/mall-agent/model/enum"
+
 // ChatRequest 对应 Chatwoot webhook 发送过来的消息体
 type ChatRequest struct {
+	Event
 	ID           uint         `json:"id"`
 	Content      string       `json:"content"`
 	MessageType  string       `json:"message_type"`
 	CreatedAt    string       `json:"created_at"` // 时间戳
-	Event        string       `json:"event"`      // 事件类型, 例如: message_created
 	Private      bool         `json:"private"`    // 是否是私密消息
 	Conversation Conversation `json:"conversation"`
 	Sender       Sender       `json:"sender"`
 	Account      Account      `json:"account"`
 	Attachments  []Attachment `json:"attachments"`
+}
+
+type ConversationResolvedRequest struct {
+	Event
+	ID uint `json:"id"`
+}
+
+type Event struct {
+	Event enum.ChatwootEvent `json:"event"`
 }
 
 // Account 代表账户信息

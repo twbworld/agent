@@ -43,12 +43,12 @@ func (s *LlmService) NewChat(ctx context.Context, param *common.ChatRequest, ref
 
 	finalContent.WriteString(param.Content)
 
-	return global.LlmService.ChatCompletionWithHistory( // 调用新的ChatCompletionWithHistory
+	return global.LlmService.ChatCompletionWithHistory(
 		ctx,
 		enum.ModelLarge,
 		systemPrompt,
 		finalContent.String(),
-		history, // 传递历史记录
+		history,
 		0.5,
 	)
 }

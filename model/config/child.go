@@ -14,7 +14,6 @@ type Redis struct {
 	Addr                   string `json:"addr" mapstructure:"addr" yaml:"addr"`
 	Password               string `json:"password" mapstructure:"password" yaml:"password"`
 	DB                     int    `json:"db" mapstructure:"db" yaml:"db"`
-	LockPrefix             string `json:"lock_prefix" mapstructure:"lock_prefix" yaml:"lock_prefix"`
 	LockExpiry             int    `json:"lock_expiry" mapstructure:"lock_expiry" yaml:"lock_expiry"`
 	ConversationHistoryTTL int    `json:"conversation_history_ttl" mapstructure:"conversation_history_ttl" yaml:"conversation_history_ttl"`
 }

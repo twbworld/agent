@@ -11,7 +11,9 @@ import (
 )
 
 const (
-	RedisConversationHistoryKeyPrefix = "conversation:history:" // Redis中存储聊天记录的Key前缀
+	KeyCannedResponsesHash       = "canned_responses:hash"            // Redis中存储快捷回复的Hash Key
+	KeySyncCannedResponsesLock   = "agent:lock:sync_canned_responses" // Redis分布式锁Key
+	KeyPrefixConversationHistory = "conversation:history:"            // Redis中存储聊天记录的Key前缀
 )
 
 // Service 定义了Redis操作的接口
@@ -92,7 +94,7 @@ func (c *client) Ping(ctx context.Context) *redis.StatusCmd {
 
 // GetConversationHistory 从Redis获取指定会话的聊天记录
 func (c *client) GetConversationHistory(ctx context.Context, conversationID uint) ([]common.LlmMessage, error) {
-	key := fmt.Sprintf("%s%d", RedisConversationHistoryKeyPrefix, conversationID)
+	key := fmt.Sprintf("%s%d", KeyPrefixConversationHistory, conversationID)
 	val, err := c.rdb.Get(ctx, key).Result()
 	if err == redis.Nil {
 		return nil, nil // 缓存未命中
@@ -110,7 +112,7 @@ func (c *client) GetConversationHistory(ctx context.Context, conversationID uint
 
 // SetConversationHistory 将聊天记录保存到Redis，并设置过期时间
 func (c *client) SetConversationHistory(ctx context.Context, conversationID uint, history []common.LlmMessage, ttl time.Duration) error {
-	key := fmt.Sprintf("%s%d", RedisConversationHistoryKeyPrefix, conversationID)
+	key := fmt.Sprintf("%s%d", KeyPrefixConversationHistory, conversationID)
 	jsonBytes, err := json.Marshal(history)
 	if err != nil {
 		return fmt.Errorf("序列化聊天记录失败: %w", err)
@@ -120,7 +122,7 @@ func (c *client) SetConversationHistory(ctx context.Context, conversationID uint
 
 // AppendToConversationHistory 向Redis中指定会话的聊天记录追加一条或多条新消息，并重置过期时间
 func (c *client) AppendToConversationHistory(ctx context.Context, conversationID uint, ttl time.Duration, newMessages ...common.LlmMessage) error {
-	key := fmt.Sprintf("%s%d", RedisConversationHistoryKeyPrefix, conversationID)
+	key := fmt.Sprintf("%s%d", KeyPrefixConversationHistory, conversationID)
 
 	// 使用事务确保原子性
 	err := c.rdb.Watch(ctx, func(tx *redis.Tx) error {

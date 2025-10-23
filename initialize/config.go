@@ -100,9 +100,6 @@ func handleConfig(c *config.Config) {
 	if c.Redis.DB == 0 {
 		c.Redis.DB = 0
 	}
-	if c.Redis.LockPrefix == "" {
-		c.Redis.LockPrefix = "agent:lock:"
-	}
 	if c.Redis.LockExpiry == 0 {
 		c.Redis.LockExpiry = 30
 	}

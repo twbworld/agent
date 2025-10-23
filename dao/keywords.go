@@ -10,12 +10,8 @@ import (
 
 	"gitee.com/taoJie_1/mall-agent/global"
 	"gitee.com/taoJie_1/mall-agent/internal/chatwoot"
-	"github.com/go-redis/redis/v8" // 引入go-redis
-)
-
-const (
-	RedisCannedResponsesKey = "canned_responses:hash"      // Redis中存储快捷回复的Hash Key
-	RedisSyncLockKey        = "canned_responses:sync_lock" // Redis分布式锁Key的后缀
+	"gitee.com/taoJie_1/mall-agent/internal/redis"
+	redisv8 "github.com/go-redis/redis/v8"
 )
 
 type KeywordsDb struct{}
@@ -26,7 +22,7 @@ func (d *KeywordsDb) LoadAllKeywordsFromRedis(ctx context.Context) ([]chatwoot.C
 		return nil, errors.New("Redis客户端未初始化")
 	}
 
-	data, err := global.RedisClient.HGetAll(ctx, RedisCannedResponsesKey).Result()
+	data, err := global.RedisClient.HGetAll(ctx, redis.KeyCannedResponsesHash).Result()
 	if err != nil {
 		return nil, fmt.Errorf("从Redis获取快捷回复失败: %w", err)
 	}
@@ -79,7 +75,7 @@ func (d *KeywordsDb) SaveKeywordsToRedis(ctx context.Context, responses []chatwo
 		return 0, nil
 	}
 
-	err := global.RedisClient.HSet(ctx, RedisCannedResponsesKey, args...).Err()
+	err := global.RedisClient.HSet(ctx, redis.KeyCannedResponsesHash, args...).Err()
 	if err != nil {
 		return 0, fmt.Errorf("批量保存快捷回复到Redis失败: %w", err)
 	}
@@ -100,7 +96,7 @@ func (d *KeywordsDb) DeleteKeywordsFromRedis(ctx context.Context, shortCodes []s
 		fields[i] = sc
 	}
 
-	count, err := global.RedisClient.HDel(ctx, RedisCannedResponsesKey, fields...).Result()
+	count, err := global.RedisClient.HDel(ctx, redis.KeyCannedResponsesHash, fields...).Result()
 	if err != nil {
 		return 0, fmt.Errorf("从Redis删除快捷回复失败: %w", err)
 	}
@@ -112,9 +108,8 @@ func (d *KeywordsDb) AcquireSyncLock(ctx context.Context, agentID string) (bool,
 	if global.RedisClient == nil {
 		return false, errors.New("Redis客户端未初始化")
 	}
-	lockKey := global.Config.Redis.LockPrefix + RedisSyncLockKey
 	expiry := time.Duration(global.Config.Redis.LockExpiry) * time.Second
-	return global.RedisClient.SetNX(ctx, lockKey, agentID, expiry).Result()
+	return global.RedisClient.SetNX(ctx, redis.KeySyncCannedResponsesLock, agentID, expiry).Result()
 }
 
 // ReleaseSyncLock 释放Redis分布式锁
@@ -122,15 +117,14 @@ func (d *KeywordsDb) ReleaseSyncLock(ctx context.Context, agentID string) error 
 	if global.RedisClient == nil {
 		return errors.New("Redis客户端未初始化")
 	}
-	lockKey := global.Config.Redis.LockPrefix + RedisSyncLockKey
 
 	// 确保只有持有锁的实例才能释放锁
-	val, err := global.RedisClient.Get(ctx, lockKey).Result()
-	if err != nil && err != redis.Nil {
+	val, err := global.RedisClient.Get(ctx, redis.KeySyncCannedResponsesLock).Result()
+	if err != nil && err != redisv8.Nil {
 		return fmt.Errorf("获取锁值失败: %w", err)
 	}
 	if val == agentID {
-		return global.RedisClient.Del(ctx, lockKey).Err()
+		return global.RedisClient.Del(ctx, redis.KeySyncCannedResponsesLock).Err()
 	}
 	return nil // 不是当前实例持有的锁，无需释放
 }

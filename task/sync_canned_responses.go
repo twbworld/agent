@@ -12,6 +12,7 @@ import (
 	"gitee.com/taoJie_1/mall-agent/dao"
 	"gitee.com/taoJie_1/mall-agent/global"
 	"gitee.com/taoJie_1/mall-agent/internal/chatwoot"
+	"gitee.com/taoJie_1/mall-agent/internal/redis"
 	"gitee.com/taoJie_1/mall-agent/internal/vector"
 	"gitee.com/taoJie_1/mall-agent/model/enum"
 	"github.com/gin-gonic/gin"
@@ -199,7 +200,7 @@ func syncRedis(ctx context.Context, exactMatchRules []chatwoot.CannedResponse) e
 	}
 
 	// 获取当前Redis中所有的short_code，用于判断哪些需要删除
-	existingRedisData, err := global.RedisClient.HGetAll(ctx, dao.RedisCannedResponsesKey).Result()
+	existingRedisData, err := global.RedisClient.HGetAll(ctx, redis.KeyCannedResponsesHash).Result()
 	if err != nil {
 		return fmt.Errorf("获取现有Redis快捷回复失败: %w", err)
 	}

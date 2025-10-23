@@ -55,7 +55,7 @@ func (d *ChatApi) HandleChat(ctx *gin.Context) {
 		return
 	}
 
-	// "用户"消息
+	// 处理非"用户"消息
 	if req.MessageType != string(enum.MessageTypeIncoming) || req.Conversation.Meta.Sender.Type != string(enum.SenderTypeContact) {
 		common.Success(ctx, nil)
 		return

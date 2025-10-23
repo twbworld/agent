@@ -55,9 +55,19 @@ func (c *client) Close() error {
 	return c.client.Close()
 }
 
+type NoOpEmbeddingFunction struct{}
+
+func (f *NoOpEmbeddingFunction) EmbedDocuments(ctx context.Context, texts []string) ([]embeddings.Embedding, error) {
+	return make([]embeddings.Embedding, len(texts)), nil
+}
+
+func (f *NoOpEmbeddingFunction) EmbedQuery(ctx context.Context, text string) (embeddings.Embedding, error) {
+	return nil, nil
+}
+
 func (c *client) GetOrCreateCollection(ctx context.Context, name string) (chroma.Collection, error) {
-	// TODO: 未来可以根据需要进行参数化配置
-	col, err := c.client.GetOrCreateCollection(ctx, name)
+	// 使用自定义的 NoOpEmbeddingFunction 来覆盖默认的嵌入函数，防止在静态编译环境下因加载 onnxruntime 而导致 cgo 相关的 SIGSEGV 错误。
+	col, err := c.client.GetOrCreateCollection(ctx, name, chroma.WithEmbeddingFunctionCreate(&NoOpEmbeddingFunction{}))
 	if err != nil {
 		return nil, err
 	}

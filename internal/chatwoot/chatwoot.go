@@ -54,12 +54,19 @@ type Attachment struct {
 }
 
 type Service interface {
+	// 获取所有的预设回复
 	GetCannedResponses() ([]CannedResponse, error)
+	//获取用户信息
 	GetAccountDetails() (*AccountDetails, error)
+	// 在指定的对话中创建一条私信备注
 	CreatePrivateNote(conversationID uint, content string) error
+	// 将会话状态切换为指定状态
 	SetConversationStatus(conversationID uint, status enum.ConversationStatus) error
+	// 切换指定会话的 "输入中..." 状态
 	ToggleTypingStatus(conversationID uint, status string) error
+	// 在指定对话中创建一条新消息 (通常是回复)
 	CreateMessage(conversationID uint, content string) error
+	// 从Chatwoot API获取指定会话的历史消息
 	GetConversationMessages(accountID, conversationID uint) ([]Message, error)
 }
 
@@ -98,7 +105,7 @@ type tokenType int
 
 const (
 	agentToken tokenType = iota //==0
-	botToken 					//==1
+	botToken                    //==1
 )
 
 // sendRequest 是一个通用的请求发送函数，用于处理所有与Chatwoot API的交互
@@ -146,7 +153,6 @@ func (c *Client) sendRequest(method, path string, token tokenType, requestBody, 
 	return nil
 }
 
-//获取用户信息
 func (c *Client) GetAccountDetails() (*AccountDetails, error) {
 	path := fmt.Sprintf("/api/v1/accounts/%d", c.AccountID)
 	var accountDetails AccountDetails
@@ -157,7 +163,6 @@ func (c *Client) GetAccountDetails() (*AccountDetails, error) {
 	return &accountDetails, nil
 }
 
-// 获取所有的预设回复
 func (c *Client) GetCannedResponses() ([]CannedResponse, error) {
 	path := fmt.Sprintf("/api/v1/accounts/%d/canned_responses", c.AccountID)
 	var responses []CannedResponse
@@ -175,7 +180,6 @@ type CreatePrivateNoteRequest struct {
 	Private     bool   `json:"private"`
 }
 
-// 在指定的对话中创建一条私信备注
 func (c *Client) CreatePrivateNote(conversationID uint, content string) error {
 	path := fmt.Sprintf("/api/v1/accounts/%d/conversations/%d/messages", c.AccountID, conversationID)
 	notePayload := CreatePrivateNoteRequest{
@@ -186,7 +190,6 @@ func (c *Client) CreatePrivateNote(conversationID uint, content string) error {
 	return c.sendRequest("POST", path, botToken, notePayload, nil)
 }
 
-// SetConversationStatus 将会话状态切换为指定状态
 func (c *Client) SetConversationStatus(conversationID uint, status enum.ConversationStatus) error {
 	path := fmt.Sprintf("/api/v1/accounts/%d/conversations/%d/toggle_status", c.AccountID, conversationID)
 	payload := TransferToHumanRequest{
@@ -200,7 +203,6 @@ type ToggleTypingRequest struct {
 	TypingStatus string `json:"typing_status"` // "on" or "off"
 }
 
-// 切换指定会话的 "输入中..." 状态
 func (c *Client) ToggleTypingStatus(conversationID uint, status string) error {
 	if status != "on" && status != "off" {
 		return fmt.Errorf("无效的输入状态: %s", status)
@@ -220,7 +222,6 @@ type CreateMessageRequest struct {
 	ContentType string `json:"content_type"`
 }
 
-// 在指定对话中创建一条新消息 (通常是回复)
 func (c *Client) CreateMessage(conversationID uint, content string) error {
 	path := fmt.Sprintf("/api/v1/accounts/%d/conversations/%d/messages", c.AccountID, conversationID)
 	payload := CreateMessageRequest{
@@ -232,7 +233,6 @@ func (c *Client) CreateMessage(conversationID uint, content string) error {
 	return c.sendRequest("POST", path, botToken, payload, nil)
 }
 
-// GetConversationMessages 从Chatwoot API获取指定会话的历史消息
 func (c *Client) GetConversationMessages(accountID, conversationID uint) ([]Message, error) {
 	path := fmt.Sprintf("/api/v1/accounts/%d/conversations/%d/messages", accountID, conversationID)
 	var response ConversationMessagesResponse

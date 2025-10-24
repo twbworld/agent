@@ -18,6 +18,7 @@ type Service interface {
 	Heartbeat(ctx context.Context) error
 	Close() error
 	GetOrCreateCollection(ctx context.Context, name string) (chroma.Collection, error)
+	// 批量插入或更新文档到指定的集合中
 	Upsert(ctx context.Context, collectionName string, documents []Document) error
 }
 
@@ -74,7 +75,6 @@ func (c *client) GetOrCreateCollection(ctx context.Context, name string) (chroma
 	return col, nil
 }
 
-// Upsert 批量插入或更新文档到指定的集合中
 func (c *client) Upsert(ctx context.Context, collectionName string, documents []Document) error {
 	if len(documents) == 0 {
 		return nil

@@ -13,14 +13,14 @@ type Database struct {
 type Redis struct {
 	Addr                   string `json:"addr" mapstructure:"addr" yaml:"addr"`
 	Password               string `json:"password" mapstructure:"password" yaml:"password"`
-	DB                     int    `json:"db" mapstructure:"db" yaml:"db"`
-	LockExpiry             int    `json:"lock_expiry" mapstructure:"lock_expiry" yaml:"lock_expiry"`
-	ConversationHistoryTTL int    `json:"conversation_history_ttl" mapstructure:"conversation_history_ttl" yaml:"conversation_history_ttl"`
+	DB                     int64    `json:"db" mapstructure:"db" yaml:"db"`
+	LockExpiry             int64    `json:"lock_expiry" mapstructure:"lock_expiry" yaml:"lock_expiry"`
+	ConversationHistoryTTL int64    `json:"conversation_history_ttl" mapstructure:"conversation_history_ttl" yaml:"conversation_history_ttl"`
 }
 
 type Chatwoot struct {
 	Url       string `yaml:"url" mapstructure:"url" json:"url"`
-	AccountId uint   `yaml:"account_id" mapstructure:"account_id" json:"account_id"`
+	AccountId int64   `yaml:"account_id" mapstructure:"account_id" json:"account_id"`
 	Auth      string `yaml:"auth" mapstructure:"auth" json:"auth"`
 	BotAuth   string `yaml:"bot_auth" mapstructure:"bot_auth" json:"bot_auth"`
 }
@@ -50,14 +50,14 @@ type VectorDb struct {
 }
 
 type Ai struct {
-	MaxPromptLength           uint     `json:"max_prompt_length" mapstructure:"max_prompt_length" yaml:"max_prompt_length"`
-	MaxShortCodeLength        uint     `json:"max_short_code_length" mapstructure:"max_short_code_length" yaml:"max_short_code_length"`
+	MaxPromptLength           int64     `json:"max_prompt_length" mapstructure:"max_prompt_length" yaml:"max_prompt_length"`
+	MaxShortCodeLength        int64     `json:"max_short_code_length" mapstructure:"max_short_code_length" yaml:"max_short_code_length"`
 	SemanticPrefix            string   `json:"semantic_prefix" mapstructure:"semantic_prefix" yaml:"semantic_prefix"`
 	HybridPrefix              string   `json:"hybrid_prefix" mapstructure:"hybrid_prefix" yaml:"hybrid_prefix"`
-	TransferKeywords          []string `json:"transfer_keywords" mapstructure:"transfer_keywords" yaml:"transfer_keywords"`
-	VectorSearchTopK          int      `json:"vector_search_top_k" mapstructure:"vector_search_top_k" yaml:"vector_search_top_k"`
+	VectorSearchTopK          int64      `json:"vector_search_top_k" mapstructure:"vector_search_top_k" yaml:"vector_search_top_k"`
 	VectorSimilarityThreshold float32  `json:"vector_similarity_threshold" mapstructure:"vector_similarity_threshold" yaml:"vector_similarity_threshold"`
 	VectorSearchMinSimilarity float32  `json:"vector_search_min_similarity" mapstructure:"vector_search_min_similarity" yaml:"vector_search_min_similarity"`
-	TransferGracePeriod       uint     `json:"transfer_grace_period" mapstructure:"transfer_grace_period" yaml:"transfer_grace_period"`
+	TransferGracePeriod       int64     `json:"transfer_grace_period" mapstructure:"transfer_grace_period" yaml:"transfer_grace_period"`
 	AsyncJobTimeout           int64    `json:"async_job_timeout" mapstructure:"async_job_timeout" yaml:"async_job_timeout"`
+	TransferKeywords          []string `json:"transfer_keywords" mapstructure:"transfer_keywords" yaml:"transfer_keywords"`
 }

@@ -60,7 +60,7 @@ func (i *Initializer) initRedis() error {
 	client, err := redis.NewClient(
 		global.Config.Redis.Addr,
 		global.Config.Redis.Password,
-		global.Config.Redis.DB,
+		int(global.Config.Redis.DB),
 	)
 	if err != nil {
 		return fmt.Errorf("初始化Redis客户端失败: %w", err)

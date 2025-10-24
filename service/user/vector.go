@@ -8,19 +8,19 @@ import (
 	"gitee.com/taoJie_1/mall-agent/global"
 )
 
-type IVectorService interface {
+type VectorService interface {
+	// 在向量数据库中搜索与查询最相似的文档。
 	Search(ctx context.Context, query string) ([]dao.SearchResult, error)
 }
 
-type VectorService struct{}
+type vectorService struct{}
 
-func NewVectorService() *VectorService {
-	return &VectorService{}
+func NewVectorService() *vectorService {
+	return &vectorService{}
 }
 
-// Search 在向量数据库中搜索与查询最相似的文档。
-func (s *VectorService) Search(ctx context.Context, query string) ([]dao.SearchResult, error) {
-	results, err := dao.App.VectorDb.Search(ctx, query, global.Config.Ai.VectorSearchTopK)
+func (s *vectorService) Search(ctx context.Context, query string) ([]dao.SearchResult, error) {
+	results, err := dao.App.VectorDb.Search(ctx, query, int(global.Config.Ai.VectorSearchTopK))
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil

@@ -11,19 +11,19 @@ import (
 	"gitee.com/taoJie_1/mall-agent/model/enum"
 )
 
-type ILlmService interface {
+type LlmService interface {
+	// 负责业务层面的决策，例如决定使用哪个模型、哪个Prompt
 	NewChat(ctx context.Context, param *common.ChatRequest, referenceDocs []dao.SearchResult, history []common.LlmMessage) (string, error) // 修改方法签名
 }
 
-type LlmService struct {
+type llmService struct {
 }
 
-func NewLlmService() *LlmService {
-	return &LlmService{}
+func NewLlmService() *llmService {
+	return &llmService{}
 }
 
-// 负责业务层面的决策，例如决定使用哪个模型、哪个Prompt
-func (s *LlmService) NewChat(ctx context.Context, param *common.ChatRequest, referenceDocs []dao.SearchResult, history []common.LlmMessage) (string, error) { // 修改方法签名
+func (s *llmService) NewChat(ctx context.Context, param *common.ChatRequest, referenceDocs []dao.SearchResult, history []common.LlmMessage) (string, error) { // 修改方法签名
 	if global.LlmService == nil {
 		return "", fmt.Errorf("LLM客户端未初始化")
 	}

@@ -22,6 +22,55 @@ const (
 	AuthErrorCode ResCode = 2
 )
 
+type LlmSize string
+
+const (
+	ModelSmall  LlmSize = "small"
+	ModelMedium LlmSize = "medium"
+	ModelLarge  LlmSize = "large"
+)
+
+type ChatwootWebhook string
+
+const (
+	// 来自联系人的新消息。
+	MessageTypeIncoming ChatwootWebhook = "incoming"
+	// 从应用程序发送的消息。
+	MessageTypeOutgoing ChatwootWebhook = "outgoing"
+	// 对话中的最终用户。
+	SenderTypeContact ChatwootWebhook = "contact"
+)
+
+type ConversationStatus string
+
+const (
+	//会话开放状态, 人工客服可恢复
+	ConversationStatusOpen ConversationStatus = "open"
+	//会话待处理
+	ConversationStatusPending ConversationStatus = "pending"
+	//会话已解决
+	ConversationStatusResolved ConversationStatus = "resolved"
+	//会话暂停
+	ConversationStatusSnoozed ConversationStatus = "snoozed"
+)
+
+type ChatwootEvent string
+
+const (
+	// 来自联系人的新消息。
+	EventMessageCreated ChatwootEvent = "message_created"
+	// 消息已更新。
+	EventMessageUpdated ChatwootEvent = "message_updated"
+	// 新对话创建。
+	EventConversationCreated ChatwootEvent = "conversation_created"
+	// 对话状态更改。
+	EventConversationStatusChanged ChatwootEvent = "conversation_status_changed"
+	// 对话已更新。
+	EventConversationUpdated ChatwootEvent = "conversation_updated"
+	// 对话已解决。
+	EventConversationResolved ChatwootEvent = "conversation_resolved"
+)
+
 type SystemPrompt string
 
 const (
@@ -43,14 +92,6 @@ const (
 - 输出：只输出最终的中文问题，不要包含任何解释、标签或引号。`
 )
 
-type LlmSize string
-
-const (
-	ModelSmall  LlmSize = "small"
-	ModelMedium LlmSize = "medium"
-	ModelLarge  LlmSize = "large"
-)
-
 type TransferToHuman string
 
 const (
@@ -62,51 +103,12 @@ const (
 	TransferToHuman6 TransferToHuman = "金额过大[转人工]"
 )
 
-type ChatwootWebhook string
-
-const (
-	// 来自联系人的新消息。
-	MessageTypeIncoming ChatwootWebhook = "incoming"
-	// 从应用程序发送的消息。
-	MessageTypeOutgoing ChatwootWebhook = "outgoing"
-	// 对话中的最终用户。
-	SenderTypeContact ChatwootWebhook = "contact"
-)
-
-type ConversationStatus string
-
-const (
-	ConversationStatusOpen    ConversationStatus = "open"
-	ConversationStatusPending ConversationStatus = "pending"
-	ConversationStatusBot     ConversationStatus = "bot"
-)
-
 type ReplyMessage string
 
 const (
-	ReplyMsgTransferSuccess       ReplyMessage = "已为您转接人工客服，请稍候。"
-	ReplyMsgAlreadyTransferred    ReplyMessage = "正在为您联系人工客服，请耐心等待，无需重复发送消息。"
+	ReplyMsgTransferSuccess       ReplyMessage = "已为您转接人工客服，请稍候。无需重复发送消息。"
 	ReplyMsgUnsupportedAttachment ReplyMessage = "您发送的消息暂不支持智能客服处理，已为您转接人工客服。"
 	ReplyMsgPromptTooLong         ReplyMessage = "提问内容过长，已为您转接人工客服。"
-	ReplyMsgLlmError              ReplyMessage = "抱歉，智能客服服务暂时遇到问题，已为您转接人工客服。"
-	ReplyMsgLlmEmpty              ReplyMessage = "抱歉，智能客服暂时无法回答您的问题，已为您转接人工客服。"
-	ReplyMsgSystemError           ReplyMessage = "系统繁忙，请稍后再试或联系人工客服。"
+	ReplyMsgLlmError              ReplyMessage = "抱歉，智能客服遇到问题，已为您转接人工客服。"
 	ReplyMsgAiRetrying            ReplyMessage = "智能客服暂时无法处理您的问题，正在尝试进一步分析，请稍候。"
-)
-
-type ChatwootEvent string
-
-const (
-	// 来自联系人的新消息。
-	EventMessageCreated ChatwootEvent = "message_created"
-	// 消息已更新。
-	EventMessageUpdated ChatwootEvent = "message_updated"
-	// 新对话创建。
-	EventConversationCreated ChatwootEvent = "conversation_created"
-	// 对话状态更改。
-	EventConversationStatusChanged ChatwootEvent = "conversation_status_changed"
-	// 对话已更新。
-	EventConversationUpdated ChatwootEvent = "conversation_updated"
-	// 对话已解决。
-	EventConversationResolved ChatwootEvent = "conversation_resolved"
 )

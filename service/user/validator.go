@@ -6,13 +6,13 @@ import (
 	"strings"
 )
 
-type IValidator interface {
+type Validator interface {
 	ValidatorChatRequest(data *common.ChatRequest) error
 }
 
-type Validator struct{}
+type validator struct{}
 
-func (v *Validator) ValidatorChatRequest(data *common.ChatRequest) error {
+func (v *validator) ValidatorChatRequest(data *common.ChatRequest) error {
 	if data.Conversation.AccountID == 0 || data.Conversation.ConversationID == 0 {
 		return errors.New("参数错误[gftsd]")
 	}

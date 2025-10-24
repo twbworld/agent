@@ -12,7 +12,6 @@ import (
 	"unicode/utf8"
 
 	"gitee.com/taoJie_1/mall-agent/internal/redis"
-	redisv8 "github.com/go-redis/redis/v8"
 
 	"github.com/gin-gonic/gin"
 	"golang.org/x/sync/errgroup"
@@ -62,7 +61,6 @@ func (d *ChatApi) HandleChat(ctx *gin.Context) {
 		common.Success(ctx, nil)
 
 	default:
-		// For any other event we don't handle, just acknowledge it.
 		common.Success(ctx, nil)
 	}
 }
@@ -133,7 +131,7 @@ func (d *ChatApi) processMessageAsync(ctx context.Context, req common.ChatReques
 	defer func() {
 		if p := recover(); p != nil {
 			global.Log.Errorf("[processMessageAsync] panic: %v", p)
-			_ = service.Service.UserServiceGroup.ActionService.TransferToHuman(req.Conversation.ConversationID, enum.TransferToHuman2, string(enum.ReplyMsgSystemError))
+			_ = service.Service.UserServiceGroup.ActionService.TransferToHuman(req.Conversation.ConversationID, enum.TransferToHuman2, string(enum.ReplyMsgLlmError))
 		}
 	}()
 
@@ -143,7 +141,7 @@ func (d *ChatApi) processMessageAsync(ctx context.Context, req common.ChatReques
 	cannedAnswer, isAction, err := service.Service.UserServiceGroup.ActionService.CannedResponses(&req)
 	if err != nil {
 		global.Log.Errorf("[processMessageAsync] 匹配关键字失败: %v", err)
-		_ = service.Service.UserServiceGroup.ActionService.TransferToHuman(req.Conversation.ConversationID, enum.TransferToHuman2, string(enum.ReplyMsgSystemError))
+		_ = service.Service.UserServiceGroup.ActionService.TransferToHuman(req.Conversation.ConversationID, enum.TransferToHuman2, string(enum.ReplyMsgLlmError))
 		return
 	}
 
@@ -169,7 +167,7 @@ func (d *ChatApi) processMessageAsync(ctx context.Context, req common.ChatReques
 			// 标志存在，说明在宽限期内，AI将继续处理新消息
 			global.Log.Debugf("会话 %d 处于转人工宽限期，AI将继续处理新消息", req.Conversation.ConversationID)
 			isGracePeriodOverride = true // 标记为宽限期处理模式
-		} else if err == redisv8.Nil {
+		} else if err == redis.ErrNil {
 			// 标志不存在，正常退出，交由人工处理
 			return
 		} else {
@@ -231,7 +229,7 @@ func (d *ChatApi) processMessageAsync(ctx context.Context, req common.ChatReques
 
 		default:
 			global.Log.Errorf("[processMessageAsync] errgroup执行失败: %v", err)
-			_ = service.Service.UserServiceGroup.ActionService.TransferToHuman(req.Conversation.ConversationID, enum.TransferToHuman2, string(enum.ReplyMsgSystemError))
+			_ = service.Service.UserServiceGroup.ActionService.TransferToHuman(req.Conversation.ConversationID, enum.TransferToHuman2, string(enum.ReplyMsgLlmError))
 			return
 		}
 	}
@@ -272,7 +270,7 @@ func (d *ChatApi) processMessageAsync(ctx context.Context, req common.ChatReques
 
 	if llmAnswer == "" {
 		global.Log.Warnf("[processMessageAsync] LLM返回空回复，转人工, 会话ID: %d", req.Conversation.ConversationID)
-		_ = service.Service.UserServiceGroup.ActionService.TransferToHuman(req.Conversation.ConversationID, enum.TransferToHuman5, string(enum.ReplyMsgLlmEmpty))
+		_ = service.Service.UserServiceGroup.ActionService.TransferToHuman(req.Conversation.ConversationID, enum.TransferToHuman5, string(enum.ReplyMsgLlmError))
 		return
 	}
 
@@ -283,7 +281,7 @@ func (d *ChatApi) processMessageAsync(ctx context.Context, req common.ChatReques
 			gracePeriodKey := fmt.Sprintf("%s%d", redis.KeyPrefixTransferGracePeriod, req.Conversation.ConversationID)
 			err := global.RedisClient.Get(context.Background(), gracePeriodKey).Err() // 使用context.Background()，因为此协程独立于请求生命周期
 
-			if err == redisv8.Nil {
+			if err == redis.ErrNil {
 				// 宽限期已过，或者标志已被删除，不再尝试改回bot状态，避免与人工客服冲突
 				global.Log.Debugf("会话 %d 宽限期已过，AI不再尝试改回bot状态。", req.Conversation.ConversationID)
 				return
@@ -294,7 +292,7 @@ func (d *ChatApi) processMessageAsync(ctx context.Context, req common.ChatReques
 			}
 
 			// 宽限期标志仍然存在，可以安全地改回bot状态
-			if err := service.Service.UserServiceGroup.ActionService.SetConversationBot(req.Conversation.ConversationID); err != nil {
+			if err := service.Service.UserServiceGroup.ActionService.SetConversationPending(req.Conversation.ConversationID); err != nil {
 				global.Log.Warnf("将会话 %d 状态改回机器人失败: %v", req.Conversation.ConversationID, err)
 			} else {
 				global.Log.Debugf("会话 %d 状态成功从open改回bot。", req.Conversation.ConversationID)

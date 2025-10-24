@@ -17,8 +17,11 @@ const (
 	KeyPrefixTransferGracePeriod = "agent:transfer_grace_period:"     // AI自动转人工后的宽限期Key前缀
 )
 
+var ErrNil = redis.Nil
+
 // Service 定义了Redis操作的接口
 type Service interface {
+	Close() error
 	Get(ctx context.Context, key string) *redis.StringCmd
 	Set(ctx context.Context, key string, value interface{}, expiration time.Duration) *redis.StatusCmd
 	Del(ctx context.Context, keys ...string) *redis.IntCmd
@@ -27,10 +30,12 @@ type Service interface {
 	HDel(ctx context.Context, key string, fields ...string) *redis.IntCmd
 	SetNX(ctx context.Context, key string, value interface{}, expiration time.Duration) *redis.BoolCmd
 	Ping(ctx context.Context) *redis.StatusCmd
+	// 从Redis获取指定会话的聊天记录
 	GetConversationHistory(ctx context.Context, conversationID uint) ([]common.LlmMessage, error)
+	// 将聊天记录保存到Redis，并设置过期时间
 	SetConversationHistory(ctx context.Context, conversationID uint, history []common.LlmMessage, ttl time.Duration) error
+	// 向Redis中指定会话的聊天记录追加一条或多条新消息，并重置过期时间
 	AppendToConversationHistory(ctx context.Context, conversationID uint, ttl time.Duration, newMessages ...common.LlmMessage) error
-	Close() error
 }
 
 type client struct {
@@ -93,7 +98,6 @@ func (c *client) Ping(ctx context.Context) *redis.StatusCmd {
 	return c.rdb.Ping(ctx)
 }
 
-// GetConversationHistory 从Redis获取指定会话的聊天记录
 func (c *client) GetConversationHistory(ctx context.Context, conversationID uint) ([]common.LlmMessage, error) {
 	key := fmt.Sprintf("%s%d", KeyPrefixConversationHistory, conversationID)
 	val, err := c.rdb.Get(ctx, key).Result()
@@ -111,7 +115,6 @@ func (c *client) GetConversationHistory(ctx context.Context, conversationID uint
 	return history, nil
 }
 
-// SetConversationHistory 将聊天记录保存到Redis，并设置过期时间
 func (c *client) SetConversationHistory(ctx context.Context, conversationID uint, history []common.LlmMessage, ttl time.Duration) error {
 	key := fmt.Sprintf("%s%d", KeyPrefixConversationHistory, conversationID)
 	jsonBytes, err := json.Marshal(history)
@@ -121,7 +124,6 @@ func (c *client) SetConversationHistory(ctx context.Context, conversationID uint
 	return c.rdb.Set(ctx, key, jsonBytes, ttl).Err()
 }
 
-// AppendToConversationHistory 向Redis中指定会话的聊天记录追加一条或多条新消息，并重置过期时间
 func (c *client) AppendToConversationHistory(ctx context.Context, conversationID uint, ttl time.Duration, newMessages ...common.LlmMessage) error {
 	key := fmt.Sprintf("%s%d", KeyPrefixConversationHistory, conversationID)
 

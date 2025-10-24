@@ -20,9 +20,13 @@ type client struct {
 }
 
 type Service interface {
+	// 调用LLM进行实时对话
 	ChatCompletion(ctx context.Context, size enum.LlmSize, systemPrompt enum.SystemPrompt, content string, temperature ...float32) (string, error)
+	// 调用LLM进行实时对话，并支持传入历史消息
 	ChatCompletionWithHistory(ctx context.Context, size enum.LlmSize, systemPrompt enum.SystemPrompt, content string, history []common.LlmMessage, temperature ...float32) (string, error) // 新增方法
+	// 执行一次性的文本生成任务，通常用于后台任务。
 	GetCompletion(ctx context.Context, size enum.LlmSize, systemPrompt enum.SystemPrompt, content string, temperature ...float32) (string, error)
+	// 根据输入文本（关键词或内容），使用小模型生成一个标准的、自然的问句
 	GenerateStandardQuestion(ctx context.Context, prompt enum.SystemPrompt, text string) (string, error)
 }
 
@@ -49,12 +53,10 @@ func (c *client) getLlmConfig(size enum.LlmSize) *config.Llm {
 	return nil
 }
 
-// ChatCompletion 调用LLM进行实时对话
 func (c *client) ChatCompletion(ctx context.Context, size enum.LlmSize, systemPrompt enum.SystemPrompt, content string, temperature ...float32) (string, error) {
 	return c.ChatCompletionWithHistory(ctx, size, systemPrompt, content, nil, temperature...)
 }
 
-// ChatCompletionWithHistory 调用LLM进行实时对话，并支持传入历史消息
 func (c *client) ChatCompletionWithHistory(ctx context.Context, size enum.LlmSize, systemPrompt enum.SystemPrompt, content string, history []common.LlmMessage, temperature ...float32) (string, error) {
 	llmClient, ok := c.llmClients[size]
 	if !ok {
@@ -102,7 +104,7 @@ func (c *client) ChatCompletionWithHistory(ctx context.Context, size enum.LlmSiz
 
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
-			return "", context.Canceled
+			return "", err
 		}
 		c.log.Errorf("LLM API调用失败: %v", err)
 		return "", errors.New("LLM服务暂不可用, 请稍后再试")
@@ -123,12 +125,10 @@ func (c *client) ChatCompletionWithHistory(ctx context.Context, size enum.LlmSiz
 	return strings.TrimSpace(finalAnswer), nil
 }
 
-// GenerateStandardQuestion 根据输入文本（关键词或内容），使用小模型生成一个标准的、自然的问句
 func (c *client) GenerateStandardQuestion(ctx context.Context, prompt enum.SystemPrompt, text string) (string, error) {
 	return c.GetCompletion(ctx, enum.ModelSmall, prompt, text, 0.2)
 }
 
-// GetCompletion 执行一次性的文本生成任务，通常用于后台任务。
 func (c *client) GetCompletion(ctx context.Context, size enum.LlmSize, systemPrompt enum.SystemPrompt, content string, temperature ...float32) (string, error) {
 	llmClient, ok := c.llmClients[size]
 	if !ok {

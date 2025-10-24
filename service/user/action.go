@@ -14,15 +14,20 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-type IActionService interface {
+type ActionService interface {
+	// 转接人工客服
 	TransferToHuman(ConversationID uint, remark enum.TransferToHuman, message ...string) error
-	SetConversationBot(conversationID uint) error
+	// 将会话状态设置为机器人处理
+	SetConversationPending(conversationID uint) error
+	// 切换输入状态
 	ToggleTyping(conversationID uint, status bool)
+	// 发送消息
 	SendMessage(conversationID uint, content string)
+	// 匹配预设回复或执行特殊动作（如转人工）
 	CannedResponses(chatRequest *common.ChatRequest) (string, bool, error)
 }
 
-type ActionService struct {
+type actionService struct {
 	transferKeywords map[string]struct{}
 }
 
@@ -33,7 +38,7 @@ var noGracePeriodReasons = []enum.TransferToHuman{
 	enum.TransferToHuman6,
 }
 
-func NewActionService() *ActionService {
+func NewActionService() *actionService {
 	// 初始化转人工的关键词列表,避免在每次调用时都创建map
 	transferSet := make(map[string]struct{})
 	keywordsList := global.Config.Ai.TransferKeywords
@@ -41,13 +46,12 @@ func NewActionService() *ActionService {
 		transferSet[strings.ToLower(kw)] = struct{}{}
 	}
 
-	return &ActionService{
+	return &actionService{
 		transferKeywords: transferSet,
 	}
 }
 
-// 转接人工客服
-func (d *ActionService) TransferToHuman(ConversationID uint, remark enum.TransferToHuman, message ...string) error {
+func (d *actionService) TransferToHuman(ConversationID uint, remark enum.TransferToHuman, message ...string) error {
 	if global.ChatwootService == nil {
 		return fmt.Errorf("Chatwoot客户端未初始化")
 	}
@@ -112,16 +116,14 @@ func (d *ActionService) TransferToHuman(ConversationID uint, remark enum.Transfe
 	return nil
 }
 
-// SetConversationBot 将会话状态设置为机器人处理
-func (d *ActionService) SetConversationBot(conversationID uint) error {
+func (d *actionService) SetConversationPending(conversationID uint) error {
 	if global.ChatwootService == nil {
 		return fmt.Errorf("Chatwoot客户端未初始化")
 	}
-	return global.ChatwootService.SetConversationStatus(conversationID, enum.ConversationStatusBot)
+	return global.ChatwootService.SetConversationStatus(conversationID, enum.ConversationStatusPending)
 }
 
-// 切换输入状态
-func (d *ActionService) ToggleTyping(conversationID uint, status bool) {
+func (d *actionService) ToggleTyping(conversationID uint, status bool) {
 	if global.ChatwootService == nil {
 		return
 	}
@@ -134,8 +136,7 @@ func (d *ActionService) ToggleTyping(conversationID uint, status bool) {
 	}
 }
 
-// 发送消息
-func (d *ActionService) SendMessage(conversationID uint, content string) {
+func (d *actionService) SendMessage(conversationID uint, content string) {
 	if global.ChatwootService == nil {
 		return
 	}
@@ -144,12 +145,10 @@ func (d *ActionService) SendMessage(conversationID uint, content string) {
 	}
 }
 
-// 匹配预设回复或执行特殊动作（如转人工）
-// 返回值: (answer string, isAction bool, err error)
 // answer: 如果是普通回复，则为回复内容
 // isAction: 如果匹配到特殊动作（如转人工），则为true
 // err: 如果在匹配过程中发生错误
-func (d *ActionService) CannedResponses(chatRequest *common.ChatRequest) (string, bool, error) {
+func (d *actionService) CannedResponses(chatRequest *common.ChatRequest) (string, bool, error) {
 	content := strings.ToLower(strings.TrimSpace(chatRequest.Content))
 
 	if content == "" {

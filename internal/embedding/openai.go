@@ -12,6 +12,7 @@ type client struct {
 }
 
 type Service interface {
+	// 批量将多个文本转换为向量
 	CreateEmbeddings(ctx context.Context, texts []string) ([][]float32, error)
 }
 
@@ -22,7 +23,6 @@ func NewClient(openAIClient *openai.Client, modelName string) Service {
 	}
 }
 
-// 批量将多个文本转换为向量
 func (c *client) CreateEmbeddings(ctx context.Context, texts []string) ([][]float32, error) {
 	if len(texts) == 0 {
 		return nil, nil

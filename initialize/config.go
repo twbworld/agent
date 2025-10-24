@@ -103,8 +103,11 @@ func handleConfig(c *config.Config) {
 	if c.Redis.LockExpiry == 0 {
 		c.Redis.LockExpiry = 30
 	}
-	if c.Redis.ConversationHistoryTTL == 0 { // 新增
-		c.Redis.ConversationHistoryTTL = 3600 // 默认1小时
+	if c.Redis.ConversationHistoryTTL == 0 {
+		c.Redis.ConversationHistoryTTL = 3600
+	}
+	if c.Redis.HistoryLockExpiry == 0 {
+		c.Redis.HistoryLockExpiry = 10
 	}
 	if c.Chatwoot.Url == "" {
 		c.Chatwoot.Url = "http://127.0.0.1:8080"

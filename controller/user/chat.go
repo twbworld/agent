@@ -7,11 +7,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
-
+	"os"
 	"time"
 	"unicode/utf8"
 
 	"gitee.com/taoJie_1/mall-agent/internal/redis"
+	"gitee.com/taoJie_1/mall-agent/utils"
 
 	"github.com/gin-gonic/gin"
 	"golang.org/x/sync/errgroup"
@@ -304,34 +305,15 @@ func (d *ChatApi) processMessageAsync(ctx context.Context, req common.ChatReques
 	go d.updateConversationHistory(req.Conversation.ConversationID, req.Content, llmAnswer)
 }
 
-// getConversationHistory 获取会话历史记录，优先从Redis获取，否则从Chatwoot API获取
-func (d *ChatApi) getConversationHistory(ctx context.Context, accountID, conversationID uint, currentMessage string) ([]common.LlmMessage, error) {
-	if global.RedisClient == nil {
-		return nil, fmt.Errorf("Redis客户端未初始化")
-	}
-
-	// 1. 尝试从Redis获取聊天记录
-	history, err := global.RedisClient.GetConversationHistory(ctx, conversationID)
-	if err != nil {
-		global.Log.Warnf("从Redis获取会话 %d 历史记录失败: %v, 将尝试从Chatwoot获取", conversationID, err)
-	} else if history != nil {
-		global.Log.Debugf("会话 %d 历史记录从Redis缓存命中", conversationID)
-		// 缓存命中，直接返回历史记录。当前用户消息会作为LLM的content参数传入，无需在此处追加。
-		return history, nil
-	}
-
-	if global.ChatwootService == nil {
-		return nil, fmt.Errorf("Chatwoot客户端未初始化")
-	}
-
-	// 2. 缓存未命中，从Chatwoot API获取完整的历史记录
-	global.Log.Debugf("会话 %d 历史记录Redis缓存未命中，从Chatwoot API获取", conversationID)
+// fetchAndCacheHistory 是一个辅助函数，用于从Chatwoot获取数据、格式化并存入Redis
+func (d *ChatApi) fetchAndCacheHistory(ctx context.Context, accountID, conversationID uint, currentMessage string) ([]common.LlmMessage, error) {
+	// 从Chatwoot API获取完整的历史记录
 	chatwootMessages, err := global.ChatwootService.GetConversationMessages(accountID, conversationID)
 	if err != nil {
 		return nil, fmt.Errorf("从Chatwoot API获取会话 %d 消息失败: %w", conversationID, err)
 	}
 
-	// 3. 格式化历史记录为LLM需要的格式
+	// 格式化历史记录为LLM需要的格式
 	var formattedHistory []common.LlmMessage
 	for _, msg := range chatwootMessages {
 		// 过滤掉私信备注、没有内容的附件消息
@@ -339,7 +321,6 @@ func (d *ChatApi) getConversationHistory(ctx context.Context, accountID, convers
 			continue
 		}
 
-		// message_type为0代表incoming, 1代表outgoing
 		isIncoming := msg.MessageType == 0
 		isOutgoing := msg.MessageType == 1
 
@@ -359,14 +340,82 @@ func (d *ChatApi) getConversationHistory(ctx context.Context, accountID, convers
 		formattedHistory = append(formattedHistory, common.LlmMessage{Role: role, Content: msg.Content})
 	}
 
-	// 4. 将格式化后的历史记录存入Redis，并设置过期时间 (异步操作)
-	go func(history []common.LlmMessage, convID uint, ttl time.Duration) {
-		if err := global.RedisClient.SetConversationHistory(context.Background(), convID, history, ttl); err != nil {
-			global.Log.Errorf("异步将会话 %d 历史记录存入Redis失败: %v", convID, err)
-		}
-	}(formattedHistory, conversationID, time.Duration(global.Config.Redis.ConversationHistoryTTL)*time.Second)
+	// 将格式化后的历史记录存入Redis，并设置带抖动的过期时间
+	ttl := utils.GetTTLWithJitter(global.Config.Redis.ConversationHistoryTTL)
+	if err := global.RedisClient.SetConversationHistory(context.Background(), conversationID, formattedHistory, ttl); err != nil {
+		// 只记录错误，不阻塞主流程返回
+		global.Log.Errorf("将会话 %d 历史记录存入Redis失败: %v", conversationID, err)
+	}
 
 	return formattedHistory, nil
+}
+
+// getConversationHistory 获取会话历史记录，优先从Redis获取，否则从Chatwoot API获取
+func (d *ChatApi) getConversationHistory(ctx context.Context, accountID, conversationID uint, currentMessage string) ([]common.LlmMessage, error) {
+	if global.RedisClient == nil {
+		return nil, fmt.Errorf("Redis客户端未初始化")
+	}
+
+	// 1. 尝试从Redis获取聊天记录
+	history, err := global.RedisClient.GetConversationHistory(ctx, conversationID)
+	if err != nil && err != redis.ErrNil { // Redis error other than miss
+		global.Log.Warnf("从Redis获取会话 %d 历史记录失败: %v, 将尝试从Chatwoot获取", conversationID, err)
+	} else if history != nil { // Cache hit
+		global.Log.Debugf("会话 %d 历史记录从Redis缓存命中", conversationID)
+		return history, nil
+	}
+
+	// --- 缓存未命中，进入回源逻辑 ---
+	if global.ChatwootService == nil {
+		return nil, fmt.Errorf("Chatwoot客户端未初始化")
+	}
+
+	// 2. 使用分布式锁防止缓存击穿
+	lockKey := fmt.Sprintf("%s%d", redis.KeyPrefixHistoryLock, conversationID)
+	lockExpiry := time.Duration(global.Config.Redis.HistoryLockExpiry) * time.Second
+	agentID, _ := os.Hostname()
+	if agentID == "" {
+		agentID = "unknown-agent"
+	}
+
+	locked, err := global.RedisClient.SetNX(ctx, lockKey, agentID, lockExpiry).Result()
+	if err != nil {
+		global.Log.Errorf("尝试获取会话 %d 历史记录锁失败: %v", conversationID, err)
+		// 即使获取锁失败，也尝试从源获取，作为降级策略
+		return d.fetchAndCacheHistory(ctx, accountID, conversationID, currentMessage)
+	}
+
+	if locked {
+		// 2a. 成功获取锁，从Chatwoot API获取数据并缓存
+		global.Log.Debugf("会话 %d 历史记录Redis缓存未命中，成功获取锁，从Chatwoot API获取", conversationID)
+		defer func() {
+			// 使用后台 context 确保即使原始请求取消，锁释放也能执行
+			if err := global.RedisClient.Del(context.Background(), lockKey).Err(); err != nil {
+				global.Log.Warnf("释放会话 %d 历史记录锁失败: %v", conversationID, err)
+			}
+		}()
+		// 在获取锁后，再次检查缓存，防止在获取锁的过程中，已有其他请求完成了缓存填充（双重检查锁定）
+		history, err := global.RedisClient.GetConversationHistory(ctx, conversationID)
+		if err == nil && history != nil {
+			global.Log.Debugf("获取锁后发现会话 %d 缓存已存在", conversationID)
+			return history, nil
+		}
+		return d.fetchAndCacheHistory(ctx, accountID, conversationID, currentMessage)
+	}
+
+	// 2b. 未获取到锁，说明其他goroutine正在回源，等待后重试
+	global.Log.Debugf("会话 %d 历史记录锁被占用，等待后重试", conversationID)
+	time.Sleep(200 * time.Millisecond) // 短暂等待
+
+	history, err = global.RedisClient.GetConversationHistory(ctx, conversationID)
+	if err == nil && history != nil {
+		global.Log.Debugf("等待后，会话 %d 历史记录从Redis缓存命中", conversationID)
+		return history, nil
+	}
+
+	// 如果等待后仍然没有缓存，作为降级策略，直接从源获取数据
+	global.Log.Warnf("等待后会话 %d 缓存仍未命中，直接回源作为降级策略", conversationID)
+	return d.fetchAndCacheHistory(ctx, accountID, conversationID, currentMessage)
 }
 
 // updateConversationHistory 在LLM回复后，更新Redis中的会话历史记录
@@ -376,7 +425,7 @@ func (d *ChatApi) updateConversationHistory(conversationID uint, userMessage, ai
 		return
 	}
 
-	ttl := time.Duration(global.Config.Redis.ConversationHistoryTTL) * time.Second
+	ttl := utils.GetTTLWithJitter(global.Config.Redis.ConversationHistoryTTL)
 
 	// 统一追加用户消息和AI回复
 	messagesToAppend := []common.LlmMessage{
@@ -399,7 +448,7 @@ func (d *ChatApi) updateHistoryWithHumanMessage(req common.ChatRequest) {
 		return
 	}
 
-	ttl := time.Duration(global.Config.Redis.ConversationHistoryTTL) * time.Second
+	ttl := utils.GetTTLWithJitter(global.Config.Redis.ConversationHistoryTTL)
 	messageToAppend := common.LlmMessage{
 		Role:    "assistant",
 		Content: req.Content,

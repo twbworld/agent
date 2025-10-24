@@ -1,12 +1,13 @@
 package utils
 
 import (
-	"crypto/rand"
+	crand "crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
 	"math"
 	"math/big"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -166,10 +167,20 @@ func ReadyFile(fileExt ...string) (string, string) {
 		ext = fileExt[0]
 	}
 
-	n, err := rand.Int(rand.Reader, big.NewInt(100))
+	n, err := crand.Int(crand.Reader, big.NewInt(100))
 	if err != nil {
 		return "", ""
 	}
 
 	return filepath.Join(global.Config.StaticDir, time.Now().In(global.Tz).Format("2006/01/")) + "/", Hash(strconv.FormatInt(time.Now().UnixNano()+n.Int64(), 10))[:10] + ext
+}
+
+// GetTTLWithJitter 为缓存TTL增加随机抖动，防止缓存雪崩
+func GetTTLWithJitter(baseTTLInSeconds int64) time.Duration {
+	if baseTTLInSeconds <= 0 {
+		return 0
+	}
+	// 添加一个最多为基础TTL 10% 的随机抖动
+	jitter := rand.Int63n(baseTTLInSeconds / 10)
+	return time.Duration(baseTTLInSeconds+jitter) * time.Second
 }

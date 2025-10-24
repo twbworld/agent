@@ -41,6 +41,8 @@ redis:
   lock_expiry: 30
   # 会话历史记录的过期时间(秒)
   conversation_history_ttl: 3600
+  # 获取会话历史记录锁的过期时间(秒)
+  history_lock_expiry: 10
 chatwoot:
   # Chatwoot部署地址
   url: "http://127.0.0.1:3000"

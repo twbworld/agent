@@ -162,3 +162,7 @@
 
 ### 6.5. 指引
 *  配置事例文件位于目录下的`config.example.yaml`, 对应go代码文件`model/config/default.go`和`model/config/child.go`; 默认值配置位于`initialize/global/enter.go`下的`handleConfig()`方法
+
+## 7. 其他
+
+* **redis使用**: 避免 缓存穿透、缓存击穿、缓存雪崩 等问题

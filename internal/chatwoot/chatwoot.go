@@ -57,7 +57,7 @@ type Service interface {
 	GetCannedResponses() ([]CannedResponse, error)
 	GetAccountDetails() (*AccountDetails, error)
 	CreatePrivateNote(conversationID uint, content string) error
-	ToggleConversationStatus(conversationID uint) error
+	SetConversationStatus(conversationID uint, status enum.ConversationStatus) error
 	ToggleTypingStatus(conversationID uint, status string) error
 	CreateMessage(conversationID uint, content string) error
 	GetConversationMessages(accountID, conversationID uint) ([]Message, error)
@@ -65,7 +65,7 @@ type Service interface {
 
 // TransferToHumanRequest 定义了转人工API的请求体
 type TransferToHumanRequest struct {
-	Status string `json:"status"` // "open" 表示转为人工处理
+	Status enum.ConversationStatus `json:"status"` // "open" 表示转为人工处理
 	// 还可以增加 AssigneeID 或 TeamID 来指定客服或团队
 	// TeamID int `json:"team_id,omitempty"`
 }
@@ -186,11 +186,11 @@ func (c *Client) CreatePrivateNote(conversationID uint, content string) error {
 	return c.sendRequest("POST", path, botToken, notePayload, nil)
 }
 
-// 将会话状态切换为 "open", 转接人工客服
-func (c *Client) ToggleConversationStatus(conversationID uint) error {
+// SetConversationStatus 将会话状态切换为指定状态
+func (c *Client) SetConversationStatus(conversationID uint, status enum.ConversationStatus) error {
 	path := fmt.Sprintf("/api/v1/accounts/%d/conversations/%d/toggle_status", c.AccountID, conversationID)
 	payload := TransferToHumanRequest{
-		Status: "open",
+		Status: status,
 	}
 	return c.sendRequest("POST", path, botToken, payload, nil)
 }

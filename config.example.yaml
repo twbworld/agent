@@ -102,6 +102,8 @@ ai:
   vector_search_min_similarity: 0.7
   # AI处理(包括精确匹配和向量检索和LLM处理)的超时时间(秒)
   async_job_timeout: 60
+  # (秒)AI转人工后的宽限期, 0为禁用
+  transfer_grace_period: 5
   # 用于触发转人工的关键词列表
   transfer_keywords:
     - "人工客服"

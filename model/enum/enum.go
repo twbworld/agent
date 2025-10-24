@@ -58,7 +58,7 @@ const (
 	TransferToHuman2 TransferToHuman = "系统错误导致[转人工]"
 	TransferToHuman3 TransferToHuman = "自动[转人工]"
 	TransferToHuman4 TransferToHuman = "用户情绪激动[转人工]"
-	TransferToHuman5 TransferToHuman = "AI无法处理[转人工]"
+	TransferToHuman5 TransferToHuman = "智能客服无法处理[转人工]"
 	TransferToHuman6 TransferToHuman = "金额过大[转人工]"
 )
 
@@ -86,20 +86,27 @@ type ReplyMessage string
 const (
 	ReplyMsgTransferSuccess       ReplyMessage = "已为您转接人工客服，请稍候。"
 	ReplyMsgAlreadyTransferred    ReplyMessage = "正在为您联系人工客服，请耐心等待，无需重复发送消息。"
-	ReplyMsgUnsupportedAttachment ReplyMessage = "您发送的消息暂不支持AI处理，已为您转接人工客服。"
+	ReplyMsgUnsupportedAttachment ReplyMessage = "您发送的消息暂不支持智能客服处理，已为您转接人工客服。"
 	ReplyMsgPromptTooLong         ReplyMessage = "提问内容过长，已为您转接人工客服。"
-	ReplyMsgLlmError              ReplyMessage = "抱歉，AI服务暂时遇到问题，已为您转接人工客服。"
-	ReplyMsgLlmEmpty              ReplyMessage = "抱歉，AI暂时无法回答您的问题，已为您转接人工客服。"
+	ReplyMsgLlmError              ReplyMessage = "抱歉，智能客服服务暂时遇到问题，已为您转接人工客服。"
+	ReplyMsgLlmEmpty              ReplyMessage = "抱歉，智能客服暂时无法回答您的问题，已为您转接人工客服。"
 	ReplyMsgSystemError           ReplyMessage = "系统繁忙，请稍后再试或联系人工客服。"
+	ReplyMsgAiRetrying            ReplyMessage = "智能客服暂时无法处理您的问题，正在尝试进一步分析，请稍候。"
 )
 
 type ChatwootEvent string
 
 const (
-	EventMessageCreated            ChatwootEvent = "message_created"
-	EventMessageUpdated            ChatwootEvent = "message_updated"
-	EventConversationCreated       ChatwootEvent = "conversation_created"
+	// 来自联系人的新消息。
+	EventMessageCreated ChatwootEvent = "message_created"
+	// 消息已更新。
+	EventMessageUpdated ChatwootEvent = "message_updated"
+	// 新对话创建。
+	EventConversationCreated ChatwootEvent = "conversation_created"
+	// 对话状态更改。
 	EventConversationStatusChanged ChatwootEvent = "conversation_status_changed"
-	EventConversationUpdated       ChatwootEvent = "conversation_updated"
-	EventConversationResolved      ChatwootEvent = "conversation_resolved"
+	// 对话已更新。
+	EventConversationUpdated ChatwootEvent = "conversation_updated"
+	// 对话已解决。
+	EventConversationResolved ChatwootEvent = "conversation_resolved"
 )

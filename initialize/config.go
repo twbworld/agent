@@ -147,4 +147,7 @@ func handleConfig(c *config.Config) {
 	if c.Ai.AsyncJobTimeout == 0 {
 		c.Ai.AsyncJobTimeout = 30
 	}
+	if c.Ai.TransferGracePeriod == 0 {
+		c.Ai.TransferGracePeriod = 5
+	}
 }

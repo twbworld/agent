@@ -16,6 +16,7 @@ import (
 
 type IActionService interface {
 	TransferToHuman(ConversationID uint, remark enum.TransferToHuman, message ...string) error
+	SetConversationBot(conversationID uint) error
 	ToggleTyping(conversationID uint, status bool)
 	SendMessage(conversationID uint, content string)
 	CannedResponses(chatRequest *common.ChatRequest) (string, bool, error)
@@ -27,9 +28,9 @@ type ActionService struct {
 
 // noGracePeriodReasons 定义了哪些转人工原因不需要设置宽限期，应立即转接
 var noGracePeriodReasons = []enum.TransferToHuman{
-	enum.TransferToHuman1, // 用户要求[转人工]
-	enum.TransferToHuman4, // 用户情绪激动[转人工]
-	enum.TransferToHuman6, // 金额过大[转人工]
+	enum.TransferToHuman1,
+	enum.TransferToHuman4,
+	enum.TransferToHuman6,
 }
 
 func NewActionService() *ActionService {
@@ -50,21 +51,19 @@ func (d *ActionService) TransferToHuman(ConversationID uint, remark enum.Transfe
 	if global.ChatwootService == nil {
 		return fmt.Errorf("Chatwoot客户端未初始化")
 	}
-	g, _ := errgroup.WithContext(context.Background())
 
-	// 如果转接原因不在“立即转接”列表中，则设置宽限期
-	if utils.InSlice(noGracePeriodReasons, remark) == -1 {
-		g.Go(func() error {
-			if global.RedisClient != nil {
-				const gracePeriod = 5 * time.Second
-				key := fmt.Sprintf("%s%d", redis.KeyPrefixTransferGracePeriod, ConversationID)
-				if err := global.RedisClient.Set(context.Background(), key, "1", gracePeriod).Err(); err != nil {
-					global.Log.Warnf("[action]为会话 %d 设置转人工宽限期标志失败: %v", ConversationID, err)
-				}
+	// 同步设置宽限期标志 (如果需要)
+	gracePeriod := time.Duration(global.Config.Ai.TransferGracePeriod) * time.Second
+	if gracePeriod > 0 && utils.InSlice(noGracePeriodReasons, remark) == -1 {
+		if global.RedisClient != nil {
+			key := fmt.Sprintf("%s%d", redis.KeyPrefixTransferGracePeriod, ConversationID)
+			if err := global.RedisClient.Set(context.Background(), key, "1", gracePeriod).Err(); err != nil {
+				global.Log.Warnf("[action]为会话 %d 设置转人工宽限期标志失败: %v", ConversationID, err)
 			}
-			return nil
-		})
+		}
 	}
+
+	g, _ := errgroup.WithContext(context.Background())
 
 	// 创建私信备注（内部使用）
 	if remark != "" {
@@ -75,30 +74,50 @@ func (d *ActionService) TransferToHuman(ConversationID uint, remark enum.Transfe
 			return nil
 		})
 	}
-
 	g.Go(func() error {
-		if err := global.ChatwootService.ToggleConversationStatus(ConversationID); err != nil {
+		if err := global.ChatwootService.SetConversationStatus(ConversationID, enum.ConversationStatusOpen); err != nil {
 			global.Log.Errorf("[action]转接会话 %d 至人工客服失败: %v", ConversationID, err)
 			return err
 		}
 		return nil
 	})
+	// 根据转接原因决定发送给用户的消息
+	userMessage := ""
+	if utils.InSlice(noGracePeriodReasons, remark) != -1 {
+		// 显式转人工，或高优先级转人工
+		userMessage = string(enum.ReplyMsgTransferSuccess)
+	} else {
+		// 隐式转人工，且有宽限期
+		userMessage = string(enum.ReplyMsgAiRetrying)
+	}
 
+	// 如果有额外的消息参数，则覆盖默认消息
 	if len(message) > 0 && message[0] != "" {
+		userMessage = message[0]
+	}
+
+	if userMessage != "" {
 		g.Go(func() error {
-			if err := global.ChatwootService.CreateMessage(ConversationID, message[0]); err != nil {
+			if err := global.ChatwootService.CreateMessage(ConversationID, userMessage); err != nil {
 				global.Log.Warnf("[action]为会话 %d 发送转人工提示失败: %v", ConversationID, err)
 			}
 			return nil
 		})
 	}
 
-	// 等待所有任务完成，并返回遇到的第一个错误
 	if err := g.Wait(); err != nil {
 		return err
 	}
 
 	return nil
+}
+
+// SetConversationBot 将会话状态设置为机器人处理
+func (d *ActionService) SetConversationBot(conversationID uint) error {
+	if global.ChatwootService == nil {
+		return fmt.Errorf("Chatwoot客户端未初始化")
+	}
+	return global.ChatwootService.SetConversationStatus(conversationID, enum.ConversationStatusBot)
 }
 
 // 切换输入状态

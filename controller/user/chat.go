@@ -1,7 +1,6 @@
 package user
 
 import (
-	// "bytes"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -9,7 +8,6 @@ import (
 	"fmt"
 	"io"
 
-	// "io"
 	"time"
 	"unicode/utf8"
 
@@ -139,6 +137,8 @@ func (d *ChatApi) processMessageAsync(ctx context.Context, req common.ChatReques
 		}
 	}()
 
+	var isGracePeriodOverride bool // 标记是否处于宽限期处理模式
+
 	// 1. 快速路径优先：同步执行关键词匹配
 	cannedAnswer, isAction, err := service.Service.UserServiceGroup.ActionService.CannedResponses(&req)
 	if err != nil {
@@ -160,19 +160,15 @@ func (d *ChatApi) processMessageAsync(ctx context.Context, req common.ChatReques
 		return
 	}
 
-	// 如果会话状态为 "open"，且未匹配到任何快捷回复，则AI不继续处理，交由人工跟进
+	// 如果会话状态为 "open"，且未匹配到任何快捷回复，则检查宽限期
 	if req.Conversation.Status == string(enum.ConversationStatusOpen) {
-		// 检查是否存在"转人工宽限期"
 		gracePeriodKey := fmt.Sprintf("%s%d", redis.KeyPrefixTransferGracePeriod, req.Conversation.ConversationID)
 		err := global.RedisClient.Get(ctx, gracePeriodKey).Err()
 
 		if err == nil {
-			// 标志存在，说明在宽限期内，AI继续处理
+			// 标志存在，说明在宽限期内，AI将继续处理新消息
 			global.Log.Debugf("会话 %d 处于转人工宽限期，AI将继续处理新消息", req.Conversation.ConversationID)
-			// 消费掉该标志
-			if delErr := global.RedisClient.Del(context.Background(), gracePeriodKey).Err(); delErr != nil {
-				global.Log.Warnf("删除会话 %d 的宽限期标志失败: %v", req.Conversation.ConversationID, delErr)
-			}
+			isGracePeriodOverride = true // 标记为宽限期处理模式
 		} else if err == redisv8.Nil {
 			// 标志不存在，正常退出，交由人工处理
 			return
@@ -278,6 +274,32 @@ func (d *ChatApi) processMessageAsync(ctx context.Context, req common.ChatReques
 		global.Log.Warnf("[processMessageAsync] LLM返回空回复，转人工, 会话ID: %d", req.Conversation.ConversationID)
 		_ = service.Service.UserServiceGroup.ActionService.TransferToHuman(req.Conversation.ConversationID, enum.TransferToHuman5, string(enum.ReplyMsgLlmEmpty))
 		return
+	}
+
+	// 如果在宽限期内AI成功处理，则异步将会话状态改回“机器人”
+	if isGracePeriodOverride {
+		go func() {
+			// 再次检查宽限期标志是否仍然存在
+			gracePeriodKey := fmt.Sprintf("%s%d", redis.KeyPrefixTransferGracePeriod, req.Conversation.ConversationID)
+			err := global.RedisClient.Get(context.Background(), gracePeriodKey).Err() // 使用context.Background()，因为此协程独立于请求生命周期
+
+			if err == redisv8.Nil {
+				// 宽限期已过，或者标志已被删除，不再尝试改回bot状态，避免与人工客服冲突
+				global.Log.Debugf("会话 %d 宽限期已过，AI不再尝试改回bot状态。", req.Conversation.ConversationID)
+				return
+			}
+			if err != nil {
+				global.Log.Warnf("重新检查会话 %d 宽限期标志失败: %v", req.Conversation.ConversationID, err)
+				return
+			}
+
+			// 宽限期标志仍然存在，可以安全地改回bot状态
+			if err := service.Service.UserServiceGroup.ActionService.SetConversationBot(req.Conversation.ConversationID); err != nil {
+				global.Log.Warnf("将会话 %d 状态改回机器人失败: %v", req.Conversation.ConversationID, err)
+			} else {
+				global.Log.Debugf("会话 %d 状态成功从open改回bot。", req.Conversation.ConversationID)
+			}
+		}()
 	}
 
 	service.Service.UserServiceGroup.ActionService.SendMessage(req.Conversation.ConversationID, llmAnswer)

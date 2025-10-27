@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"time"
 	"unicode/utf8"
 
@@ -266,6 +267,13 @@ func (d *ChatApi) processMessageAsync(ctx context.Context, req common.ChatReques
 		}
 		global.Log.Errorf("[processMessageAsync] LLM错误: %v", err)
 		_ = service.Service.UserServiceGroup.ActionService.TransferToHuman(req.Conversation.ConversationID, enum.TransferToHuman2, string(enum.ReplyMsgLlmError))
+		return
+	}
+
+	// 检查LLM是否返回了不确定的信号
+	if strings.TrimSpace(llmAnswer) == enum.LlmUnsureTransferSignal {
+		global.Log.Debugf("[processMessageAsync] LLM不确定答案，主动转人工, 会话ID: %d", req.Conversation.ConversationID)
+		_ = service.Service.UserServiceGroup.ActionService.TransferToHuman(req.Conversation.ConversationID, enum.TransferToHuman5, "")
 		return
 	}
 

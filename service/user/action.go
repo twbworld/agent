@@ -36,6 +36,7 @@ var noGracePeriodReasons = []enum.TransferToHuman{
 	enum.TransferToHuman1,
 	enum.TransferToHuman4,
 	enum.TransferToHuman6,
+	enum.TransferToHuman5,
 }
 
 func NewActionService() *actionService {

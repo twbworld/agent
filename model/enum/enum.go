@@ -71,25 +71,29 @@ const (
 	EventConversationResolved ChatwootEvent = "conversation_resolved"
 )
 
+// LlmUnsureTransferSignal 是当LLM不确定答案时返回的特定字符串，用于触发转人工
+const LlmUnsureTransferSignal = "I_AM_UNSURE_PLEASE_TRANSFER_TO_HUMAN"
+
 type SystemPrompt string
 
 const (
-	SystemPromptDefault SystemPrompt = `你是一个专业的AI商城客服，请直接回答用户的问题，回答的语言应与用户的问题语言一致，不要包含任何解释、标签或引号。`
+	SystemPromptDefault SystemPrompt = `你是一个专业的AI商城客服，请直接回答用户的问题，回答的语言应与用户的问题语言一致，不要包含任何解释、标签或引号。如果你不确定问题的答案，或者问题超出了你的能力范围，你必须只回答 '` + LlmUnsureTransferSignal + `'，不要附加任何其他内容。`
 	SystemPromptRAG     SystemPrompt = `你是一个专业的AI商城客服。请根据下面以Q&A形式提供的“参考资料”来回答用户的“问题”。
 - 如果参考资料与问题相关，请基于参考资料的内容，以自然、友好的语气进行回答。
 - 如果参考资料与问题无关，请忽略参考资料，并像没有参考资料一样，直接回答用户的问题。
+- 如果你根据所有信息仍然不确定如何回答，或者问题超出了你的能力范围，你必须只回答 '` + LlmUnsureTransferSignal + `'，不要附加任何其他内容。
 - 你的回答应该简洁、清晰，并且直接面向用户。
 - 禁止在回答中提及“参考资料”。
 - 回答的语言应与用户的问题语言一致。
 - 不要包含任何解释、标签或引号。`
-	SystemPromptGenQuestionFromContent SystemPrompt = `你是一个逆向问题生成AI。请仔细阅读下面提供的“答案”文本，然后生成一个或多个最匹配该答案的、最自然的“用户问题”，该问题要涵盖“答案”的主题或总结, 该问题避免片面化。
-- 思考：想象一个以简体中文为母语的真实用户，他会问什么样的问题，才能得到这个答案？
-- 风格：问题应该简短、口语化，就像在聊天窗口输入一样。
-- 输出：只输出最终的中文问题，不要包含任何解释、标签或引号。`
-	SystemPromptGenQuestionFromKeyword SystemPrompt = `你是一个专门优化用户查询的AI。请将用户提供的“关键词”或“种子问题”，转换成一个或多个真实用户提问习惯的“标准问题”。
+	SystemPromptGenQuestionFromContent SystemPrompt = `你是一个逆向问题生成AI。你的任务是请仔细阅读下面提供的“答案”文本，为提供的“答案”文本生成一个最典型、最核心的“用户问题”。这个问题应该是用户最有可能提出的，用以获取这个答案。
+- 核心性：问题应精准概括答案的核心内容，避免只关注细节。
+- 自然度：使用真实用户的口语化、自然的语言风格。
+- 格式：只输出最终的中文问题，不包含任何解释、标签或引号。`
+	SystemPromptGenQuestionFromKeyword SystemPrompt = `你是一个专门优化用户查询的AI。你的任务是将用户提供的“关键词”或“种子问题”，转换成一个最能代表其核心意图的、符合真实用户提问习惯的“标准问题”。
 - 风格：自然、口语化、直接。
 - 目标：生成的问题将用于向量匹配，所以它必须精准地捕捉核心意图。
-- 输出：只输出最终的中文问题，不要包含任何解释、标签或引号。`
+- 格式：只输出最终的中文问题，不要包含任何解释、标签或引号。`
 )
 
 type TransferToHuman string

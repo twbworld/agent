@@ -11,11 +11,12 @@ import (
 )
 
 const (
-	KeyCannedResponsesHash       = "canned_responses:hash"            // Redis中存储快捷回复的Hash Key
-	KeySyncCannedResponsesLock   = "agent:lock:sync_canned_responses" // Redis分布式锁Key
-	KeyPrefixConversationHistory = "conversation:history:"            // Redis中存储聊天记录的Key前缀
-	KeyPrefixHistoryLock         = "agent:lock:history:"              // 获取历史记录的锁,防止缓存击穿
-	KeyPrefixTransferGracePeriod = "agent:transfer_grace_period:"     // AI自动转人工后的宽限期Key前缀
+	KeyCannedResponsesHash       = "canned_responses:hash"                 // Redis中存储快捷回复的Hash Key
+	KeySyncCannedResponsesLock   = "agent:lock:sync_canned_responses"      // Redis分布式锁Key
+	KeyLastSyncCannedResponses   = "agent:last_sync_time:canned_responses" // 上次同步快捷回复的时间戳
+	KeyPrefixConversationHistory = "conversation:history:"                 // Redis中存储聊天记录的Key前缀
+	KeyPrefixHistoryLock         = "agent:lock:history:"                   // 获取历史记录的锁,防止缓存击穿
+	KeyPrefixTransferGracePeriod = "agent:transfer_grace_period:"          // AI自动转人工后的宽限期Key前缀
 )
 
 var ErrNil = redis.Nil

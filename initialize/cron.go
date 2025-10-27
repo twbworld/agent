@@ -10,8 +10,7 @@ func (i *Initializer) timerStart(taskManager *task.Manager) error {
 	i.cron = cron.New([]cron.Option{
 		cron.WithLocation(global.Tz),
 	}...)
-
-	if err := i.startCronJob(taskManager.KeywordReloader, "0 3 * * *"); err != nil {
+	if err := i.startCronJob(taskManager.KeywordReloader, "*/30 * * * *"); err != nil {
 		return err
 	}
 

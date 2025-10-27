@@ -91,12 +91,7 @@ func (d *KeywordsDb) DeleteKeywordsFromRedis(ctx context.Context, shortCodes []s
 		return 0, nil
 	}
 
-	fields := make([]string, len(shortCodes))
-	for i, sc := range shortCodes {
-		fields[i] = sc
-	}
-
-	count, err := global.RedisClient.HDel(ctx, redis.KeyCannedResponsesHash, fields...).Result()
+	count, err := global.RedisClient.HDel(ctx, redis.KeyCannedResponsesHash, shortCodes...).Result()
 	if err != nil {
 		return 0, fmt.Errorf("从Redis删除快捷回复失败: %w", err)
 	}

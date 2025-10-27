@@ -22,6 +22,8 @@ type CannedResponse struct {
 	AccountId int    `json:"account_id"`
 	ShortCode string `json:"short_code"`
 	Content   string `json:"content"`
+	CreatedAt string `json:"created_at"`
+	UpdatedAt string `json:"updated_at"`
 }
 
 // ConversationMessagesResponse 定义了会话消息列表API的响应结构

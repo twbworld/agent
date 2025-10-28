@@ -23,10 +23,30 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+// setupLogFile 是一个辅助函数，用于创建和打开一个每日轮转的日志文件。
+func (i *Initializer) setupLogFile(logPath string) (*os.File, error) {
+	// 采用更通用的日志命名规范, 例如: gin.log -> gin.log.2025-10-28
+	dateSuffix := time.Now().In(global.Tz).Format("2006-01-02")
+	dailyLogPath := fmt.Sprintf("%s.%s", logPath, dateSuffix)
+
+	if err := utils.CreateFile(dailyLogPath); err != nil {
+		return nil, fmt.Errorf("创建日志文件 '%s' 失败: %w", dailyLogPath, err)
+	}
+
+	file, err := os.OpenFile(dailyLogPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if err != nil {
+		return nil, fmt.Errorf("打开日志文件 '%s' 失败: %w", dailyLogPath, err)
+	}
+
+	i.logFileClosers = append(i.logFileClosers, file)
+	return file, nil
+}
+
 // InitLog 初始化logrus日志库
 func (i *Initializer) InitLog() error {
-	if err := utils.CreateFile(global.Config.RunLogPath); err != nil {
-		return fmt.Errorf("创建文件错误[oirdtug]: %w", err)
+	runfile, err := i.setupLogFile(global.Config.RunLogPath)
+	if err != nil {
+		return fmt.Errorf("初始化运行日志失败: %w", err)
 	}
 
 	global.Log = logrus.New()
@@ -37,16 +57,11 @@ func (i *Initializer) InitLog() error {
 		global.Log.SetLevel(logrus.InfoLevel)
 	}
 
-	runfile, err := os.OpenFile(global.Config.RunLogPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
-	if err != nil {
-		return fmt.Errorf("打开文件错误[0atrpf]: %w", err)
-	}
 	global.Log.SetOutput(io.MultiWriter(os.Stdout, runfile))
-	i.logFileCloser = runfile // 存储文件关闭器
 	return nil
 }
 
-func (i *Initializer) initTz() error {
+func (i *Initializer) InitTz() error {
 	Location, err := time.LoadLocation(global.Config.Tz)
 	if err != nil {
 		return fmt.Errorf("时区配置失败[siortuj]: %w", err)

@@ -291,7 +291,7 @@ func (m *Manager) processSemanticRules(ctx context.Context, rules []chatwoot.Can
 	return documentsForVectorDB, nil
 }
 
-// LoadKeywords 从Redis加载关键词到内存，并处理分布式锁(移除goto)
+// LoadKeywords 从Redis加载关键词到内存，并处理分布式锁
 func (m *Manager) LoadKeywords() error {
 	ctx := context.Background()
 

@@ -12,6 +12,11 @@ import (
 func main() {
 	startTime := time.Now()
 	initSvc := initialize.New()
+
+	if err := initSvc.InitTz(); err != nil {
+		panic(fmt.Sprintf("初始化时区失败: %v", err))
+	}
+
 	if err := initSvc.InitLog(); err != nil {
 		panic(fmt.Sprintf("初始化日志失败[fbvk89]: %v", err))
 	}
@@ -27,7 +32,7 @@ func main() {
 	}
 	defer initSvc.Close()
 
-	initialize.InitLogger()
+	initSvc.InitLogger()
 
 	taskManager := task.NewManager(global.EmbeddingService)
 

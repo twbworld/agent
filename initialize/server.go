@@ -23,13 +23,17 @@ import (
 
 var server *http.Server
 
-func InitLogger() {
-	ginfile, err := os.OpenFile(global.Config.GinLogPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+func (i *Initializer) InitLogger() {
+	ginfile, err := i.setupLogFile(global.Config.GinLogPath)
 	if err != nil {
-		global.Log.Fatalf("打开文件错误[fsmk89]: %v", err)
+		// 在此处使用 Fatalf 是合适的，因为如果Gin日志无法初始化，服务继续运行可能会隐藏问题。
+		global.Log.Fatalf("初始化Gin日志失败: %v", err)
 	}
-	gin.DefaultWriter, gin.DefaultErrorWriter = io.MultiWriter(ginfile), global.Log.Out //记录所有日志
-	gin.DisableConsoleColor()                                                           //将日志写入文件时不需要控制台颜色
+
+	// 将Gin日志同时输出到文件和标准输出，便于调试
+	gin.DefaultWriter = io.MultiWriter(os.Stdout, ginfile)
+	gin.DefaultErrorWriter = gin.DefaultWriter
+	gin.DisableConsoleColor() //将日志写入文件时不需要控制台颜色
 }
 
 func Start(initializer *Initializer, taskManager *task.Manager, startTime time.Time) {
@@ -55,7 +59,10 @@ func initGinServer() {
 	}
 	gin.SetMode(mode)
 
-	ginServer := gin.Default()
+	ginServer := gin.New()
+	// 使用 gin.Logger() 和 gin.Recovery() 中间件来替代 gin.Default()
+	// 这可以消除 gin.Default() 在调试模式下产生的警告，同时保持功能不变
+	ginServer.Use(gin.Logger(), gin.Recovery())
 	router.Start(ginServer)
 
 	ginServer.ForwardedByClientIP = true

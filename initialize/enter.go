@@ -13,7 +13,7 @@ import (
 // Initializer 统一管理项目的所有初始化工作
 type Initializer struct {
 	cron          *cron.Cron
-	logFileCloser io.Closer // 用于存储日志文件的关闭器
+	logFileClosers []io.Closer
 }
 
 // Run 并发执行所有核心服务的初始化
@@ -21,7 +21,6 @@ func (i *Initializer) Run() error {
 	eg, _ := errgroup.WithContext(context.Background())
 
 	// 关键任务，失败会终止程序
-	eg.Go(i.initTz)
 	eg.Go(i.dbStart)
 	eg.Go(i.initChatwoot)
 	eg.Go(i.initRedis)
@@ -60,10 +59,14 @@ func (i *Initializer) Close() {
 
 // logClose 关闭或刷新日志组件
 func (i *Initializer) logClose() error {
-	if i.logFileCloser != nil {
-		return i.logFileCloser.Close()
+	var lastErr error
+	for _, closer := range i.logFileClosers {
+		if err := closer.Close(); err != nil {
+			// 记录最后一个错误，但继续尝试关闭其他文件
+			lastErr = err
+		}
 	}
-	return nil
+	return lastErr
 }
 
 // StartSystem 启动系统级服务，如定时器和数据加载

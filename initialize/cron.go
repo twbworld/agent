@@ -14,6 +14,10 @@ func (i *Initializer) timerStart(taskManager *task.Manager) error {
 		return err
 	}
 
+	if err := i.startCronJob(taskManager.CleanUpLogs, "0 3 * * *"); err != nil {
+		return err
+	}
+
 	i.cron.Start() //已含协程
 	global.Log.Infoln("定时器启动成功")
 	return nil

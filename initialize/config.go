@@ -79,6 +79,10 @@ func handleConfig(c *config.Config) {
 	if c.RunLogPath == "" {
 		c.RunLogPath = "log/run.log"
 	}
+	// 默认保留7天日志
+	if c.LogRetentionDays == 0 {
+		c.LogRetentionDays = 7
+	}
 	if c.Tz == "" {
 		c.Tz = "Asia/Shanghai"
 	}

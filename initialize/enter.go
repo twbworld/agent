@@ -21,7 +21,7 @@ func (i *Initializer) Run() error {
 	eg, _ := errgroup.WithContext(context.Background())
 
 	// 关键任务，失败会终止程序
-	eg.Go(i.dbStart)
+	// eg.Go(i.dbStart)
 	eg.Go(i.initChatwoot)
 	eg.Go(i.initRedis)
 

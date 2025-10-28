@@ -73,6 +73,7 @@ ehthumbs_vista.db
 .eslintcache
 /config.yaml
 /*.db
+/*.db*
 __debug*
 
 /worktree*/

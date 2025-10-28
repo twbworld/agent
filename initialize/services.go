@@ -50,7 +50,14 @@ func (i *Initializer) InitLog() error {
 	}
 
 	global.Log = logrus.New()
-	global.Log.SetFormatter(&logrus.JSONFormatter{})
+	global.Log.SetFormatter(&logrus.JSONFormatter{
+		TimestampFormat: time.RFC3339,
+		FieldMap: logrus.FieldMap{
+			logrus.FieldKeyLevel: "level",
+			logrus.FieldKeyMsg:   "msg",
+			logrus.FieldKeyTime:  "time",
+		},
+	})
 	if gin.Mode() == gin.DebugMode {
 		global.Log.SetLevel(logrus.DebugLevel)
 	} else {

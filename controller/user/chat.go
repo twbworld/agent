@@ -253,6 +253,8 @@ func (d *ChatApi) processMessageAsync(ctx context.Context, req common.ChatReques
 		}
 	}
 
+	global.Log.Debugln("=================开始进入LLM分诊台")
+
 	triageCtx, triageCancel := context.WithTimeout(ctx, 10*time.Second) // 为分诊步骤设置一个较短的超时
 	defer triageCancel()
 
@@ -312,7 +314,7 @@ func (d *ChatApi) processMessageAsync(ctx context.Context, req common.ChatReques
 		}
 	}
 
-	global.Log.Debugln("=================开始进入LLM")
+	global.Log.Debugln("=================开始进入大型LLM")
 
 	// 6. 调用大型LLM服务获取最终回复
 	llmAnswer, err := service.Service.UserServiceGroup.LlmService.NewChat(ctx, &req, llmReferenceDocs, conversationHistory)

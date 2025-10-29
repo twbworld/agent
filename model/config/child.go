@@ -58,6 +58,7 @@ type Ai struct {
 	VectorSearchTopK          int64    `json:"vector_search_top_k" mapstructure:"vector_search_top_k" yaml:"vector_search_top_k"`
 	VectorSimilarityThreshold float32  `json:"vector_similarity_threshold" mapstructure:"vector_similarity_threshold" yaml:"vector_similarity_threshold"`
 	VectorSearchMinSimilarity float32  `json:"vector_search_min_similarity" mapstructure:"vector_search_min_similarity" yaml:"vector_search_min_similarity"`
+	TriageContextQuestions    uint     `json:"triage_context_questions" mapstructure:"triage_context_questions" yaml:"triage_context_questions"`
 	TransferGracePeriod       int64    `json:"transfer_grace_period" mapstructure:"transfer_grace_period" yaml:"transfer_grace_period"`
 	AsyncJobTimeout           int64    `json:"async_job_timeout" mapstructure:"async_job_timeout" yaml:"async_job_timeout"`
 	TransferKeywords          []string `json:"transfer_keywords" mapstructure:"transfer_keywords" yaml:"transfer_keywords"`

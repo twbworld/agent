@@ -53,6 +53,14 @@ func (c *client) getLlmConfig(size enum.LlmSize) *config.Llm {
 	return nil
 }
 
+// filterContent 从LLM的原始响应中剥离思考过程标签
+func (c *client) filterContent(rawAnswer string) string {
+	if parts := strings.SplitN(rawAnswer, "</think>", 2); len(parts) > 1 {
+		return strings.TrimSpace(parts[1])
+	}
+	return strings.TrimSpace(rawAnswer)
+}
+
 func (c *client) ChatCompletion(ctx context.Context, size enum.LlmSize, systemPrompt enum.SystemPrompt, content string, temperature ...float32) (string, error) {
 	return c.ChatCompletionWithHistory(ctx, size, systemPrompt, content, nil, temperature...)
 }
@@ -113,16 +121,7 @@ func (c *client) ChatCompletionWithHistory(ctx context.Context, size enum.LlmSiz
 	if len(resp.Choices) == 0 || resp.Choices[0].Message.Content == "" {
 		return "", errors.New("LLM服务返回了空结果")
 	}
-	llmAnswer := resp.Choices[0].Message.Content
-
-	// 处理回答，去掉可能的思考标记
-	var finalAnswer string
-	if parts := strings.SplitN(llmAnswer, "</think>", 2); len(parts) > 1 {
-		finalAnswer = parts[1]
-	} else {
-		finalAnswer = parts[0]
-	}
-	return strings.TrimSpace(finalAnswer), nil
+	return c.filterContent(resp.Choices[0].Message.Content), nil
 }
 
 func (c *client) GenerateStandardQuestion(ctx context.Context, prompt enum.SystemPrompt, text string) (string, error) {
@@ -175,14 +174,5 @@ func (c *client) GetCompletion(ctx context.Context, size enum.LlmSize, systemPro
 		return "", errors.New("LLM服务(GetCompletion)返回了空结果")
 	}
 
-	llmAnswer := resp.Choices[0].Message.Content
-
-	// 处理回答，去掉可能的思考标记
-	var finalAnswer string
-	if parts := strings.SplitN(llmAnswer, "</think>", 2); len(parts) > 1 {
-		finalAnswer = parts[1]
-	} else {
-		finalAnswer = parts[0]
-	}
-	return strings.TrimSpace(finalAnswer), nil
+	return c.filterContent(resp.Choices[0].Message.Content), nil
 }

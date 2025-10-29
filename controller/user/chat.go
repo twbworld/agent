@@ -14,9 +14,9 @@ import (
 
 	"gitee.com/taoJie_1/mall-agent/internal/redis"
 	"gitee.com/taoJie_1/mall-agent/utils"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/gin-gonic/gin"
-	"golang.org/x/sync/errgroup"
 
 	"gitee.com/taoJie_1/mall-agent/dao"
 	"gitee.com/taoJie_1/mall-agent/global"
@@ -160,83 +160,140 @@ func (d *ChatApi) processMessageAsync(ctx context.Context, req common.ChatReques
 		return
 	}
 
-	// 如果会话状态为 "open"，且未匹配到任何快捷回复，则检查宽限期
+	// 如果会话状态为 "open"，则检查宽限期
 	if req.Conversation.Status == string(enum.ConversationStatusOpen) {
 		gracePeriodKey := fmt.Sprintf("%s%d", redis.KeyPrefixTransferGracePeriod, req.Conversation.ConversationID)
 		err := global.RedisClient.Get(ctx, gracePeriodKey).Err()
 
 		if err == nil {
-			// 标志存在，说明在宽限期内，AI将继续处理新消息
 			global.Log.Debugf("会话 %d 处于转人工宽限期，AI将继续处理新消息", req.Conversation.ConversationID)
-			isGracePeriodOverride = true // 标记为宽限期处理模式
+			isGracePeriodOverride = true
 		} else if err == redis.ErrNil {
-			// 标志不存在，正常退出，交由人工处理
-			return
+			return // 标志不存在，正常退出，交由人工处理
 		} else {
-			// 查询Redis时发生其他错误，为安全起见，直接退出
 			global.Log.Errorf("检查会话 %d 的转人工宽限期标志失败: %v", req.Conversation.ConversationID, err)
-			return
+			return // 查询Redis时发生其他错误，为安全起见，直接退出
 		}
 	}
 
-	// --- 快速路径未命中，进入慢速路径 --- //
-	var (
-		vectorResults       []dao.SearchResult
-		conversationHistory []common.LlmMessage
-		chosenVectorAnswer  string
-	)
+	// --- 进入智能处理路径 --- //
+
+	// 2. 并发获取向量搜索结果和会话历史，优化IO密集型操作
+	var vectorResults []dao.SearchResult
+	var fullHistory []common.LlmMessage
+	var vectorErr error // 使用独立的错误变量，因为向量搜索失败不应中断整个流程
 
 	g, gCtx := errgroup.WithContext(ctx)
 
-	// 2. 慢速路径：并发执行向量搜索和历史记录获取
+	// 向量搜索
 	g.Go(func() error {
-		var currentVectorResults []dao.SearchResult
 		var searchErr error
-		currentVectorResults, searchErr = service.Service.UserServiceGroup.VectorService.Search(gCtx, req.Content)
-		if searchErr != nil {
+		vectorResults, searchErr = service.Service.UserServiceGroup.VectorService.Search(gCtx, req.Content)
+		if searchErr != nil && !errors.Is(searchErr, context.Canceled) {
 			global.Log.Warnf("[processMessageAsync] 向量数据库搜索失败: %v", searchErr)
-			return nil
-		}
-
-		if len(currentVectorResults) > 0 {
-			vectorResults = currentVectorResults
-			// 检查是否有高相似度的向量搜索结果，并触发快速响应
-			if currentVectorResults[0].Similarity >= global.Config.Ai.VectorSimilarityThreshold {
-				chosenVectorAnswer = currentVectorResults[0].Answer
-				return ErrVectorMatchFound
-			}
+			vectorErr = searchErr
 		}
 		return nil
 	})
 
+	// 获取会话历史
 	g.Go(func() error {
 		var historyErr error
-		conversationHistory, historyErr = d.getConversationHistory(gCtx, req.Conversation.AccountID, req.Conversation.ConversationID, req.Content)
+		fullHistory, historyErr = d.getConversationHistory(gCtx, req.Conversation.AccountID, req.Conversation.ConversationID, req.Content)
 		if historyErr != nil {
-			global.Log.Errorf("[processMessageAsync] 获取会话历史记录失败: %v", historyErr)
-			return historyErr
+			global.Log.Warnf("[processMessageAsync] 获取历史记录失败: %v", historyErr)
 		}
 		return nil
 	})
 
-	// 等待所有goroutine完成或被中断
-	if err := g.Wait(); err != nil && !errors.Is(err, context.Canceled) {
-		switch {
-		case errors.Is(err, ErrVectorMatchFound):
-			// 向量搜索高相似度匹配，提前响应
-			global.Log.Debugf("[processMessageAsync] 向量搜索高相似度匹配，提前响应, 相似度: %.4f, 会话ID: %d", vectorResults[0].Similarity, req.Conversation.ConversationID)
-			service.Service.UserServiceGroup.ActionService.SendMessage(req.Conversation.ConversationID, chosenVectorAnswer)
-			go d.updateConversationHistory(req.Conversation.ConversationID, req.Content, chosenVectorAnswer)
-			return // 回复已发送，终止流程
+	// 等待向量搜索和历史记录获取完成
+	if err := g.Wait(); err != nil {
+		global.Log.Errorf("[processMessageAsync] 并发获取数据时发生意外错误: %v", err)
+		_ = service.Service.UserServiceGroup.ActionService.TransferToHuman(req.Conversation.ConversationID, enum.TransferToHuman2, string(enum.ReplyMsgLlmError))
+		return
+	}
 
-		default:
-			global.Log.Errorf("[processMessageAsync] errgroup执行失败: %v", err)
-			_ = service.Service.UserServiceGroup.ActionService.TransferToHuman(req.Conversation.ConversationID, enum.TransferToHuman2, string(enum.ReplyMsgLlmError))
-			return
+	// 3. 高相似度直接回答：如果向量搜索结果中存在极高相似度的匹配项，则直接回复，跳过所有LLM
+	if len(vectorResults) > 0 && vectorResults[0].Similarity >= global.Config.Ai.VectorSimilarityThreshold {
+		chosenVectorAnswer := vectorResults[0].Answer
+		global.Log.Debugf("[processMessageAsync] 向量搜索高相似度匹配，提前响应, 相似度: %.4f, 会话ID: %d", vectorResults[0].Similarity, req.Conversation.ConversationID)
+		service.Service.UserServiceGroup.ActionService.SendMessage(req.Conversation.ConversationID, chosenVectorAnswer)
+		go d.updateConversationHistory(req.Conversation.ConversationID, req.Content, chosenVectorAnswer)
+		return
+	}
+
+	// 4. 分诊台 (Triage) & 智能路由
+	// 4.1 复用已获取的数据
+	if vectorErr != nil {
+		// 如果向量搜索失败，清空可能存在的vectorResults，确保后续逻辑正确处理空结果
+		vectorResults = nil
+	}
+	// fullHistory 已经获取
+
+	// 4.2 准备分诊台所需的上下文信息
+	var triageHistory []common.LlmMessage
+	if len(fullHistory) > 0 {
+		// 取最后4条消息 (相当于2轮完整对话) 作为分诊上下文
+		const triageHistoryLimit = 4
+		startIndex := len(fullHistory) - triageHistoryLimit
+		if startIndex < 0 {
+			startIndex = 0
+		}
+		triageHistory = fullHistory[startIndex:]
+	}
+
+	var retrievedQuestions []string
+	if len(vectorResults) > 0 {
+		// 只取前N个最相关的问题作为上下文，避免prompt过长
+		for i, res := range vectorResults {
+			if i >= int(global.Config.Ai.TriageContextQuestions) {
+				break
+			}
+			retrievedQuestions = append(retrievedQuestions, res.Question)
 		}
 	}
 
-	// --- 如果代码能执行到这里，说明没有任何快速路径被命中 --- //
+	triageCtx, triageCancel := context.WithTimeout(ctx, 10*time.Second) // 为分诊步骤设置一个较短的超时
+	defer triageCancel()
+
+	triageResult, err := service.Service.UserServiceGroup.LlmService.Triage(triageCtx, req.Content, triageHistory, retrievedQuestions)
+	if err != nil {
+		global.Log.Errorf("[Triage] 分诊台LLM调用失败: %v, 会话ID: %d", err, req.Conversation.ConversationID)
+		_ = service.Service.UserServiceGroup.ActionService.TransferToHuman(req.Conversation.ConversationID, enum.TransferToHuman2, string(enum.ReplyMsgLlmError))
+		return
+	}
+
+	// 4.3 根据分诊结果执行路由
+	// 定义需要立即转人工的负面情绪和紧急等级
+	triggerTransferEmotions := []enum.TriageEmotion{
+		enum.TriageEmotionAngry,
+		enum.TriageEmotionFrustrated,
+		enum.TriageEmotionAnxious,
+	}
+	triggerTransferUrgencies := []enum.TriageUrgency{
+		enum.TriageUrgencyCritical,
+		enum.TriageUrgencyHigh,
+	}
+
+	if utils.InSlice(triggerTransferEmotions, enum.TriageEmotion(triageResult.Emotion)) > -1 ||
+		enum.TriageIntent(triageResult.Intent) == enum.TriageIntentRequestHuman ||
+		utils.InSlice(triggerTransferUrgencies, enum.TriageUrgency(triageResult.Urgency)) > -1 {
+		global.Log.Debugf("[Triage] 触发高优先级转人工规则, 意图: %s, 情绪: %s, 紧急度: %s, 会话ID: %d", triageResult.Intent, triageResult.Emotion, triageResult.Urgency, req.Conversation.ConversationID)
+		_ = service.Service.UserServiceGroup.ActionService.TransferToHuman(req.Conversation.ConversationID, enum.TransferToHuman3, string(enum.ReplyMsgTransferSuccess))
+		return
+	}
+
+	if !triageResult.IsRelated || enum.TriageIntent(triageResult.Intent) == enum.TriageIntentOffTopic {
+		global.Log.Debugf("[Triage] 识别为无关问题，已礼貌拒绝, 会话ID: %d", req.Conversation.ConversationID)
+		service.Service.UserServiceGroup.ActionService.SendMessage(req.Conversation.ConversationID, string(enum.ReplyMsgOffTopic))
+		go d.updateConversationHistory(req.Conversation.ConversationID, req.Content, string(enum.ReplyMsgOffTopic))
+		return
+	}
+
+	// --- 分诊通过，进入深度处理路径 --- //
+
+	// 5. 复用之前获取的完整会话历史记录
+	conversationHistory := fullHistory
 
 	// 告诉用户“机器人正在输入中...”
 	go service.Service.UserServiceGroup.ActionService.ToggleTyping(req.Conversation.ConversationID, true)
@@ -244,11 +301,10 @@ func (d *ChatApi) processMessageAsync(ctx context.Context, req common.ChatReques
 		go service.Service.UserServiceGroup.ActionService.ToggleTyping(req.Conversation.ConversationID, false)
 	}()
 
-	// 准备给LLM的参考资料
+	// 准备给大型LLM的参考资料 (RAG)
 	var llmReferenceDocs []dao.SearchResult
 	if len(vectorResults) > 0 {
 		for _, res := range vectorResults {
-			global.Log.Debugln(res.Similarity, "================相似度")
 			// 只使用相似度高于配置阈值的文档作为参考
 			if res.Similarity >= global.Config.Ai.VectorSearchMinSimilarity {
 				llmReferenceDocs = append(llmReferenceDocs, res)
@@ -258,7 +314,7 @@ func (d *ChatApi) processMessageAsync(ctx context.Context, req common.ChatReques
 
 	global.Log.Debugln("=================开始进入LLM")
 
-	// 调用LLM服务获取回复
+	// 6. 调用大型LLM服务获取最终回复
 	llmAnswer, err := service.Service.UserServiceGroup.LlmService.NewChat(ctx, &req, llmReferenceDocs, conversationHistory)
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
@@ -286,12 +342,9 @@ func (d *ChatApi) processMessageAsync(ctx context.Context, req common.ChatReques
 	// 如果在宽限期内AI成功处理，则异步将会话状态改回“机器人”
 	if isGracePeriodOverride {
 		go func() {
-			// 再次检查宽限期标志是否仍然存在
 			gracePeriodKey := fmt.Sprintf("%s%d", redis.KeyPrefixTransferGracePeriod, req.Conversation.ConversationID)
-			err := global.RedisClient.Get(context.Background(), gracePeriodKey).Err() // 使用context.Background()，因为此协程独立于请求生命周期
-
+			err := global.RedisClient.Get(context.Background(), gracePeriodKey).Err()
 			if err == redis.ErrNil {
-				// 宽限期已过，或者标志已被删除，不再尝试改回bot状态，避免与人工客服冲突
 				global.Log.Debugf("会话 %d 宽限期已过，AI不再尝试改回bot状态。", req.Conversation.ConversationID)
 				return
 			}
@@ -299,7 +352,6 @@ func (d *ChatApi) processMessageAsync(ctx context.Context, req common.ChatReques
 				global.Log.Warnf("重新检查会话 %d 宽限期标志失败: %v", req.Conversation.ConversationID, err)
 				return
 			}
-
 			// 宽限期标志仍然存在，可以安全地改回bot状态
 			if err := service.Service.UserServiceGroup.ActionService.SetConversationPending(req.Conversation.ConversationID); err != nil {
 				global.Log.Warnf("将会话 %d 状态改回机器人失败: %v", req.Conversation.ConversationID, err)

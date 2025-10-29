@@ -151,6 +151,9 @@ func handleConfig(c *config.Config) {
 	if c.Ai.VectorSimilarityThreshold == 0 {
 		c.Ai.VectorSimilarityThreshold = 0.9
 	}
+	if c.Ai.TriageContextQuestions == 0 {
+		c.Ai.TriageContextQuestions = 2
+	}
 	if c.Ai.AsyncJobTimeout == 0 {
 		c.Ai.AsyncJobTimeout = 30
 	}

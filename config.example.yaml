@@ -104,6 +104,8 @@ ai:
   vector_similarity_threshold: 0.9
   # 向量搜索结果的最低相似度阈值(0-1), 低于此阈值则不作为LLM的参考
   vector_search_min_similarity: 0.7
+  # 为分诊台提供向量搜索结果作为上下文时，取最相关的前N个问题
+  triage_context_questions: 2
   # AI处理(包括精确匹配和向量检索和LLM处理)的超时时间(秒)
   async_job_timeout: 60
   # (秒)AI转人工后的宽限期, 0为禁用

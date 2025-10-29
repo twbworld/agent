@@ -18,3 +18,11 @@ type LlmMessage struct {
 	Role    string `json:"role"`    // 消息角色，例如 "user", "assistant", "system"
 	Content string `json:"content"` // 消息内容
 }
+
+// TriageResult 结构体定义了分诊台LLM返回的JSON格式
+type TriageResult struct {
+	Intent    string `json:"intent"`
+	Emotion   string `json:"emotion"`
+	IsRelated bool   `json:"is_related"`
+	Urgency   string `json:"urgency"`
+}

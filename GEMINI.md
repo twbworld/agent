@@ -166,8 +166,9 @@
 *   **禁止滥用 `init`**: 尽量将初始化逻辑放在 `main` 函数或构造函数中。
 *   **禁止可变全局变量**: 避免使用任何可能在运行时被修改的全局变量。
 *   **注意 Map 无序**: 不要编写任何依赖 `for range` 遍历 `map` 顺序的代码。
+
 ## 7. 其他
 
 * **redis使用**: 避免 缓存穿透、缓存击穿、缓存雪崩 等问题。
-*  配置事例文件位于目录下的`config.example.yaml`, 对应go代码文件`model/config/default.go`和`model/config/child.go`; 默认值配置位于`initialize/global/enter.go`下的`handleConfig()`方法
+*  配置事例文件位于目录下的`config.example.yaml`, 对应go代码文件`model/config/default.go`和`model/config/child.go`; 默认值配置位于`initialize/config.go`下的`handleConfig()`方法,热重置配置位于`initialize/reload.go`下的`HandleConfigChange`方法。
 *  善用`utils/tool.go`下的工具类,避免出现重复代码。

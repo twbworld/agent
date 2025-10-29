@@ -201,7 +201,7 @@ func (m *Manager) processSemanticRules(ctx context.Context, rules []chatwoot.Can
 		mu            sync.Mutex
 		completedJobs []semanticJob
 	)
-	llmGroup.SetLimit(10) // 增加并发限制以加快处理速度
+	llmGroup.SetLimit(10) // 并发限制以加快处理速度
 
 	semanticPrefix := global.Config.Ai.SemanticPrefix
 	hybridPrefix := global.Config.Ai.HybridPrefix

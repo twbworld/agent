@@ -3,6 +3,7 @@ package initialize
 import (
 	"context"
 	"io"
+	"sync"
 
 	"gitee.com/taoJie_1/mall-agent/global"
 	"gitee.com/taoJie_1/mall-agent/task"
@@ -12,8 +13,9 @@ import (
 
 // Initializer 统一管理项目的所有初始化工作
 type Initializer struct {
-	cron          *cron.Cron
+	cron           *cron.Cron
 	logFileClosers []io.Closer
+	reloadLock     sync.Mutex // 用于热重载的锁
 }
 
 // Run 并发执行所有核心服务的初始化

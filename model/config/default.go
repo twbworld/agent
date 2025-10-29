@@ -1,5 +1,7 @@
 package config
 
+import "encoding/json"
+
 type Config struct {
 	Debug            bool         `json:"debug" mapstructure:"debug" yaml:"debug"`
 	ProjectName      string       `json:"project_name" mapstructure:"project_name" yaml:"project_name"`
@@ -18,4 +20,12 @@ type Config struct {
 	LlmEmbedding     LlmEmbedding `json:"llm_embedding" mapstructure:"llm_embedding" yaml:"llm_embedding"`
 	VectorDb         VectorDb     `json:"vector_db" mapstructure:"vector_db" yaml:"vector_db"`
 	Ai               Ai           `json:"ai" mapstructure:"ai" yaml:"ai"`
+}
+
+// DeepCopy 使用JSON序列化和反序列化实现Config对象的深度拷贝
+func (c *Config) DeepCopy() *Config {
+	newConfig := new(Config)
+	data, _ := json.Marshal(c)
+	_ = json.Unmarshal(data, newConfig)
+	return newConfig
 }

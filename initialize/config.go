@@ -4,6 +4,8 @@ import (
 	"flag"
 	"fmt"
 	"strings"
+	"sync"
+	"time"
 
 	"gitee.com/taoJie_1/mall-agent/global"
 	"gitee.com/taoJie_1/mall-agent/model/config"
@@ -35,6 +37,9 @@ func New() *Initializer {
 		configPath = `config.yaml`
 	}
 
+	// 将 Initializer 实例创建提前
+	i := &Initializer{}
+
 	v := viper.New()
 	v.SetConfigFile(configPath)
 	v.SetConfigType("yaml")
@@ -42,13 +47,39 @@ func New() *Initializer {
 		panic("读取配置失败[u9ij]: " + configPath + err.Error())
 	}
 
+	// --- 为热重载引入Debounce(防抖)机制 ---
+	var (
+		debounceTimer *time.Timer
+		debounceMutex sync.Mutex
+	)
+	const debounceDuration = 200 * time.Millisecond
+
 	v.WatchConfig()
 	v.OnConfigChange(func(e fsnotify.Event) {
-		fmt.Println("配置文件变化[djiads]: ", e.Name)
-		if err := v.Unmarshal(global.Config); err != nil {
-			fmt.Println(err)
+		debounceMutex.Lock()
+		// 如果已有计时器，则重置它
+		if debounceTimer != nil {
+			debounceTimer.Stop()
 		}
-		handleConfig(global.Config)
+		// 启动一个新的计时器，在持续时间内如果没有新事件，则执行重载
+		debounceTimer = time.AfterFunc(debounceDuration, func() {
+			fmt.Println("配置文件变化[djiads] (Debounced): ", e.Name)
+
+			// 为比较，先深度拷贝一份旧的配置
+			oldConfig := global.Config.DeepCopy()
+
+			if err := v.Unmarshal(global.Config); err != nil {
+				fmt.Println("热加载配置文件反序列化失败:", err)
+				// 如果反序列化失败，则恢复旧配置，防止程序状态不一致
+				global.Config = oldConfig
+				return
+			}
+			handleConfig(global.Config)
+
+			// 调用新的处理函数来处理配置变更
+			i.HandleConfigChange(oldConfig, global.Config)
+		})
+		debounceMutex.Unlock()
 	})
 
 	if err := v.Unmarshal(global.Config); err != nil {
@@ -57,9 +88,8 @@ func New() *Initializer {
 
 	handleConfig(global.Config)
 
-	return &Initializer{}
+	return i
 }
-
 // handleConfig 处理和设置配置的默认值
 func handleConfig(c *config.Config) {
 	c.StaticDir = strings.TrimRight(c.StaticDir, "/")

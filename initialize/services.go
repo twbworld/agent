@@ -42,6 +42,16 @@ func (i *Initializer) setupLogFile(logPath string) (*os.File, error) {
 	return file, nil
 }
 
+// CustomJSONFormatter for logrus to set timezone
+type CustomJSONFormatter struct {
+	logrus.JSONFormatter
+}
+
+func (f *CustomJSONFormatter) Format(entry *logrus.Entry) ([]byte, error) {
+	entry.Time = entry.Time.In(global.Tz)
+	return f.JSONFormatter.Format(entry)
+}
+
 // InitLog 初始化logrus日志库
 func (i *Initializer) InitLog() error {
 	runfile, err := i.setupLogFile(global.Config.RunLogPath)
@@ -50,12 +60,14 @@ func (i *Initializer) InitLog() error {
 	}
 
 	global.Log = logrus.New()
-	global.Log.SetFormatter(&logrus.JSONFormatter{
-		TimestampFormat: time.RFC3339,
-		FieldMap: logrus.FieldMap{
-			logrus.FieldKeyLevel: "level",
-			logrus.FieldKeyMsg:   "msg",
-			logrus.FieldKeyTime:  "time",
+	global.Log.SetFormatter(&CustomJSONFormatter{
+		JSONFormatter: logrus.JSONFormatter{
+			TimestampFormat: time.RFC3339,
+			FieldMap: logrus.FieldMap{
+				logrus.FieldKeyLevel: "level",
+				logrus.FieldKeyMsg:   "msg",
+				logrus.FieldKeyTime:  "time",
+			},
 		},
 	})
 	if gin.Mode() == gin.DebugMode {

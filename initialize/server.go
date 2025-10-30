@@ -30,9 +30,16 @@ func (i *Initializer) InitLogger() {
 		global.Log.Fatalf("初始化Gin日志失败: %v", err)
 	}
 
-	// 将Gin日志同时输出到文件和标准输出，便于调试
-	gin.DefaultWriter = io.MultiWriter(os.Stdout, ginfile)
-	gin.DefaultErrorWriter = gin.DefaultWriter
+	if global.Config.Debug {
+		// 调试模式下，日志同时输出到文件和标准输出
+		gin.DefaultWriter = io.MultiWriter(os.Stdout, ginfile)
+	} else {
+		// 发布模式下，日志只输出到文件
+		gin.DefaultWriter = ginfile
+	}
+
+	// 错误日志总是输出到文件和标准错误，便于问题排查
+	gin.DefaultErrorWriter = io.MultiWriter(os.Stderr, ginfile)
 	gin.DisableConsoleColor() //将日志写入文件时不需要控制台颜色
 }
 

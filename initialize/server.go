@@ -86,8 +86,7 @@ func logStartupInfo(startTime time.Time) {
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
 
-	global.Log.Infof("服务已启动, 耗时: %v, Go: %s, 端口: %s, 模式: %s, PID: %d, 内存: %gMiB", time.Since(startTime), runtime.Version(), global.Config.GinAddr, gin.Mode(), syscall.Getpid(), utils.NumberFormat(float32(m.Alloc)/1024/1024))
-
+	global.Log.Infof("服务已启动, 版本: %s, 耗时: %v, Go: %s, 端口: %s, 模式: %s, PID: %d, 内存: %gMiB", global.Version, time.Since(startTime), runtime.Version(), global.Config.GinAddr, gin.Mode(), syscall.Getpid(), utils.NumberFormat(float32(m.Alloc)/1024/1024))
 }
 
 // 等待关闭信号(ctrl+C)

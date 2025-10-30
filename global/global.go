@@ -17,6 +17,7 @@ import (
 // 全局变量
 // 业务逻辑禁止修改
 var (
+	Version          string
 	Config           *config.Config = new(config.Config) //指针类型, 给与其内存空间
 	Log              *logrus.Logger
 	Tz               *time.Location
@@ -26,7 +27,7 @@ var (
 	LlmService       llm.Service
 	VectorDb         vector.Service
 	RedisClient      redis.Service
-	ActiveLLMTasks *ActiveTasksMap = &ActiveTasksMap{Data: make(map[uint]context.CancelFunc)}
+	ActiveLLMTasks   *ActiveTasksMap = &ActiveTasksMap{Data: make(map[uint]context.CancelFunc)}
 )
 
 type CannedResponsesMap struct {

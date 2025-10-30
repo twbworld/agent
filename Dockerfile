@@ -7,8 +7,10 @@ ENV GO111MODULE=on
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
+#请在CI/CD中使用"git describe --tags --always"获取版本号并设置VERSION参数
+ARG VERSION="unknown"
 #go-sqlite3需要cgo编译; 且使用完全静态编译, 否则需依赖外部安装的glibc
-RUN CGO_ENABLED=1 GOOS=linux GOARCH=$TARGETARCH go build -ldflags "-s -w --extldflags '-static -fpic'" -o server . && \
+RUN CGO_ENABLED=1 GOOS=linux GOARCH=$TARGETARCH go build -ldflags "-s -w --extldflags '-static -fpic' -X 'gitee.com/taoJie_1/mall-agent/global.Version=${VERSION}'" -o server . && \
     mv config.example.yaml server /app/static
 
 

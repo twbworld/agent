@@ -2,6 +2,7 @@ package router
 
 import (
 	"net/http"
+	"strings"
 
 	"gitee.com/taoJie_1/mall-agent/controller"
 	"gitee.com/taoJie_1/mall-agent/global"
@@ -38,11 +39,11 @@ func Start(ginServer *gin.Engine) {
 	})
 
 	ginServer.NoRoute(func(ctx *gin.Context) {
-		//内部重定向
-		ctx.Request.URL.Path = "/404.html"
-		ginServer.HandleContext(ctx)
-		//http重定向
-		// ctx.Redirect(http.StatusMovedPermanently, "/404.html")
+		if strings.Contains(ctx.Request.Header.Get("Accept"), "text/html") {
+			ctx.HTML(http.StatusNotFound, "404.html", gin.H{"status": "404"})
+		} else {
+			common.FailNotFound(ctx)
+		}
 	})
 
 	v1 := ginServer.Group("api/v1")

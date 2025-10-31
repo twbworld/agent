@@ -21,12 +21,12 @@ var (
 	Config           *config.Config = new(config.Config) //指针类型, 给与其内存空间
 	Log              *logrus.Logger
 	Tz               *time.Location
+	RedisClient      redis.Service
 	CannedResponses  *CannedResponsesMap = &CannedResponsesMap{Data: make(map[string]string)}
 	ChatwootService  chatwoot.Service
 	EmbeddingService embedding.Service
 	LlmService       llm.Service
 	VectorDb         vector.Service
-	RedisClient      redis.Service
 	ActiveLLMTasks   *ActiveTasksMap = &ActiveTasksMap{Data: make(map[uint]context.CancelFunc)}
 )
 

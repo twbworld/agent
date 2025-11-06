@@ -14,10 +14,6 @@ type Response struct {
 	Token string       `json:"token,omitempty"`
 }
 
-type OllamaResponse struct {
-	Response string `json:"response"`
-}
-
 func result(ctx *gin.Context, code enum.ResCode, msg enum.Msg, data interface{}) {
 	ctx.JSON(http.StatusOK, Response{
 		Code: code,
@@ -93,4 +89,8 @@ func FailAuth(ctx *gin.Context, message string) {
 // token过期
 func FailAuthWs(c chan *Response, message string) {
 	resultWs(c, enum.AuthErrorCode, enum.Msg(message), map[string]interface{}{})
+}
+
+type OllamaResponse struct {
+	Response string `json:"response"`
 }

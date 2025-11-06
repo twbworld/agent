@@ -23,6 +23,24 @@ import (
 
 var server *http.Server
 
+// Start 负责初始化并启动所有服务
+func Start(initializer *Initializer, taskManager *task.Manager, startTime time.Time) {
+	initializer.StartSystem(taskManager)
+
+	service.Service.CommonServiceGroup = common.NewServiceGroup()
+	service.Service.UserServiceGroup = user.NewServiceGroup()
+	service.Service.AdminServiceGroup = admin.NewServiceGroup()
+
+	initGinServer()
+
+	go startServer()
+
+	logStartupInfo(startTime)
+
+	waitForShutdown()
+}
+
+// 日志初始化
 func (i *Initializer) InitLogger() {
 	ginfile, err := i.setupLogFile(global.Config.GinLogPath)
 	if err != nil {
@@ -43,22 +61,6 @@ func (i *Initializer) InitLogger() {
 	gin.DisableConsoleColor() //将日志写入文件时不需要控制台颜色
 }
 
-func Start(initializer *Initializer, taskManager *task.Manager, startTime time.Time) {
-	initializer.StartSystem(taskManager)
-
-	service.Service.CommonServiceGroup = common.NewServiceGroup()
-	service.Service.UserServiceGroup = user.NewServiceGroup()
-	service.Service.AdminServiceGroup = admin.NewServiceGroup()
-
-	initGinServer()
-	//协程启动服务
-	go startServer()
-
-	logStartupInfo(startTime)
-
-	waitForShutdown()
-}
-
 func initGinServer() {
 	mode := gin.ReleaseMode
 	if global.Config.Debug {
@@ -68,13 +70,12 @@ func initGinServer() {
 
 	ginServer := gin.New()
 	// 使用 gin.Logger() 和 gin.Recovery() 中间件来替代 gin.Default()
-	// 这可以消除 gin.Default() 在调试模式下产生的警告，同时保持功能不变
 	ginServer.Use(gin.Logger(), gin.Recovery())
+
 	router.Start(ginServer)
 
 	ginServer.ForwardedByClientIP = true
 
-	// ginServer.Run(":80")
 	server = &http.Server{
 		Addr:    global.Config.GinAddr,
 		Handler: ginServer,
@@ -96,7 +97,7 @@ func logStartupInfo(startTime time.Time) {
 	global.Log.Infof("服务已启动, 版本: %s, 耗时: %v, Go: %s, 端口: %s, 模式: %s, PID: %d, 内存: %gMiB", global.Version, time.Since(startTime), runtime.Version(), global.Config.GinAddr, gin.Mode(), syscall.Getpid(), utils.NumberFormat(float32(m.Alloc)/1024/1024))
 }
 
-// 等待关闭信号(ctrl+C)
+// 阻塞并等待关闭信号(ctrl+C)
 func waitForShutdown() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()

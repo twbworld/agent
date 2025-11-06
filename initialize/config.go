@@ -109,7 +109,6 @@ func handleConfig(c *config.Config) {
 	if c.RunLogPath == "" {
 		c.RunLogPath = "log/run.log"
 	}
-	// 默认保留7天日志
 	if c.LogRetentionDays == 0 {
 		c.LogRetentionDays = 7
 	}
@@ -144,7 +143,7 @@ func handleConfig(c *config.Config) {
 		c.Redis.HistoryLockExpiry = 10
 	}
 	if c.Chatwoot.Url == "" {
-		c.Chatwoot.Url = "http://127.0.0.1:8080"
+		c.Chatwoot.Url = "http://127.0.0.1:3000"
 	}
 	if c.Chatwoot.AccountId == 0 {
 		c.Chatwoot.AccountId = 1

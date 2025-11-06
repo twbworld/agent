@@ -17,7 +17,6 @@ import (
 	"gitee.com/taoJie_1/mall-agent/internal/vector"
 	"gitee.com/taoJie_1/mall-agent/model/enum"
 	"gitee.com/taoJie_1/mall-agent/utils"
-	"github.com/gin-gonic/gin"
 	"github.com/sashabaranov/go-openai"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
@@ -70,7 +69,7 @@ func (i *Initializer) InitLog() error {
 			},
 		},
 	})
-	if gin.Mode() == gin.DebugMode {
+	if global.Config.Debug {
 		global.Log.SetLevel(logrus.DebugLevel)
 	} else {
 		global.Log.SetLevel(logrus.InfoLevel)

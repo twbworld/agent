@@ -170,5 +170,5 @@
 ## 7. 其他
 
 * **redis使用**: 避免 缓存穿透、缓存击穿、缓存雪崩 等问题。
-*  配置事例文件位于目录下的`config.example.yaml`, 对应go代码文件`model/config/default.go`和`model/config/child.go`; 默认值配置位于`initialize/config.go`下的`handleConfig()`方法,热重置配置位于`initialize/reload.go`下的`HandleConfigChange`方法。
+*  如果改动配置文件, 则必须同步以下文件: 配置事例文件位于目录下的`config.example.yaml`, 对应go代码文件`model/config/default.go`和`model/config/child.go`, 默认值配置位于`initialize/config.go`下的`handleConfig()`方法,热重置配置位于`initialize/reload.go`下的`HandleConfigChange`方法。
 *  善用`utils/tool.go`下的工具类,避免出现重复代码。

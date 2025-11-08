@@ -71,9 +71,6 @@ const (
 	EventConversationResolved ChatwootEvent = "conversation_resolved"
 )
 
-// LlmUnsureTransferSignal 是当LLM不确定答案时返回的特定字符串，用于触发转人工
-const LlmUnsureTransferSignal = "I_AM_UNSURE_PLEASE_TRANSFER_TO_HUMAN"
-
 // TriageIntent 定义了分诊台模型可能识别出的用户意图
 type TriageIntent string
 
@@ -108,6 +105,9 @@ const (
 	TriageUrgencyLow      TriageUrgency = "low"
 )
 
+// LlmUnsureTransferSignal 是当LLM不确定答案时返回的特定字符串，用于触发转人工
+const LlmUnsureTransferSignal = "I_AM_UNSURE_PLEASE_TRANSFER_TO_HUMAN"
+
 type SystemPrompt string
 
 const (
@@ -128,6 +128,11 @@ const (
 - 禁止在回答中提及“参考资料”。
 - 回答的语言应与用户的问题语言一致。
 - 不要包含任何解释、标签或引号。`
+	SystemPromptRAGInstructions SystemPrompt = `
+请根据下面以Q&A形式提供的“参考资料”来回答用户的“问题”。
+- 如果参考资料与问题相关，请基于参考资料的内容，以自然、友好的语气进行回答。
+- 如果参考资料与问题无关，请忽略参考资料，并像没有参考资料一样，直接回答用户的问题。
+- 禁止在回答中提及“参考资料”。`
 	SystemPromptGenQuestionFromContent SystemPrompt = `你是一个逆向问题生成AI。你的任务是请仔细阅读下面提供的“答案”文本，为提供的“答案”文本生成一个最典型、最核心的“用户问题”。这个问题应该是用户最有可能提出的，用以获取这个答案。
 - 核心性：问题应精准概括答案的核心内容，避免只关注细节。
 - 自然度：使用真实用户的口语化、自然的语言风格。
@@ -175,8 +180,27 @@ const (
   "is_related": true,
   "urgency": "..."
 }`
-)
+	SystemPromptToolUser SystemPrompt = `你是一个强大的AI助手，可以调用外部工具来完成任务。
+当你判断需要调用工具时，你必须使用 <tool_code>...</tool_code> 标签来包裹一个严格的JSON对象。
+此JSON对象必须包含 "name" (string, 工具的名称) 和 "arguments" (object, 一个包含所有参数键值对的对象)。
 
+**重要**: 工具的 "name" 必须使用 "客户端名称.工具名称" 的格式，例如 "default.查询物流"。
+
+例如:
+<tool_code>
+{
+  "name": "default.查询物流",
+  "arguments": {
+    "order_id": "123456789"
+  }
+}
+</tool_code>
+
+可用工具列表如下 (格式为 客户端名称.工具名称: 描述):
+{tools}
+
+请根据用户的问题和可用工具列表，生成正确的工具调用JSON。如果不需要调用工具，请直接回答用户的问题。`
+)
 type TransferToHuman string
 
 const (

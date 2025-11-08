@@ -114,3 +114,11 @@ ai:
   transfer_keywords:
     - "人工客服"
     - "转人工"
+# MCP服务配置
+mcp_servers:
+  # MCP服务命名
+  mcp_name:
+    # MCP服务的地址
+    url: "http://127.0.0.1:8080"
+    # MCP服务的认证Token
+    auth: ""

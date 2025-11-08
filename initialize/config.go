@@ -90,12 +90,13 @@ func New() *Initializer {
 
 	return i
 }
+
 // handleConfig 处理和设置配置的默认值
 func handleConfig(c *config.Config) {
 	c.StaticDir = strings.TrimRight(c.StaticDir, "/")
 
 	if c.ProjectName == "" {
-		c.ProjectName = "AI客服系统"
+		c.ProjectName = "mall-Agent"
 	}
 	if c.GinAddr == "" {
 		c.GinAddr = ":80"

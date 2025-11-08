@@ -13,10 +13,10 @@ import (
 )
 
 type LlmService interface {
+	// 分诊, 使用小型LLM对用户输入进行分诊，返回分类结果
+	Triage(ctx context.Context, content string, history []common.LlmMessage, retrievedQuestions []string) (*common.TriageResult, error)
 	// 负责业务层面的决策，例如决定使用哪个模型、哪个Prompt
 	NewChat(ctx context.Context, param *common.ChatRequest, referenceDocs []dao.SearchResult, history []common.LlmMessage) (string, error)
-	// 使用小型LLM对用户输入进行分诊，返回分类结果
-	Triage(ctx context.Context, content string, history []common.LlmMessage, retrievedQuestions []string) (*common.TriageResult, error)
 }
 
 type llmService struct {
@@ -24,36 +24,6 @@ type llmService struct {
 
 func NewLlmService() *llmService {
 	return &llmService{}
-}
-
-func (s *llmService) NewChat(ctx context.Context, param *common.ChatRequest, referenceDocs []dao.SearchResult, history []common.LlmMessage) (string, error) { // 修改方法签名
-	if global.LlmService == nil {
-		return "", fmt.Errorf("LLM客户端未初始化")
-	}
-
-	var finalContent strings.Builder
-	var systemPrompt enum.SystemPrompt = enum.SystemPromptDefault
-
-	// 如果有参考文档，则构建一个包含上下文的prompt
-	if len(referenceDocs) > 0 {
-		systemPrompt = enum.SystemPromptRAG
-		finalContent.WriteString("--- 参考资料 ---\n")
-		for _, doc := range referenceDocs {
-			fmt.Fprintf(&finalContent, "[问题]: %s\n[回答]: %s\n---\n", doc.Question, doc.Answer)
-		}
-		finalContent.WriteString("\n--- 用户问题 ---\n")
-	}
-
-	finalContent.WriteString(param.Content)
-
-	return global.LlmService.ChatCompletionWithHistory(
-		ctx,
-		enum.ModelLarge,
-		systemPrompt,
-		finalContent.String(),
-		history,
-		0.5,
-	)
 }
 
 func (s *llmService) Triage(ctx context.Context, content string, history []common.LlmMessage, retrievedQuestions []string) (*common.TriageResult, error) {
@@ -104,4 +74,69 @@ func (s *llmService) Triage(ctx context.Context, content string, history []commo
 	}
 
 	return &triageResult, nil
+}
+
+func (s *llmService) NewChat(ctx context.Context, param *common.ChatRequest, referenceDocs []dao.SearchResult, history []common.LlmMessage) (string, error) {
+	if global.LlmService == nil {
+		return "", fmt.Errorf("LLM客户端未初始化")
+	}
+
+	hasTools := global.McpService != nil && len(global.McpService.GetAvailableTools()) > 0
+	hasDocs := len(referenceDocs) > 0
+
+	var systemPromptBuilder strings.Builder
+	var finalContent strings.Builder
+
+	// 1. 根据场景动态构建System Prompt
+	// 使用 if-else 选择基础Prompt，避免重复
+	if hasDocs {
+		systemPromptBuilder.WriteString(string(enum.SystemPromptRAG))
+	} else {
+		systemPromptBuilder.WriteString(string(enum.SystemPromptDefault))
+	}
+
+	// 2. 如果有可用工具，则追加工具使用说明
+	if hasTools {
+		// 从 enum 中获取工具使用的模板
+		toolPromptTemplate := string(enum.SystemPromptToolUser)
+
+		// 构建可用工具列表的字符串
+		var toolsListBuilder strings.Builder
+		availableClients := global.McpService.GetAvailableToolsWithClient()
+		for clientName, tools := range availableClients {
+			for _, tool := range tools {
+				toolsListBuilder.WriteString(fmt.Sprintf("- %s.%s: %s\n", clientName, tool.Name, tool.Description))
+			}
+		}
+
+		// 将工具列表替换到模板中
+		finalToolPrompt := strings.Replace(toolPromptTemplate, "{tools}", toolsListBuilder.String(), 1)
+		systemPromptBuilder.WriteString("\n\n") // 添加换行符以分隔
+		systemPromptBuilder.WriteString(finalToolPrompt)
+	}
+
+	// 3. 构建最终发送给LLM的 content
+	if hasDocs {
+		finalContent.WriteString("--- 参考资料 ---\n")
+		for _, doc := range referenceDocs {
+			// 确保问题和答案不为空
+			q := doc.Question
+			if q == "" {
+				q = "相关信息"
+			}
+			fmt.Fprintf(&finalContent, "[问题]: %s\n[回答]: %s\n---\n", q, doc.Answer)
+		}
+		finalContent.WriteString("\n--- 用户问题 ---\n")
+	}
+
+	finalContent.WriteString(param.Content)
+
+	return global.LlmService.ChatCompletionWithHistory(
+		ctx,
+		enum.ModelLarge,
+		enum.SystemPrompt(systemPromptBuilder.String()),
+		finalContent.String(),
+		history,
+		0.5,
+	)
 }

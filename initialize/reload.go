@@ -131,6 +131,41 @@ func (i *Initializer) HandleConfigChange(oldConfig, newConfig *config.Config) {
 		})
 	}
 
+	// MCP服务重载
+	if !reflect.DeepEqual(oldConfig.McpServers, newConfig.McpServers) {
+		eg.Go(func() error {
+			if global.McpService == nil {
+				// 如果之前未初始化，则进行初始化
+				if err := i.initMcp(); err != nil {
+					global.Log.Errorf("热重载期间初始化MCP服务失败: %v", err)
+					return err
+				}
+				return nil
+			}
+
+			oldMap := oldConfig.McpServers
+			newMap := newConfig.McpServers
+
+			for name, oldCfg := range oldMap {
+				if newCfg, ok := newMap[name]; !ok {
+					// 被移除
+					global.McpService.RemoveClient(name)
+				} else if !reflect.DeepEqual(oldCfg, newCfg) {
+					// 被修改
+					global.McpService.AddOrUpdateClient(name, newCfg)
+				}
+			}
+
+			// 新增的
+			for name, newCfg := range newMap {
+				if _, ok := oldMap[name]; !ok {
+					global.McpService.AddOrUpdateClient(name, newCfg)
+				}
+			}
+			return nil
+		})
+	}
+
 	if err := eg.Wait(); err != nil {
 		global.Log.Errorf("并发热重载过程中发生错误: %v", err)
 	}

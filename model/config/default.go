@@ -20,6 +20,7 @@ type Config struct {
 	LlmEmbedding     LlmEmbedding `json:"llm_embedding" mapstructure:"llm_embedding" yaml:"llm_embedding"`
 	VectorDb         VectorDb     `json:"vector_db" mapstructure:"vector_db" yaml:"vector_db"`
 	Ai               Ai           `json:"ai" mapstructure:"ai" yaml:"ai"`
+	McpServers       map[string]Mcp `json:"mcp_servers" mapstructure:"mcp_servers" yaml:"mcp_servers"`
 }
 
 // DeepCopy 使用JSON序列化和反序列化实现Config对象的深度拷贝

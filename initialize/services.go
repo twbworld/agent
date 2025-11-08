@@ -13,6 +13,7 @@ import (
 	"gitee.com/taoJie_1/mall-agent/internal/chatwoot"
 	"gitee.com/taoJie_1/mall-agent/internal/embedding"
 	"gitee.com/taoJie_1/mall-agent/internal/llm"
+	"gitee.com/taoJie_1/mall-agent/internal/mcp"
 	"gitee.com/taoJie_1/mall-agent/internal/redis"
 	"gitee.com/taoJie_1/mall-agent/internal/vector"
 	"gitee.com/taoJie_1/mall-agent/model/enum"
@@ -239,5 +240,26 @@ func (i *Initializer) doInitLlmEmbedding() error {
 		openAIClient,
 		global.Config.LlmEmbedding.Model,
 	)
+	return nil
+}
+
+func (i *Initializer) initMcp() error {
+	if len(global.Config.McpServers) == 0 {
+		return nil
+	}
+	client, err := mcp.NewClient(global.Log, global.Config.McpServers, global.Version, global.Config.ProjectName)
+	if err != nil {
+		global.Log.Warnf("MCP服务初始化失败: %v", err)
+		return err
+	}
+	global.McpService = client
+	global.Log.Info("初始化MCP服务成功")
+	return nil
+}
+
+func (i *Initializer) mcpClose() error {
+	if global.McpService != nil {
+		return global.McpService.Close()
+	}
 	return nil
 }

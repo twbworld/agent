@@ -316,7 +316,7 @@ func (d *ChatApi) processMessageAsync(ctx context.Context, req common.ChatReques
 
 	global.Log.Debugln("=================开始进入大型LLM")
 
-	// 6. 调用大型LLM服务获取最终回复
+	// 6. 调用大型LLM服务
 	llmAnswer, err := service.Service.UserServiceGroup.LlmService.NewChat(ctx, &req, llmReferenceDocs, conversationHistory)
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
@@ -333,6 +333,57 @@ func (d *ChatApi) processMessageAsync(ctx context.Context, req common.ChatReques
 		global.Log.Debugf("[processMessageAsync] LLM不确定答案，主动转人工, 会话ID: %d", req.Conversation.ConversationID)
 		_ = service.Service.UserServiceGroup.ActionService.TransferToHuman(req.Conversation.ConversationID, enum.TransferToHuman5, "")
 		return
+	}
+
+	// 检查是否需要调用工具
+	if strings.Contains(llmAnswer, "<tool_code>") {
+		global.Log.Debugln("=================需调用Mcp")
+
+		global.Log.Debugf("[processMessageAsync] LLM请求调用工具, 会话ID: %d", req.Conversation.ConversationID)
+
+		// 从回复中提取工具调用代码（JSON）
+		toolCode := strings.TrimSpace(strings.Split(strings.Split(llmAnswer, "<tool_code>")[1], "</tool_code>")[0])
+
+		if global.McpService != nil {
+			var toolCallParams common.ToolCallParams
+			if err := json.Unmarshal([]byte(toolCode), &toolCallParams); err != nil {
+				global.Log.Errorf("[processMessageAsync] 解析工具调用JSON失败: %v", err)
+				// 将错误信息反馈给LLM
+				toolResult := fmt.Sprintf("工具调用格式错误: %v", err)
+				conversationHistory = append(conversationHistory, common.LlmMessage{Role: "assistant", Content: llmAnswer}, common.LlmMessage{Role: "tool", Content: toolResult})
+			} else {
+				// 解析 "clientName.toolName"
+				parts := strings.SplitN(toolCallParams.Name, ".", 2)
+				if len(parts) != 2 {
+					toolResult := fmt.Sprintf("工具名称格式错误，必须为 '客户端名称.工具名称'，实际为: '%s'", toolCallParams.Name)
+					global.Log.Errorf("[processMessageAsync] %s", toolResult)
+					conversationHistory = append(conversationHistory, common.LlmMessage{Role: "assistant", Content: llmAnswer}, common.LlmMessage{Role: "tool", Content: toolResult})
+				} else {
+					clientName := parts[0]
+					toolName := parts[1]
+
+					// 直接调用重构后的 ExecuteTool 方法，传入解析后的组件
+					toolResult, err := global.McpService.ExecuteTool(ctx, clientName, toolName, toolCallParams.Arguments)
+					if err != nil {
+						global.Log.Errorf("[processMessageAsync] 执行MCP工具 '%s' 失败: %v", toolCallParams.Name, err)
+						toolResult = fmt.Sprintf("工具调用失败: %v", err)
+					}
+					global.Log.Debugln("=================成功获取Mcp数据")
+
+					conversationHistory = append(conversationHistory, common.LlmMessage{Role: "assistant", Content: llmAnswer}, common.LlmMessage{Role: "tool", Content: toolResult})
+				}
+			}
+
+			global.Log.Debugln("=================再次调用大型LLM分析数据")
+
+			// 将工具执行结果和历史记录再次发送给LLM
+			llmAnswer, err = service.Service.UserServiceGroup.LlmService.NewChat(ctx, &req, nil, conversationHistory)
+			if err != nil {
+				global.Log.Errorf("[processMessageAsync] 工具调用后LLM错误: %v", err)
+				_ = service.Service.UserServiceGroup.ActionService.TransferToHuman(req.Conversation.ConversationID, enum.TransferToHuman2, string(enum.ReplyMsgLlmError))
+				return
+			}
+		}
 	}
 
 	if llmAnswer == "" {

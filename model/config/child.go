@@ -1,5 +1,10 @@
 package config
 
+type Mcp struct {
+	Url  string `json:"url" mapstructure:"url" yaml:"url"`
+	Auth string `json:"auth" mapstructure:"auth" yaml:"auth"`
+}
+
 type Database struct {
 	Type          string `json:"type" mapstructure:"type" yaml:"type"`
 	SqlitePath    string `json:"sqlite_path" mapstructure:"sqlite_path" yaml:"sqlite_path"`

@@ -66,7 +66,7 @@ llm:
     timeout: 30
     # LLM的大小, small|medium|large
     size: "small"
-    # LLM的温度,不设置则由LLM服务决定
+    # LLM的温度,不设置则由LLM服务决定, qwen3默认0.6
     temperature: 0.6
 # 配置向量化模型;中途更换模型可能因dim不同而报错
 llm_embedding:

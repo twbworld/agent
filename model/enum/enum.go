@@ -180,16 +180,16 @@ const (
   "is_related": true,
   "urgency": "..."
 }`
-	SystemPromptToolUser SystemPrompt = `你是一个强大的AI助手，可以调用外部工具来完成任务。
+	SystemPromptToolUser SystemPrompt = `你可以调用外部工具来完成任务。
 当你判断需要调用工具时，你必须使用 <tool_code>...</tool_code> 标签来包裹一个严格的JSON对象。
 此JSON对象必须包含 "name" (string, 工具的名称) 和 "arguments" (object, 一个包含所有参数键值对的对象)。
 
-**重要**: 工具的 "name" 必须使用 "客户端名称.工具名称" 的格式，例如 "default.查询物流"。
+**重要**: 工具的 "name" 必须使用 "客户端名称.工具名称" 的格式，例如 "mall.查询物流"。
 
 例如:
 <tool_code>
 {
-  "name": "default.查询物流",
+  "name": "mall.查询物流",
   "arguments": {
     "order_id": "123456789"
   }

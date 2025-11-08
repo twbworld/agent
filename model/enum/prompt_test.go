@@ -60,3 +60,25 @@ func TestTriagePromptConsistency(t *testing.T) {
 		}
 	}
 }
+
+// TestSystemPromptToolUserConsistency 单元测试，用于确保工具调用(ToolUser)的系统提示词中
+// 包含所有必要的指令和占位符。
+func TestSystemPromptToolUserConsistency(t *testing.T) {
+	prompt := string(SystemPromptToolUser)
+
+	// 检查关键标签和占位符
+	expectedStrings := []string{
+		"<tool_code>",
+		"</tool_code>",
+		`"name"`,
+		`"arguments"`,
+		`"default.查询物流"`,
+		"{tools}",
+	}
+
+	for _, expected := range expectedStrings {
+		if !strings.Contains(prompt, expected) {
+			t.Errorf("SystemPromptToolUser应包含字符串: %s", expected)
+		}
+	}
+}

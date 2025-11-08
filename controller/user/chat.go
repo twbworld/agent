@@ -178,7 +178,7 @@ func (d *ChatApi) processMessageAsync(ctx context.Context, req common.ChatReques
 
 	// --- 进入智能处理路径 --- //
 
-	// 2. 并发获取向量搜索结果和会话历史，优化IO密集型操作
+	// 2. 并发获取向量搜索结果和会话历史
 	var vectorResults []dao.SearchResult
 	var fullHistory []common.LlmMessage
 	var vectorErr error // 使用独立的错误变量，因为向量搜索失败不应中断整个流程
@@ -206,14 +206,13 @@ func (d *ChatApi) processMessageAsync(ctx context.Context, req common.ChatReques
 		return nil
 	})
 
-	// 等待向量搜索和历史记录获取完成
 	if err := g.Wait(); err != nil {
 		global.Log.Errorf("[processMessageAsync] 并发获取数据时发生意外错误: %v", err)
 		_ = service.Service.UserServiceGroup.ActionService.TransferToHuman(req.Conversation.ConversationID, enum.TransferToHuman2, string(enum.ReplyMsgLlmError))
 		return
 	}
 
-	// 3. 高相似度直接回答：如果向量搜索结果中存在极高相似度的匹配项，则直接回复，跳过所有LLM
+	// 3. 高相似度直接回答
 	if len(vectorResults) > 0 && vectorResults[0].Similarity >= global.Config.Ai.VectorSimilarityThreshold {
 		chosenVectorAnswer := vectorResults[0].Answer
 		global.Log.Debugf("[processMessageAsync] 向量搜索高相似度匹配，提前响应, 相似度: %.4f, 会话ID: %d", vectorResults[0].Similarity, req.Conversation.ConversationID)
@@ -222,15 +221,79 @@ func (d *ChatApi) processMessageAsync(ctx context.Context, req common.ChatReques
 		return
 	}
 
-	// 4. 分诊台 (Triage) & 智能路由
-	// 4.1 复用已获取的数据
+	// 如果向量搜索失败，清空可能存在的vectorResults，确保后续逻辑正确处理空结果
 	if vectorErr != nil {
-		// 如果向量搜索失败，清空可能存在的vectorResults，确保后续逻辑正确处理空结果
 		vectorResults = nil
 	}
-	// fullHistory 已经获取
 
-	// 4.2 准备分诊台所需的上下文信息
+	// 4. 分诊台 (Triage) & 智能路由
+	processed, err := d.runTriage(ctx, req, fullHistory, vectorResults)
+	if err != nil {
+		global.Log.Errorf("[processMessageAsync] 分诊失败: %v, 会话ID: %d", err, req.Conversation.ConversationID)
+		_ = service.Service.UserServiceGroup.ActionService.TransferToHuman(req.Conversation.ConversationID, enum.TransferToHuman2, string(enum.ReplyMsgLlmError))
+		return
+	}
+	if processed {
+		return
+	}
+
+	// --- 分诊通过，进入深度处理路径 --- //
+
+	// 5. 调用大型LLM服务 (含RAG和工具调用)
+	llmAnswer, err := d.runComplexGeneration(ctx, req, fullHistory, vectorResults)
+	if err != nil {
+		if errors.Is(err, context.Canceled) {
+			global.Log.Debugf("会话 %d 的AI任务被取消。", req.Conversation.ConversationID)
+			return
+		}
+		global.Log.Errorf("[processMessageAsync] 复杂路径处理失败: %v", err)
+		_ = service.Service.UserServiceGroup.ActionService.TransferToHuman(req.Conversation.ConversationID, enum.TransferToHuman2, string(enum.ReplyMsgLlmError))
+		return
+	}
+
+	// 6. 最终回复处理
+	if strings.TrimSpace(llmAnswer) == enum.LlmUnsureTransferSignal {
+		global.Log.Debugf("[processMessageAsync] LLM不确定答案，主动转人工, 会话ID: %d", req.Conversation.ConversationID)
+		_ = service.Service.UserServiceGroup.ActionService.TransferToHuman(req.Conversation.ConversationID, enum.TransferToHuman5, "")
+		return
+	}
+
+	if llmAnswer == "" {
+		global.Log.Warnf("[processMessageAsync] LLM返回空回复，转人工, 会话ID: %d", req.Conversation.ConversationID)
+		_ = service.Service.UserServiceGroup.ActionService.TransferToHuman(req.Conversation.ConversationID, enum.TransferToHuman5, string(enum.ReplyMsgLlmError))
+		return
+	}
+
+	// 7. 如果在宽限期内AI成功处理，则异步将会话状态改回“机器人”
+	if isGracePeriodOverride {
+		go func() {
+			gracePeriodKey := fmt.Sprintf("%s%d", redis.KeyPrefixTransferGracePeriod, req.Conversation.ConversationID)
+			err := global.RedisClient.Get(context.Background(), gracePeriodKey).Err()
+			if err == redis.ErrNil {
+				global.Log.Debugf("会话 %d 宽限期已过，AI不再尝试改回bot状态。", req.Conversation.ConversationID)
+				return
+			}
+			if err != nil {
+				global.Log.Warnf("重新检查会话 %d 宽限期标志失败: %v", req.Conversation.ConversationID, err)
+				return
+			}
+			// 宽限期标志仍然存在，可以安全地改回bot状态
+			if err := service.Service.UserServiceGroup.ActionService.SetConversationPending(req.Conversation.ConversationID); err != nil {
+				global.Log.Warnf("将会话 %d 状态改回机器人失败: %v", req.Conversation.ConversationID, err)
+			} else {
+				global.Log.Debugf("会话 %d 状态成功从open改回bot。", req.Conversation.ConversationID)
+			}
+		}()
+	}
+
+	// 8. 发送消息并更新历史
+	service.Service.UserServiceGroup.ActionService.SendMessage(req.Conversation.ConversationID, llmAnswer)
+	go d.updateConversationHistory(req.Conversation.ConversationID, req.Content, llmAnswer)
+}
+
+// runTriage 执行分诊与智能路由
+func (d *ChatApi) runTriage(ctx context.Context, req common.ChatRequest, fullHistory []common.LlmMessage, vectorResults []dao.SearchResult) (processed bool, err error) {
+	// 准备分诊台所需的上下文信息
 	var triageHistory []common.LlmMessage
 	if len(fullHistory) > 0 {
 		// 取最后4条消息 (相当于2轮完整对话) 作为分诊上下文
@@ -260,13 +323,10 @@ func (d *ChatApi) processMessageAsync(ctx context.Context, req common.ChatReques
 
 	triageResult, err := service.Service.UserServiceGroup.LlmService.Triage(triageCtx, req.Content, triageHistory, retrievedQuestions)
 	if err != nil {
-		global.Log.Errorf("[Triage] 分诊台LLM调用失败: %v, 会话ID: %d", err, req.Conversation.ConversationID)
-		_ = service.Service.UserServiceGroup.ActionService.TransferToHuman(req.Conversation.ConversationID, enum.TransferToHuman2, string(enum.ReplyMsgLlmError))
-		return
+		return false, err
 	}
 
-	// 4.3 根据分诊结果执行路由
-	// 定义需要立即转人工的负面情绪和紧急等级
+	// 根据分诊结果执行路由
 	triggerTransferEmotions := []enum.TriageEmotion{
 		enum.TriageEmotionAngry,
 		enum.TriageEmotionFrustrated,
@@ -282,21 +342,21 @@ func (d *ChatApi) processMessageAsync(ctx context.Context, req common.ChatReques
 		utils.InSlice(triggerTransferUrgencies, enum.TriageUrgency(triageResult.Urgency)) > -1 {
 		global.Log.Debugf("[Triage] 触发高优先级转人工规则, 意图: %s, 情绪: %s, 紧急度: %s, 会话ID: %d", triageResult.Intent, triageResult.Emotion, triageResult.Urgency, req.Conversation.ConversationID)
 		_ = service.Service.UserServiceGroup.ActionService.TransferToHuman(req.Conversation.ConversationID, enum.TransferToHuman3, string(enum.ReplyMsgTransferSuccess))
-		return
+		return true, nil
 	}
 
 	if !triageResult.IsRelated || enum.TriageIntent(triageResult.Intent) == enum.TriageIntentOffTopic {
 		global.Log.Debugf("[Triage] 识别为无关问题，已礼貌拒绝, 会话ID: %d", req.Conversation.ConversationID)
 		service.Service.UserServiceGroup.ActionService.SendMessage(req.Conversation.ConversationID, string(enum.ReplyMsgOffTopic))
 		go d.updateConversationHistory(req.Conversation.ConversationID, req.Content, string(enum.ReplyMsgOffTopic))
-		return
+		return true, nil
 	}
 
-	// --- 分诊通过，进入深度处理路径 --- //
+	return false, nil
+}
 
-	// 5. 复用之前获取的完整会话历史记录
-	conversationHistory := fullHistory
-
+// runComplexGeneration 执行复杂的RAG+LLM生成，并处理工具调用
+func (d *ChatApi) runComplexGeneration(ctx context.Context, req common.ChatRequest, fullHistory []common.LlmMessage, vectorResults []dao.SearchResult) (string, error) {
 	// 告诉用户“机器人正在输入中...”
 	go service.Service.UserServiceGroup.ActionService.ToggleTyping(req.Conversation.ConversationID, true)
 	defer func() {
@@ -316,30 +376,16 @@ func (d *ChatApi) processMessageAsync(ctx context.Context, req common.ChatReques
 
 	global.Log.Debugln("=================开始进入大型LLM")
 
-	// 6. 调用大型LLM服务
-	llmAnswer, err := service.Service.UserServiceGroup.LlmService.NewChat(ctx, &req, llmReferenceDocs, conversationHistory)
+	conversationHistory := fullHistory
+	llmAnswer, err := service.Service.UserServiceGroup.LlmService.GenerateResponseOrToolCall(ctx, &req, llmReferenceDocs, conversationHistory)
 	if err != nil {
-		if errors.Is(err, context.Canceled) {
-			global.Log.Debugf("会话 %d 的AI任务被取消。", req.Conversation.ConversationID)
-			return
-		}
-		global.Log.Errorf("[processMessageAsync] LLM错误: %v", err)
-		_ = service.Service.UserServiceGroup.ActionService.TransferToHuman(req.Conversation.ConversationID, enum.TransferToHuman2, string(enum.ReplyMsgLlmError))
-		return
-	}
-
-	// 检查LLM是否返回了不确定的信号
-	if strings.TrimSpace(llmAnswer) == enum.LlmUnsureTransferSignal {
-		global.Log.Debugf("[processMessageAsync] LLM不确定答案，主动转人工, 会话ID: %d", req.Conversation.ConversationID)
-		_ = service.Service.UserServiceGroup.ActionService.TransferToHuman(req.Conversation.ConversationID, enum.TransferToHuman5, "")
-		return
+		return "", err // 将错误传递给上层处理
 	}
 
 	// 检查是否需要调用工具
 	if strings.Contains(llmAnswer, "<tool_code>") {
 		global.Log.Debugln("=================需调用Mcp")
-
-		global.Log.Debugf("[processMessageAsync] LLM请求调用工具, 会话ID: %d", req.Conversation.ConversationID)
+		global.Log.Debugf("[runComplexGeneration] LLM请求调用工具, 会话ID: %d", req.Conversation.ConversationID)
 
 		// 从回复中提取工具调用代码（JSON）
 		toolCode := strings.TrimSpace(strings.Split(strings.Split(llmAnswer, "<tool_code>")[1], "</tool_code>")[0])
@@ -347,75 +393,38 @@ func (d *ChatApi) processMessageAsync(ctx context.Context, req common.ChatReques
 		if global.McpService != nil {
 			var toolCallParams common.ToolCallParams
 			if err := json.Unmarshal([]byte(toolCode), &toolCallParams); err != nil {
-				global.Log.Errorf("[processMessageAsync] 解析工具调用JSON失败: %v", err)
-				// 将错误信息反馈给LLM
+				global.Log.Errorf("[runComplexGeneration] 解析工具调用JSON失败: %v", err)
 				toolResult := fmt.Sprintf("工具调用格式错误: %v", err)
 				conversationHistory = append(conversationHistory, common.LlmMessage{Role: "assistant", Content: llmAnswer}, common.LlmMessage{Role: "tool", Content: toolResult})
 			} else {
-				// 解析 "clientName.toolName"
 				parts := strings.SplitN(toolCallParams.Name, ".", 2)
 				if len(parts) != 2 {
 					toolResult := fmt.Sprintf("工具名称格式错误，必须为 '客户端名称.工具名称'，实际为: '%s'", toolCallParams.Name)
-					global.Log.Errorf("[processMessageAsync] %s", toolResult)
+					global.Log.Errorf("[runComplexGeneration] %s", toolResult)
 					conversationHistory = append(conversationHistory, common.LlmMessage{Role: "assistant", Content: llmAnswer}, common.LlmMessage{Role: "tool", Content: toolResult})
 				} else {
-					clientName := parts[0]
-					toolName := parts[1]
-
-					// 直接调用重构后的 ExecuteTool 方法，传入解析后的组件
+					clientName, toolName := parts[0], parts[1]
 					toolResult, err := global.McpService.ExecuteTool(ctx, clientName, toolName, toolCallParams.Arguments)
 					if err != nil {
-						global.Log.Errorf("[processMessageAsync] 执行MCP工具 '%s' 失败: %v", toolCallParams.Name, err)
+						global.Log.Errorf("[runComplexGeneration] 执行MCP工具 '%s' 失败: %v", toolCallParams.Name, err)
 						toolResult = fmt.Sprintf("工具调用失败: %v", err)
 					}
 					global.Log.Debugln("=================成功获取Mcp数据")
-
 					conversationHistory = append(conversationHistory, common.LlmMessage{Role: "assistant", Content: llmAnswer}, common.LlmMessage{Role: "tool", Content: toolResult})
 				}
 			}
 
 			global.Log.Debugln("=================再次调用大型LLM分析数据")
 
-			// 将工具执行结果和历史记录再次发送给LLM
-			llmAnswer, err = service.Service.UserServiceGroup.LlmService.NewChat(ctx, &req, nil, conversationHistory)
+			// 将工具执行结果和历史记录再次发送给LLM进行总结
+			llmAnswer, err = service.Service.UserServiceGroup.LlmService.SynthesizeToolResult(ctx, conversationHistory)
 			if err != nil {
-				global.Log.Errorf("[processMessageAsync] 工具调用后LLM错误: %v", err)
-				_ = service.Service.UserServiceGroup.ActionService.TransferToHuman(req.Conversation.ConversationID, enum.TransferToHuman2, string(enum.ReplyMsgLlmError))
-				return
+				return "", fmt.Errorf("工具调用后LLM错误: %w", err)
 			}
 		}
 	}
 
-	if llmAnswer == "" {
-		global.Log.Warnf("[processMessageAsync] LLM返回空回复，转人工, 会话ID: %d", req.Conversation.ConversationID)
-		_ = service.Service.UserServiceGroup.ActionService.TransferToHuman(req.Conversation.ConversationID, enum.TransferToHuman5, string(enum.ReplyMsgLlmError))
-		return
-	}
-
-	// 如果在宽限期内AI成功处理，则异步将会话状态改回“机器人”
-	if isGracePeriodOverride {
-		go func() {
-			gracePeriodKey := fmt.Sprintf("%s%d", redis.KeyPrefixTransferGracePeriod, req.Conversation.ConversationID)
-			err := global.RedisClient.Get(context.Background(), gracePeriodKey).Err()
-			if err == redis.ErrNil {
-				global.Log.Debugf("会话 %d 宽限期已过，AI不再尝试改回bot状态。", req.Conversation.ConversationID)
-				return
-			}
-			if err != nil {
-				global.Log.Warnf("重新检查会话 %d 宽限期标志失败: %v", req.Conversation.ConversationID, err)
-				return
-			}
-			// 宽限期标志仍然存在，可以安全地改回bot状态
-			if err := service.Service.UserServiceGroup.ActionService.SetConversationPending(req.Conversation.ConversationID); err != nil {
-				global.Log.Warnf("将会话 %d 状态改回机器人失败: %v", req.Conversation.ConversationID, err)
-			} else {
-				global.Log.Debugf("会话 %d 状态成功从open改回bot。", req.Conversation.ConversationID)
-			}
-		}()
-	}
-
-	service.Service.UserServiceGroup.ActionService.SendMessage(req.Conversation.ConversationID, llmAnswer)
-	go d.updateConversationHistory(req.Conversation.ConversationID, req.Content, llmAnswer)
+	return llmAnswer, nil
 }
 
 // fetchAndCacheHistory 是一个辅助函数，用于从Chatwoot获取数据、格式化并存入Redis

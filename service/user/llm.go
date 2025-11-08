@@ -15,8 +15,10 @@ import (
 type LlmService interface {
 	// 分诊, 使用小型LLM对用户输入进行分诊，返回分类结果
 	Triage(ctx context.Context, content string, history []common.LlmMessage, retrievedQuestions []string) (*common.TriageResult, error)
-	// 负责业务层面的决策，例如决定使用哪个模型、哪个Prompt
-	NewChat(ctx context.Context, param *common.ChatRequest, referenceDocs []dao.SearchResult, history []common.LlmMessage) (string, error)
+	// GenerateResponseOrToolCall 负责业务层面的决策，例如决定使用哪个模型、哪个Prompt，并生成初步回复或工具调用指令
+	GenerateResponseOrToolCall(ctx context.Context, param *common.ChatRequest, referenceDocs []dao.SearchResult, history []common.LlmMessage) (string, error)
+	// SynthesizeToolResult 在工具调用后，综合所有信息（包括工具结果）生成最终的自然语言回复, 不需要知识库(向量)数据了
+	SynthesizeToolResult(ctx context.Context, history []common.LlmMessage) (string, error)
 }
 
 type llmService struct {
@@ -76,7 +78,7 @@ func (s *llmService) Triage(ctx context.Context, content string, history []commo
 	return &triageResult, nil
 }
 
-func (s *llmService) NewChat(ctx context.Context, param *common.ChatRequest, referenceDocs []dao.SearchResult, history []common.LlmMessage) (string, error) {
+func (s *llmService) GenerateResponseOrToolCall(ctx context.Context, param *common.ChatRequest, referenceDocs []dao.SearchResult, history []common.LlmMessage) (string, error) {
 	if global.LlmService == nil {
 		return "", fmt.Errorf("LLM客户端未初始化")
 	}
@@ -105,7 +107,19 @@ func (s *llmService) NewChat(ctx context.Context, param *common.ChatRequest, ref
 		availableClients := global.McpService.GetAvailableToolsWithClient()
 		for clientName, tools := range availableClients {
 			for _, tool := range tools {
-				toolsListBuilder.WriteString(fmt.Sprintf("- %s.%s: %s\n", clientName, tool.Name, tool.Description))
+				var argsSchema string
+				if tool.InputSchema != nil {
+					schemaBytes, err := json.Marshal(tool.InputSchema)
+					if err == nil {
+						argsSchema = string(schemaBytes)
+					}
+				}
+
+				if argsSchema != "" {
+					toolsListBuilder.WriteString(fmt.Sprintf("- %s.%s: %s. Arguments: %s\n", clientName, tool.Name, tool.Description, argsSchema))
+				} else {
+					toolsListBuilder.WriteString(fmt.Sprintf("- %s.%s: %s\n", clientName, tool.Name, tool.Description))
+				}
 			}
 		}
 
@@ -138,5 +152,22 @@ func (s *llmService) NewChat(ctx context.Context, param *common.ChatRequest, ref
 		finalContent.String(),
 		history,
 		0.5,
+	)
+}
+
+func (s *llmService) SynthesizeToolResult(ctx context.Context, history []common.LlmMessage) (string, error) {
+	if global.LlmService == nil {
+		return "", fmt.Errorf("LLM客户端未初始化")
+	}
+
+	// 在这个阶段，我们使用一个干净、简单的系统提示，因为LLM的任务只是根据现有对话（包括工具结果）进行总结。
+	// 无需再次提供复杂的RAG或工具调用指令。
+	return global.LlmService.ChatCompletionWithHistory(
+		ctx,
+		enum.ModelLarge,
+		enum.SystemPromptDefault,
+		"", // content为空，因为所有上下文都在history中
+		history,
+		0.6,
 	)
 }

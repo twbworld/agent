@@ -65,6 +65,9 @@ func (c *client) ChatCompletion(ctx context.Context, size enum.LlmSize, systemPr
 	return c.ChatCompletionWithHistory(ctx, size, systemPrompt, content, nil, temperature...)
 }
 
+// systemPrompt: LLM的系统提示词
+// content: 用户问题 + 知识库参考资料 (RAG)
+// history: 之前的对话历史消息列表
 func (c *client) ChatCompletionWithHistory(ctx context.Context, size enum.LlmSize, systemPrompt enum.SystemPrompt, content string, history []common.LlmMessage, temperature ...float32) (string, error) {
 	llmClient, ok := c.llmClients[size]
 	if !ok {

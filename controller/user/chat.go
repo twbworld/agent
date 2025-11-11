@@ -316,8 +316,6 @@ func (d *ChatApi) runTriage(ctx context.Context, req common.ChatRequest, fullHis
 		}
 	}
 
-	global.Log.Debugln("=================开始进入LLM分诊台")
-
 	triageCtx, triageCancel := context.WithTimeout(ctx, 10*time.Second) // 为分诊步骤设置一个较短的超时
 	defer triageCancel()
 
@@ -325,6 +323,8 @@ func (d *ChatApi) runTriage(ctx context.Context, req common.ChatRequest, fullHis
 	if err != nil {
 		return false, err
 	}
+
+	global.Log.Debugf("=================分诊结果: %+v", triageResult)
 
 	// 根据分诊结果执行路由
 	triggerTransferEmotions := []enum.TriageEmotion{
@@ -345,7 +345,7 @@ func (d *ChatApi) runTriage(ctx context.Context, req common.ChatRequest, fullHis
 		return true, nil
 	}
 
-	if !triageResult.IsRelated || enum.TriageIntent(triageResult.Intent) == enum.TriageIntentOffTopic {
+	if enum.TriageIntent(triageResult.Intent) == enum.TriageIntentOffTopic {
 		global.Log.Debugf("[Triage] 识别为无关问题，已礼貌拒绝, 会话ID: %d", req.Conversation.ConversationID)
 		service.Service.UserServiceGroup.ActionService.SendMessage(req.Conversation.ConversationID, string(enum.ReplyMsgOffTopic))
 		go d.updateConversationHistory(req.Conversation.ConversationID, req.Content, string(enum.ReplyMsgOffTopic))
@@ -393,24 +393,30 @@ func (d *ChatApi) runComplexGeneration(ctx context.Context, req common.ChatReque
 		if global.McpService != nil {
 			var toolCallParams common.ToolCallParams
 			if err := json.Unmarshal([]byte(toolCode), &toolCallParams); err != nil {
+				// 如果工具调用请求的JSON格式错误，记录错误并将格式错误信息作为工具结果
 				global.Log.Errorf("[runComplexGeneration] 解析工具调用JSON失败: %v", err)
 				toolResult := fmt.Sprintf("工具调用格式错误: %v", err)
-				conversationHistory = append(conversationHistory, common.LlmMessage{Role: "assistant", Content: llmAnswer}, common.LlmMessage{Role: "tool", Content: toolResult})
+				// 构建包含用户问题、助手回复和工具结果的完整历史
+				conversationHistory = append(conversationHistory, common.LlmMessage{Role: "user", Content: req.Content}, common.LlmMessage{Role: "assistant", Content: llmAnswer}, common.LlmMessage{Role: "tool", Content: toolResult})
 			} else {
 				parts := strings.SplitN(toolCallParams.Name, ".", 2)
 				if len(parts) != 2 {
+					// 如果工具名称格式不正确，记录错误并返回相应提示
 					toolResult := fmt.Sprintf("工具名称格式错误，必须为 '客户端名称.工具名称'，实际为: '%s'", toolCallParams.Name)
 					global.Log.Errorf("[runComplexGeneration] %s", toolResult)
-					conversationHistory = append(conversationHistory, common.LlmMessage{Role: "assistant", Content: llmAnswer}, common.LlmMessage{Role: "tool", Content: toolResult})
+					conversationHistory = append(conversationHistory, common.LlmMessage{Role: "user", Content: req.Content}, common.LlmMessage{Role: "assistant", Content: llmAnswer}, common.LlmMessage{Role: "tool", Content: toolResult})
 				} else {
+					// 执行工具调用
 					clientName, toolName := parts[0], parts[1]
 					toolResult, err := global.McpService.ExecuteTool(ctx, clientName, toolName, toolCallParams.Arguments)
 					if err != nil {
+						// 如果工具执行失败，记录错误并返回失败信息
 						global.Log.Errorf("[runComplexGeneration] 执行MCP工具 '%s' 失败: %v", toolCallParams.Name, err)
 						toolResult = fmt.Sprintf("工具调用失败: %v", err)
 					}
-					global.Log.Debugln("=================成功获取Mcp数据")
-					conversationHistory = append(conversationHistory, common.LlmMessage{Role: "assistant", Content: llmAnswer}, common.LlmMessage{Role: "tool", Content: toolResult})
+					global.Log.Debugln("=================成功获取Mcp数据: %s", toolResult)
+					// 将用户问题、助手回复（工具调用）和工具执行结果一起添加到历史记录中
+					conversationHistory = append(conversationHistory, common.LlmMessage{Role: "user", Content: req.Content}, common.LlmMessage{Role: "assistant", Content: llmAnswer}, common.LlmMessage{Role: "tool", Content: toolResult})
 				}
 			}
 

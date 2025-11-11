@@ -165,9 +165,7 @@ const (
     - "neutral": 中性、客观陈述。
     - "positive": 满意、感谢、积极。
 
-3.  **是否与商城相关 (is_related)**: 必须是布尔值 true 或 false。
-
-4.  **紧急度 (urgency)**: 从以下选项中选择一个：
+3.  **紧急度 (urgency)**: 从以下选项中选择一个：
     - "critical": 极端紧急，如大面积服务中断、支付安全问题、法律风险。
     - "high": 紧急情况，如资损、重大投诉、重复问题无法解决。
     - "medium": 标准问题，如查物流、问商品。
@@ -177,7 +175,6 @@ const (
 {
   "intent": "...",
   "emotion": "...",
-  "is_related": true,
   "urgency": "..."
 }`
 	SystemPromptToolUser SystemPrompt = `你可以调用外部工具来完成任务。

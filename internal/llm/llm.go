@@ -93,11 +93,13 @@ func (c *client) ChatCompletionWithHistory(ctx context.Context, size enum.LlmSiz
 		})
 	}
 
-	// 添加当前用户消息
-	messages = append(messages, openai.ChatCompletionMessage{
-		Role:    openai.ChatMessageRoleUser,
-		Content: content,
-	})
+	// 添加当前用户消息, 仅当 content 不为空时
+	if content != "" {
+		messages = append(messages, openai.ChatCompletionMessage{
+			Role:    openai.ChatMessageRoleUser,
+			Content: content,
+		})
+	}
 
 	req := openai.ChatCompletionRequest{
 		Model:    llmConfig.Model,

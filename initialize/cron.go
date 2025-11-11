@@ -14,7 +14,7 @@ func (i *Initializer) timerStart(taskManager *task.Manager) error {
 		return err
 	}
 
-	if err := i.startCronJob(taskManager.McpCapabilitiesReloader, "*/30 * * * *"); err != nil {
+	if err := i.startCronJob(func() error { return taskManager.McpCapabilitiesReloader() }, "*/30 * * * *"); err != nil {
 		return err
 	}
 

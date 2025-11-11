@@ -37,3 +37,7 @@ type ToolCallParams struct {
 	Name      string          `json:"name"`
 	Arguments json.RawMessage `json:"arguments"`
 }
+
+type ReloadPost struct {
+	Name string `json:"name"`
+}

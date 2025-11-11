@@ -50,8 +50,11 @@ func dispatchAction(action string, taskManager *task.Manager) {
 	switch action {
 	case "keyword":
 		err = taskManager.KeywordReloader()
+	case "mcp":
+		//测试mcp可用
+		err = taskManager.McpCapabilitiesReloader()
 	default:
-		fmt.Println("未知的任务参数, 可选值: keyword")
+		fmt.Println("未知的任务参数, 可选值: keyword, mcp")
 		return
 	}
 

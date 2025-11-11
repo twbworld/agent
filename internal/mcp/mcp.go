@@ -108,7 +108,7 @@ func (c *client) AddOrUpdateClient(name string, cfg config.Mcp) error {
 	loadedTools := make(map[string]mcp.Tool)
 	for tool, err := range session.Tools(ctx, nil) {
 		if err != nil {
-			c.log.Errorf("从MCP服务 '%s' 获取工具列表时出错: %w", name, err)
+			c.log.Errorf("从MCP服务 '%s' 获取工具列表时出错: %v", name, err)
 			delete(c.tools, name)
 			return nil // 返回nil
 		}

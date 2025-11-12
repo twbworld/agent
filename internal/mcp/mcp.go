@@ -18,11 +18,19 @@ import (
 
 // Service 定义了与MCP服务交互的接口
 type Service interface {
+	// Close 关闭所有MCP会话
 	Close() error
+	// GetAvailableTools 返回所有已连接的MCP服务提供的工具列表
 	GetAvailableTools() []mcp.Tool
+	// GetAvailableToolsWithClient 返回按客户端名称分组的工具列表
 	GetAvailableToolsWithClient() map[string][]mcp.Tool
+	// GetToolDescriptions 返回一个从工具全名到其描述的映射
+	GetToolDescriptions() map[string]string
+	// ExecuteTool 解析并执行来自LLM的工具调用请求
 	ExecuteTool(ctx context.Context, clientName string, toolName string, arguments json.RawMessage) (string, error)
+	// AddOrUpdateClient 添加或更新一个MCP客户端配置，并执行一次性连接以发现工具
 	AddOrUpdateClient(name string, cfg config.Mcp) error
+	// RemoveClient 移除一个MCP客户端
 	RemoveClient(name string) error
 }
 
@@ -71,7 +79,6 @@ func NewClient(log *logrus.Logger, mcpConfigs map[string]config.Mcp, appVersion,
 	return c, nil
 }
 
-// AddOrUpdateClient 添加或更新一个MCP客户端配置，并执行一次性连接以发现工具
 func (c *client) AddOrUpdateClient(name string, cfg config.Mcp) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -120,7 +127,6 @@ func (c *client) AddOrUpdateClient(name string, cfg config.Mcp) error {
 	return nil
 }
 
-// RemoveClient 移除一个MCP客户端
 func (c *client) RemoveClient(name string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -138,7 +144,6 @@ func (c *client) removeClientUnderLock(name string) {
 	delete(c.tools, name)
 }
 
-// Close 关闭所有MCP会话
 func (c *client) Close() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -148,7 +153,6 @@ func (c *client) Close() error {
 	return nil
 }
 
-// GetAvailableTools 返回所有已连接的MCP服务提供的工具列表
 func (c *client) GetAvailableTools() []mcp.Tool {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -161,7 +165,6 @@ func (c *client) GetAvailableTools() []mcp.Tool {
 	return allTools
 }
 
-// GetAvailableToolsWithClient 返回按客户端名称分组的工具列表
 func (c *client) GetAvailableToolsWithClient() map[string][]mcp.Tool {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -175,6 +178,19 @@ func (c *client) GetAvailableToolsWithClient() map[string][]mcp.Tool {
 		toolsCopy[clientName] = clientToolsList
 	}
 	return toolsCopy
+}
+
+func (c *client) GetToolDescriptions() map[string]string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	descriptions := make(map[string]string)
+	for clientName, clientTools := range c.tools {
+		for toolName, tool := range clientTools {
+			fullName := fmt.Sprintf("%s.%s", clientName, toolName)
+			descriptions[fullName] = tool.Description
+		}
+	}
+	return descriptions
 }
 
 // coerceArguments 尝试根据工具的 schema 转换参数类型。
@@ -232,7 +248,6 @@ func (c *client) coerceArguments(arguments json.RawMessage, schema *jsonschema.S
 	return coercedJSON, nil
 }
 
-// ExecuteTool 解析并执行来自LLM的工具调用请求
 func (c *client) ExecuteTool(ctx context.Context, clientName string, toolName string, arguments json.RawMessage) (string, error) {
 	c.mu.RLock()
 	cfg, cfgOk := c.configs[clientName]

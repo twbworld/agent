@@ -2,6 +2,10 @@ package common
 
 import "gitee.com/taoJie_1/mall-agent/model/enum"
 
+type ReloadPost struct {
+	Name string `json:"name"`
+}
+
 // ChatRequest 对应 Chatwoot webhook 发送过来的消息体
 type ChatRequest struct {
 	Event

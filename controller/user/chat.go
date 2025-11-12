@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 
@@ -387,37 +388,78 @@ func (d *ChatApi) runComplexGeneration(ctx context.Context, req common.ChatReque
 		global.Log.Debugln("=================需调用Mcp")
 		global.Log.Debugf("[runComplexGeneration] LLM请求调用工具, 会话ID: %d", req.Conversation.ConversationID)
 
-		// 从回复中提取工具调用代码（JSON）
-		toolCode := strings.TrimSpace(strings.Split(strings.Split(llmAnswer, "<tool_code>")[1], "</tool_code>")[0])
-
 		if global.McpService != nil {
-			var toolCallParams common.ToolCallParams
-			if err := json.Unmarshal([]byte(toolCode), &toolCallParams); err != nil {
-				// 如果工具调用请求的JSON格式错误，记录错误并将格式错误信息作为工具结果
-				global.Log.Errorf("[runComplexGeneration] 解析工具调用JSON失败: %v", err)
+			// 将 toolCodeBlock 的声明和使用都放在这个if块内，避免McpService为nil时出现“声明但未使用”的警告
+			toolCodeBlock := strings.TrimSpace(strings.Split(strings.Split(llmAnswer, "<tool_code>")[1], "</tool_code>")[0])
+
+			var toolCalls common.ToolCalls
+			if err := json.Unmarshal([]byte(toolCodeBlock), &toolCalls); err != nil {
+				global.Log.Errorf("[runComplexGeneration] 解析工具调用JSON数组失败: %v", err)
 				toolResult := fmt.Sprintf("工具调用格式错误: %v", err)
-				// 构建包含用户问题、助手回复和工具结果的完整历史
 				conversationHistory = append(conversationHistory, common.LlmMessage{Role: "user", Content: req.Content}, common.LlmMessage{Role: "assistant", Content: llmAnswer}, common.LlmMessage{Role: "tool", Content: toolResult})
-			} else {
-				parts := strings.SplitN(toolCallParams.Name, ".", 2)
-				if len(parts) != 2 {
-					// 如果工具名称格式不正确，记录错误并返回相应提示
-					toolResult := fmt.Sprintf("工具名称格式错误，必须为 '客户端名称.工具名称'，实际为: '%s'", toolCallParams.Name)
-					global.Log.Errorf("[runComplexGeneration] %s", toolResult)
-					conversationHistory = append(conversationHistory, common.LlmMessage{Role: "user", Content: req.Content}, common.LlmMessage{Role: "assistant", Content: llmAnswer}, common.LlmMessage{Role: "tool", Content: toolResult})
-				} else {
-					// 执行工具调用
-					clientName, toolName := parts[0], parts[1]
-					toolResult, err := global.McpService.ExecuteTool(ctx, clientName, toolName, toolCallParams.Arguments)
-					if err != nil {
-						// 如果工具执行失败，记录错误并返回失败信息
-						global.Log.Errorf("[runComplexGeneration] 执行MCP工具 '%s' 失败: %v", toolCallParams.Name, err)
-						toolResult = fmt.Sprintf("工具调用失败: %v", err)
-					}
-					global.Log.Debugln("=================成功获取Mcp数据: %s", toolResult)
-					// 将用户问题、助手回复（工具调用）和工具执行结果一起添加到历史记录中
-					conversationHistory = append(conversationHistory, common.LlmMessage{Role: "user", Content: req.Content}, common.LlmMessage{Role: "assistant", Content: llmAnswer}, common.LlmMessage{Role: "tool", Content: toolResult})
+			} else if len(toolCalls) > 0 {
+				// 从MCP服务获取所有工具的描述
+				toolDescriptions := global.McpService.GetToolDescriptions()
+
+				// 并发执行所有工具调用
+				var toolResults []common.LlmMessage
+				var mu sync.Mutex
+				g, gCtx := errgroup.WithContext(ctx)
+				g.SetLimit(5) // 限制并发数为5，防止过多请求冲击MCP服务
+
+				for _, toolCall := range toolCalls {
+					toolCall := toolCall // 避免闭包陷阱
+					g.Go(func() error {
+						var toolResultContent string
+						parts := strings.SplitN(toolCall.Name, ".", 2)
+						if len(parts) != 2 {
+							toolResultContent = fmt.Sprintf("工具名称格式错误，必须为 '客户端名称.工具名称'，实际为: '%s'", toolCall.Name)
+							global.Log.Errorf("[runComplexGeneration] %s", toolResultContent)
+						} else {
+							clientName, toolName := parts[0], parts[1]
+							result, err := global.McpService.ExecuteTool(gCtx, clientName, toolName, toolCall.Arguments)
+							if err != nil {
+								toolResultContent = fmt.Sprintf("工具 '%s' 调用失败: %v", toolCall.Name, err)
+								global.Log.Errorf("[runComplexGeneration] %s", toolResultContent)
+							} else {
+								toolResultContent = result
+								global.Log.Debugf("=================成功获取Mcp数据 for '%s': %s", toolCall.Name, toolResultContent)
+							}
+						}
+
+						// 获取工具描述
+						toolDescription := "未知工具"
+						if desc, ok := toolDescriptions[toolCall.Name]; ok {
+							toolDescription = desc
+						}
+
+						// 为每个工具结果创建一个结构化的消息，并安全地追加到结果切片中
+						finalContent := fmt.Sprintf(
+							"[工具名称]: %s\n[工具作用]: %s\n[返回结果]:\n%s",
+							toolCall.Name,
+							toolDescription,
+							toolResultContent,
+						)
+						mu.Lock()
+						toolResults = append(toolResults, common.LlmMessage{
+							Role:    "tool",
+							Content: finalContent,
+						})
+						mu.Unlock()
+						return nil
+					})
 				}
+
+				// 等待所有工具调用完成
+				if err := g.Wait(); err != nil {
+					// errgroup 本身返回的错误通常是第一个非nil的错误，这里只记录日志
+					global.Log.Errorf("[runComplexGeneration] 执行MCP工具组时发生错误: %v", err)
+				}
+
+				// 将用户问题、助手回复（工具调用指令）和所有工具执行结果一起添加到历史记录中
+				conversationHistory = append(conversationHistory, common.LlmMessage{Role: "user", Content: req.Content})
+				conversationHistory = append(conversationHistory, common.LlmMessage{Role: "assistant", Content: llmAnswer})
+				conversationHistory = append(conversationHistory, toolResults...)
 			}
 
 			global.Log.Debugln("=================再次调用大型LLM分析数据")

@@ -38,6 +38,5 @@ type ToolCallParams struct {
 	Arguments json.RawMessage `json:"arguments"`
 }
 
-type ReloadPost struct {
-	Name string `json:"name"`
-}
+// ToolCalls 定义了一个ToolCallParams的切片，用于表示多个工具调用
+type ToolCalls []ToolCallParams

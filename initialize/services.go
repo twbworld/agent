@@ -253,7 +253,7 @@ func (i *Initializer) initMcp() error {
 		return err
 	}
 	global.McpService = client
-	global.Log.Info("初始化MCP服务成功")
+	global.Log.Info("初始化MCP服务结束")
 	return nil
 }
 

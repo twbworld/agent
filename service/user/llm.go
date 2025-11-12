@@ -165,7 +165,7 @@ func (s *llmService) SynthesizeToolResult(ctx context.Context, history []common.
 	return global.LlmService.ChatCompletionWithHistory(
 		ctx,
 		enum.ModelLarge,
-		enum.SystemPromptDefault,
+		enum.SystemPromptSynthesizeToolResult, // 使用专用的提示词进行结果合成
 		"", // content为空，因为所有上下文都在history中
 		history,
 		0.6,

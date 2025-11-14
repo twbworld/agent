@@ -108,8 +108,8 @@ ai:
   triage_context_questions: 2
   # AI处理(包括精确匹配和向量检索和LLM处理)的超时时间(秒)
   async_job_timeout: 60
-  # (秒)AI转人工后的宽限期, 0为禁用
-  transfer_grace_period: 5
+  # 传递给大型LLM的最大历史消息数量 (0表示不限制)
+  max_llm_history_messages: 20
   # 用于触发转人工的关键词列表
   transfer_keywords:
     - "人工客服"

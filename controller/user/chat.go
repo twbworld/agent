@@ -36,7 +36,8 @@ func (d *ChatApi) HandleChat(ctx *gin.Context) {
 		common.Fail(ctx, "参数无效")
 		return
 	}
-	// fmt.Println(string(bodyBytes))
+	// global.Log.Debugln(string(bodyBytes))
+
 	ctx.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 
 	var eventFinder common.Event
@@ -227,6 +228,13 @@ func (d *ChatApi) processMessageAsync(ctx context.Context, req common.ChatReques
 		vectorResults = nil
 	}
 
+	if global.Config.Ai.MaxLlmHistoryMessages > 0 && len(fullHistory) > int(global.Config.Ai.MaxLlmHistoryMessages) {
+		startIndex := len(fullHistory) - int(global.Config.Ai.MaxLlmHistoryMessages)
+		fullHistory = fullHistory[startIndex:]
+		global.Log.Debugf("会话 %d 历史记录已限制为最近 %d 条消息", req.Conversation.ConversationID, global.Config.Ai.MaxLlmHistoryMessages)
+	}
+	// global.Log.Debugln("会话历史=========", fullHistory)
+
 	// 4. 分诊台 (Triage) & 智能路由
 	processed, err := d.runTriage(ctx, req, fullHistory, vectorResults)
 	if err != nil {
@@ -251,6 +259,8 @@ func (d *ChatApi) processMessageAsync(ctx context.Context, req common.ChatReques
 		_ = service.Service.UserServiceGroup.ActionService.TransferToHuman(req.Conversation.ConversationID, enum.TransferToHuman2, string(enum.ReplyMsgLlmError))
 		return
 	}
+
+	global.Log.Debugln("LLM回答=================", llmAnswer)
 
 	// 6. 最终回复处理
 	if strings.TrimSpace(llmAnswer) == enum.LlmUnsureTransferSignal {
@@ -475,7 +485,7 @@ func (d *ChatApi) runComplexGeneration(ctx context.Context, req common.ChatReque
 	return llmAnswer, nil
 }
 
-// fetchAndCacheHistory 是一个辅助函数，用于从Chatwoot获取数据、格式化并存入Redis
+// fetchAndCacheHistory 从Chatwoot获取数据、格式化并存入Redis
 func (d *ChatApi) fetchAndCacheHistory(ctx context.Context, accountID, conversationID uint, currentMessage string) ([]common.LlmMessage, error) {
 	// 从Chatwoot API获取完整的历史记录
 	chatwootMessages, err := global.ChatwootService.GetConversationMessages(accountID, conversationID)
@@ -491,18 +501,15 @@ func (d *ChatApi) fetchAndCacheHistory(ctx context.Context, accountID, conversat
 			continue
 		}
 
-		isIncoming := msg.MessageType == 0
-		isOutgoing := msg.MessageType == 1
-
 		// 过滤掉当前用户消息，因为它会作为LLM的content参数传入，避免重复
-		if isIncoming && msg.Sender.Type == string(enum.SenderTypeContact) && msg.Content == currentMessage {
+		if msg.MessageType == 0 && msg.Sender.Type == string(enum.SenderTypeContact) && msg.Content == currentMessage {
 			continue
 		}
 
 		var role string
-		if isIncoming && msg.Sender.Type == string(enum.SenderTypeContact) {
+		if msg.MessageType == 0 && msg.Sender.Type == string(enum.SenderTypeContact) {
 			role = "user"
-		} else if isOutgoing {
+		} else if msg.MessageType == 1 {
 			role = "assistant" // 假设所有outgoing消息都是AI或客服的回复
 		} else {
 			continue // 忽略其他类型的消息
@@ -510,10 +517,9 @@ func (d *ChatApi) fetchAndCacheHistory(ctx context.Context, accountID, conversat
 		formattedHistory = append(formattedHistory, common.LlmMessage{Role: role, Content: msg.Content})
 	}
 
-	// 将格式化后的历史记录存入Redis，并设置带抖动的过期时间
+	// 将格式化后的历史记录存入Redis
 	ttl := utils.GetTTLWithJitter(global.Config.Redis.ConversationHistoryTTL)
 	if err := global.RedisClient.SetConversationHistory(context.Background(), conversationID, formattedHistory, ttl); err != nil {
-		// 只记录错误，不阻塞主流程返回
 		global.Log.Errorf("将会话 %d 历史记录存入Redis失败: %v", conversationID, err)
 	}
 

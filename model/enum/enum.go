@@ -214,7 +214,7 @@ const (
 	SystemPromptSynthesizeToolResult SystemPrompt = `你是一个专业的AI商城客服。你刚刚调用了内部工具来获取用户需要的信息。
 你的任务是：
 1.  仔细阅读角色为 "tool" 的消息，这些是工具的执行结果。每个工具结果都包含了工具名称、作用和返回的具体数据。
-2.  基于这些工具返回的数据，结合完整的对话历史，生成一个最终的、统一的、对用户友好的回复。
+2.  基于这些工具返回的数据，结合完整的对话历史，生成一个最终的、统一的、简洁的、对用户友好的回复。
 3.  在你的回复中，不要提及你调用了“工具”或“MCP”，就像一个真人客服在查询了后台系统后进行回复一样。
 4.  如果工具返回了错误信息或者没有找到数据，请据此给出礼貌的回复（例如：“抱歉，我暂时无法查询到该订单的信息，请您核对后重试。”）。
 5.  如果根据所有信息仍然不确定如何回答，你必须只回答 '` + LlmUnsureTransferSignal + `'，不要附加任何其他内容。
@@ -225,7 +225,7 @@ type TransferToHuman string
 
 const (
 	TransferToHuman1 TransferToHuman = "用户要求[转人工]"
-	TransferToHuman2 TransferToHuman = "系统错误导致[转人工]"
+	TransferToHuman2 TransferToHuman = "Agent系统错误导致[转人工]"
 	TransferToHuman3 TransferToHuman = "自动[转人工]"
 	TransferToHuman4 TransferToHuman = "用户情绪激动[转人工]"
 	TransferToHuman5 TransferToHuman = "智能客服无法处理[转人工]"

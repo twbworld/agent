@@ -67,4 +67,5 @@ type Ai struct {
 	TransferGracePeriod       int64    `json:"transfer_grace_period" mapstructure:"transfer_grace_period" yaml:"transfer_grace_period"`
 	AsyncJobTimeout           int64    `json:"async_job_timeout" mapstructure:"async_job_timeout" yaml:"async_job_timeout"`
 	TransferKeywords          []string `json:"transfer_keywords" mapstructure:"transfer_keywords" yaml:"transfer_keywords"`
+	MaxLlmHistoryMessages     uint     `json:"max_llm_history_messages" mapstructure:"max_llm_history_messages" yaml:"max_llm_history_messages"`
 }

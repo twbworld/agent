@@ -6,7 +6,7 @@ type ReloadPost struct {
 	Name string `json:"name"`
 }
 
-// ChatRequest 对应 Chatwoot webhook 发送过来的消息体
+// 对应 Chatwoot webhook 的事件 'message_created' 消息体
 type ChatRequest struct {
 	Event
 	ID           uint         `json:"id"`
@@ -20,6 +20,15 @@ type ChatRequest struct {
 	Attachments  []Attachment `json:"attachments"`
 }
 
+// 对应 Chatwoot webhook 的事件 'conversation_created' 消息体
+type ConversationCreatedRequest struct {
+	Event
+	ID       uint                  `json:"id"`
+	Meta     Meta                  `json:"meta"`
+	Messages []MessageFromCreation `json:"messages"`
+}
+
+// 对应 Chatwoot webhook 的事件 'conversation_resolved' 消息体
 type ConversationResolvedRequest struct {
 	Event
 	ID uint `json:"id"`
@@ -29,10 +38,20 @@ type Event struct {
 	Event enum.ChatwootEvent `json:"event"`
 }
 
-// Account 代表账户信息
-type Account struct {
-	ID   uint   `json:"id"`
-	Name string `json:"name"`
+type MessageFromCreation struct {
+	ID          uint   `json:"id"`
+	Content     string `json:"content"`
+	AccountID   uint   `json:"account_id"`
+	MessageType int    `json:"message_type"`
+	Sender      Sender `json:"sender"`
+}
+
+// Attachment 代表附件信息
+type Attachment struct {
+	ID        uint   `json:"id"`
+	MessageID uint   `json:"message_id"`
+	FileType  string `json:"file_type"` // "image", "audio", "video", "file"
+	DataURL   string `json:"data_url"`
 }
 
 // Conversation 代表会话信息
@@ -45,26 +64,29 @@ type Conversation struct {
 
 // Meta 存放会话的元数据
 type Meta struct {
-	Sender SenderInfo `json:"sender"`
+	Sender Sender `json:"sender"`
 }
 
-// SenderInfo 代表元数据中的发送者信息
-type SenderInfo struct {
-	Type string `json:"type"` // "contact", "agent_bot", "user"
-}
-
-// Sender 代表消息的直接发送者信息
+// Sender 代表元数据中的发送者信息
 type Sender struct {
-	ID    uint    `json:"id"`
-	Name  string  `json:"name"`
-	Email *string `json:"email"`
-	Type  string  `json:"type"`
+	Type             string           `json:"type"` // "contact", "agent_bot", "user"
+	CustomAttributes CustomAttributes `json:"custom_attributes"`
+	ID               uint             `json:"id"`
+	Name             string           `json:"name"`
+	Email            *string          `json:"email"`
 }
 
-// Attachment 代表附件信息
-type Attachment struct {
-	ID        uint   `json:"id"`
-	MessageID uint   `json:"message_id"`
-	FileType  string `json:"file_type"` // "image", "audio", "video", "file"
-	DataURL   string `json:"data_url"`
+// Account 代表账户信息
+type Account struct {
+	ID   uint   `json:"id"`
+	Name string `json:"name"`
+}
+
+// 前端传的自定义属性
+type CustomAttributes struct {
+	GoodsID    string `json:"goods_id,omitempty"`
+	GoodsTitle string `json:"goods_title,omitempty"`
+	GoodsImage string `json:"goods_image,omitempty"`
+	GoodsPrice string `json:"goods_price,omitempty"`
+	GoodsUrl   string `json:"goods_url,omitempty"`
 }

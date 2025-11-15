@@ -172,3 +172,882 @@
 * **redis使用**: 避免 缓存穿透、缓存击穿、缓存雪崩 等问题。
 *  如果改动配置文件, 则必须同步以下文件: 配置事例文件位于目录下的`config.example.yaml`, 对应go代码文件`model/config/default.go`和`model/config/child.go`, 默认值配置位于`initialize/config.go`下的`handleConfig()`方法,热重置配置位于`initialize/reload.go`下的`HandleConfigChange`方法。
 *  善用`utils/tool.go`下的工具类,避免出现重复代码。
+
+
+
+# Chatwoot-webhook数据结构
+
+```json
+{
+    "account": {
+        "id": 1,
+        "name": "tj"
+    },
+    "additional_attributes": {},
+    "avatar": "",
+    "custom_attributes": {
+        "goods_id": "prod_12345",
+        "goods_image": "https://wjyqtj.oss-cn-guangzhou.aliyuncs.com/temp/f966babe-031c-4ef7-b29f-ff4d56f5d897.png",
+        "goods_title": "Qwen3-72B 限量版纪念T恤"
+    },
+    "email": null,
+    "id": 163,
+    "identifier": null,
+    "name": "billowing-night-17",
+    "phone_number": null,
+    "thumbnail": "",
+    "blocked": false,
+    "event": "contact_updated",
+    "changed_attributes": [
+        {
+            "updated_at": {
+                "previous_value": "2025-11-15T03:32:25.810Z",
+                "current_value": "2025-11-15T03:32:26.292Z"
+            }
+        },
+        {
+            "custom_attributes": {
+                "previous_value": {},
+                "current_value": {
+                    "goods_id": "prod_12345",
+                    "goods_title": "Qwen3-72B 限量版纪念T恤",
+                    "goods_image": "https://wjyqtj.oss-cn-guangzhou.aliyuncs.com/temp/f966babe-031c-4ef7-b29f-ff4d56f5d897.png"
+                }
+            }
+        }
+    ]
+}
+```
+
+点击浮窗:
+```json
+{
+    "id": 163,
+    "contact": {
+        "account": {
+            "id": 1,
+            "name": "tj"
+        },
+        "additional_attributes": {},
+        "avatar": "",
+        "custom_attributes": {
+            "goods_id": "prod_12345",
+            "goods_image": "https://wjyqtj.oss-cn-guangzhou.aliyuncs.com/temp/f966babe-031c-4ef7-b29f-ff4d56f5d897.png",
+            "goods_title": "Qwen3-72B 限量版纪念T恤"
+        },
+        "email": null,
+        "id": 163,
+        "identifier": null,
+        "name": "billowing-night-17",
+        "phone_number": null,
+        "thumbnail": "",
+        "blocked": false
+    },
+    "inbox": {
+        "id": 1,
+        "name": "淘街"
+    },
+    "account": {
+        "id": 1,
+        "name": "tj"
+    },
+    "current_conversation": null,
+    "source_id": "f8cf369d-2d88-40b8-9253-887b675a33d3",
+    "event": "webwidget_triggered",
+    "event_info": {
+        "initiated_at": {
+            "timestamp": "Sat Nov 15 2025 11:33:32 GMT+0800 (中国标准时间)"
+        },
+        "referer": "http://agent.cc.cc/",
+        "widget_language": "zh_CN",
+        "browser_language": "zh",
+        "browser": {
+            "browser_name": "Microsoft Edge",
+            "browser_version": "142.0.0.0",
+            "device_name": "Unknown",
+            "platform_name": "Windows",
+            "platform_version": "10.0"
+        }
+    }
+}
+```
+
+```json
+{
+    "additional_attributes": {
+        "browser": {
+            "device_name": "Unknown",
+            "browser_name": "Microsoft Edge",
+            "platform_name": "Windows",
+            "browser_version": "142.0.0.0",
+            "platform_version": "10.0"
+        },
+        "referer": "http://agent.cc.cc/",
+        "initiated_at": {
+            "timestamp": "Sat Nov 15 2025 11:35:11 GMT+0800 (中国标准时间)"
+        },
+        "browser_language": "zh"
+    },
+    "can_reply": true,
+    "channel": "Channel::WebWidget",
+    "contact_inbox": {
+        "id": 163,
+        "contact_id": 163,
+        "inbox_id": 1,
+        "source_id": "f8cf369d-2d88-40b8-9253-887b675a33d3",
+        "created_at": "2025-11-15T03:32:25.816Z",
+        "updated_at": "2025-11-15T03:32:25.816Z",
+        "hmac_verified": false,
+        "pubsub_token": "zJJMyipUDmJCzHAreZD1XyeH"
+    },
+    "id": 150,
+    "inbox_id": 1,
+    "messages": [
+        {
+            "id": 810,
+            "content": "你好",
+            "account_id": 1,
+            "inbox_id": 1,
+            "conversation_id": 150,
+            "message_type": 0,
+            "created_at": 1763177714,
+            "updated_at": "2025-11-15T03:35:14.179Z",
+            "private": false,
+            "status": "sent",
+            "source_id": null,
+            "content_type": "text",
+            "content_attributes": {
+                "in_reply_to": null
+            },
+            "sender_type": "Contact",
+            "sender_id": 163,
+            "external_source_ids": {},
+            "additional_attributes": {},
+            "processed_message_content": "你好",
+            "sentiment": {},
+            "conversation": {
+                "assignee_id": null,
+                "unread_count": 1,
+                "last_activity_at": 1763177714,
+                "contact_inbox": {
+                    "source_id": "f8cf369d-2d88-40b8-9253-887b675a33d3"
+                }
+            },
+            "sender": {
+                "additional_attributes": {},
+                "custom_attributes": {
+                    "goods_id": "prod_12345",
+                    "goods_image": "https://wjyqtj.oss-cn-guangzhou.aliyuncs.com/temp/f966babe-031c-4ef7-b29f-ff4d56f5d897.png",
+                    "goods_title": "Qwen3-72B 限量版纪念T恤"
+                },
+                "email": null,
+                "id": 163,
+                "identifier": null,
+                "name": "billowing-night-17",
+                "phone_number": null,
+                "thumbnail": "",
+                "blocked": false,
+                "type": "contact"
+            }
+        }
+    ],
+    "labels": [],
+    "meta": {
+        "sender": {
+            "additional_attributes": {},
+            "custom_attributes": {
+                "goods_id": "prod_12345",
+                "goods_image": "https://wjyqtj.oss-cn-guangzhou.aliyuncs.com/temp/f966babe-031c-4ef7-b29f-ff4d56f5d897.png",
+                "goods_title": "Qwen3-72B 限量版纪念T恤"
+            },
+            "email": null,
+            "id": 163,
+            "identifier": null,
+            "name": "billowing-night-17",
+            "phone_number": null,
+            "thumbnail": "",
+            "blocked": false,
+            "type": "contact"
+        },
+        "assignee": null,
+        "team": null,
+        "hmac_verified": false
+    },
+    "status": "pending",
+    "custom_attributes": {},
+    "snoozed_until": null,
+    "unread_count": 1,
+    "first_reply_created_at": null,
+    "priority": null,
+    "waiting_since": 1763177714,
+    "agent_last_seen_at": 0,
+    "contact_last_seen_at": 0,
+    "last_activity_at": 1763177714,
+    "timestamp": 1763177714,
+    "created_at": 1763177714,
+    "updated_at": 1763177714.155967,
+    "event": "conversation_created"
+}
+```
+
+```json
+{
+    "account": {
+        "id": 1,
+        "name": "tj"
+    },
+    "additional_attributes": {},
+    "content_attributes": {
+        "in_reply_to": null
+    },
+    "content_type": "text",
+    "content": "你好",
+    "conversation": {
+        "additional_attributes": {
+            "browser_language": "zh",
+            "browser": {
+                "browser_name": "Microsoft Edge",
+                "browser_version": "142.0.0.0",
+                "device_name": "Unknown",
+                "platform_name": "Windows",
+                "platform_version": "10.0"
+            },
+            "initiated_at": {
+                "timestamp": "Sat Nov 15 2025 11:35:11 GMT+0800 (中国标准时间)"
+            },
+            "referer": "http://agent.cc.cc/"
+        },
+        "can_reply": true,
+        "channel": "Channel::WebWidget",
+        "contact_inbox": {
+            "id": 163,
+            "contact_id": 163,
+            "inbox_id": 1,
+            "source_id": "f8cf369d-2d88-40b8-9253-887b675a33d3",
+            "created_at": "2025-11-15T03:32:25.816Z",
+            "updated_at": "2025-11-15T03:32:25.816Z",
+            "hmac_verified": false,
+            "pubsub_token": "zJJMyipUDmJCzHAreZD1XyeH"
+        },
+        "id": 150,
+        "inbox_id": 1,
+        "messages": [
+            {
+                "id": 810,
+                "content": "你好",
+                "account_id": 1,
+                "inbox_id": 1,
+                "conversation_id": 150,
+                "message_type": 0,
+                "created_at": 1763177714,
+                "updated_at": "2025-11-15T03:35:14.179Z",
+                "private": false,
+                "status": "sent",
+                "source_id": null,
+                "content_type": "text",
+                "content_attributes": {
+                    "in_reply_to": null
+                },
+                "sender_type": "Contact",
+                "sender_id": 163,
+                "external_source_ids": {},
+                "additional_attributes": {},
+                "processed_message_content": "你好",
+                "sentiment": {},
+                "conversation": {
+                    "assignee_id": null,
+                    "unread_count": 1,
+                    "last_activity_at": 1763177714,
+                    "contact_inbox": {
+                        "source_id": "f8cf369d-2d88-40b8-9253-887b675a33d3"
+                    }
+                },
+                "sender": {
+                    "additional_attributes": {},
+                    "custom_attributes": {
+                        "goods_id": "prod_12345",
+                        "goods_image": "https://wjyqtj.oss-cn-guangzhou.aliyuncs.com/temp/f966babe-031c-4ef7-b29f-ff4d56f5d897.png",
+                        "goods_title": "Qwen3-72B 限量版纪念T恤"
+                    },
+                    "email": null,
+                    "id": 163,
+                    "identifier": null,
+                    "name": "billowing-night-17",
+                    "phone_number": null,
+                    "thumbnail": "",
+                    "blocked": false,
+                    "type": "contact"
+                }
+            }
+        ],
+        "labels": [],
+        "meta": {
+            "sender": {
+                "additional_attributes": {},
+                "custom_attributes": {
+                    "goods_id": "prod_12345",
+                    "goods_image": "https://wjyqtj.oss-cn-guangzhou.aliyuncs.com/temp/f966babe-031c-4ef7-b29f-ff4d56f5d897.png",
+                    "goods_title": "Qwen3-72B 限量版纪念T恤"
+                },
+                "email": null,
+                "id": 163,
+                "identifier": null,
+                "name": "billowing-night-17",
+                "phone_number": null,
+                "thumbnail": "",
+                "blocked": false,
+                "type": "contact"
+            },
+            "assignee": null,
+            "team": null,
+            "hmac_verified": false
+        },
+        "status": "pending",
+        "custom_attributes": {},
+        "snoozed_until": null,
+        "unread_count": 1,
+        "first_reply_created_at": null,
+        "priority": null,
+        "waiting_since": 1763177714,
+        "agent_last_seen_at": 0,
+        "contact_last_seen_at": 0,
+        "last_activity_at": 1763177714,
+        "timestamp": 1763177714,
+        "created_at": 1763177714,
+        "updated_at": 1763177714.183048
+    },
+    "created_at": "2025-11-15T03:35:14.179Z",
+    "id": 810,
+    "inbox": {
+        "id": 1,
+        "name": "淘街"
+    },
+    "message_type": "incoming",
+    "private": false,
+    "sender": {
+        "account": {
+            "id": 1,
+            "name": "tj"
+        },
+        "additional_attributes": {},
+        "avatar": "",
+        "custom_attributes": {
+            "goods_id": "prod_12345",
+            "goods_image": "https://wjyqtj.oss-cn-guangzhou.aliyuncs.com/temp/f966babe-031c-4ef7-b29f-ff4d56f5d897.png",
+            "goods_title": "Qwen3-72B 限量版纪念T恤"
+        },
+        "email": null,
+        "id": 163,
+        "identifier": null,
+        "name": "billowing-night-17",
+        "phone_number": null,
+        "thumbnail": "",
+        "blocked": false
+    },
+    "source_id": null,
+    "event": "message_created"
+}
+```
+
+```json
+{
+    "account": {
+        "id": 1,
+        "name": "tj"
+    },
+    "additional_attributes": {},
+    "avatar": "",
+    "custom_attributes": {
+        "goods_id": "prod_12345",
+        "goods_image": "https://wjyqtj.oss-cn-guangzhou.aliyuncs.com/temp/f966babe-031c-4ef7-b29f-ff4d56f5d897.png",
+        "goods_title": "Qwen3-72B 限量版纪念T恤"
+    },
+    "email": null,
+    "id": 163,
+    "identifier": null,
+    "name": "billowing-night-17",
+    "phone_number": null,
+    "thumbnail": "",
+    "blocked": false,
+    "event": "contact_updated",
+    "changed_attributes": [
+        {
+            "updated_at": {
+                "previous_value": "2025-11-15T03:32:26.292Z",
+                "current_value": "2025-11-15T03:35:14.232Z"
+            }
+        },
+        {
+            "last_activity_at": {
+                "previous_value": null,
+                "current_value": "2025-11-15T03:35:14.231Z"
+            }
+        }
+    ]
+}
+```
+
+```json
+{
+    "additional_attributes": {
+        "browser": {
+            "device_name": "Unknown",
+            "browser_name": "Microsoft Edge",
+            "platform_name": "Windows",
+            "browser_version": "142.0.0.0",
+            "platform_version": "10.0"
+        },
+        "referer": "http://agent.cc.cc/",
+        "initiated_at": {
+            "timestamp": "Sat Nov 15 2025 11:35:11 GMT+0800 (中国标准时间)"
+        },
+        "browser_language": "zh"
+    },
+    "can_reply": true,
+    "channel": "Channel::WebWidget",
+    "contact_inbox": {
+        "id": 163,
+        "contact_id": 163,
+        "inbox_id": 1,
+        "source_id": "f8cf369d-2d88-40b8-9253-887b675a33d3",
+        "created_at": "2025-11-15T03:32:25.816Z",
+        "updated_at": "2025-11-15T03:32:25.816Z",
+        "hmac_verified": false,
+        "pubsub_token": "zJJMyipUDmJCzHAreZD1XyeH"
+    },
+    "id": 150,
+    "inbox_id": 1,
+    "messages": [
+        {
+            "id": 810,
+            "content": "你好",
+            "account_id": 1,
+            "inbox_id": 1,
+            "conversation_id": 150,
+            "message_type": 0,
+            "created_at": 1763177714,
+            "updated_at": "2025-11-15T03:35:14.179Z",
+            "private": false,
+            "status": "sent",
+            "source_id": null,
+            "content_type": "text",
+            "content_attributes": {
+                "in_reply_to": null
+            },
+            "sender_type": "Contact",
+            "sender_id": 163,
+            "external_source_ids": {},
+            "additional_attributes": {},
+            "processed_message_content": "你好",
+            "sentiment": {},
+            "conversation": {
+                "assignee_id": null,
+                "unread_count": 1,
+                "last_activity_at": 1763177714,
+                "contact_inbox": {
+                    "source_id": "f8cf369d-2d88-40b8-9253-887b675a33d3"
+                }
+            },
+            "sender": {
+                "additional_attributes": {},
+                "custom_attributes": {
+                    "goods_id": "prod_12345",
+                    "goods_image": "https://wjyqtj.oss-cn-guangzhou.aliyuncs.com/temp/f966babe-031c-4ef7-b29f-ff4d56f5d897.png",
+                    "goods_title": "Qwen3-72B 限量版纪念T恤"
+                },
+                "email": null,
+                "id": 163,
+                "identifier": null,
+                "name": "billowing-night-17",
+                "phone_number": null,
+                "thumbnail": "",
+                "blocked": false,
+                "type": "contact"
+            }
+        }
+    ],
+    "labels": [],
+    "meta": {
+        "sender": {
+            "additional_attributes": {},
+            "custom_attributes": {
+                "goods_id": "prod_12345",
+                "goods_image": "https://wjyqtj.oss-cn-guangzhou.aliyuncs.com/temp/f966babe-031c-4ef7-b29f-ff4d56f5d897.png",
+                "goods_title": "Qwen3-72B 限量版纪念T恤"
+            },
+            "email": null,
+            "id": 163,
+            "identifier": null,
+            "name": "billowing-night-17",
+            "phone_number": null,
+            "thumbnail": "",
+            "blocked": false,
+            "type": "contact"
+        },
+        "assignee": null,
+        "team": null,
+        "hmac_verified": false
+    },
+    "status": "pending",
+    "custom_attributes": {},
+    "snoozed_until": null,
+    "unread_count": 1,
+    "first_reply_created_at": null,
+    "priority": null,
+    "waiting_since": 1763177714,
+    "agent_last_seen_at": 0,
+    "contact_last_seen_at": 1763177714,
+    "last_activity_at": 1763177714,
+    "timestamp": 1763177714,
+    "created_at": 1763177714,
+    "updated_at": 1763177714.230474,
+    "event": "conversation_status_changed",
+    "changed_attributes": null
+}
+```
+
+```json
+{
+    "additional_attributes": {
+        "browser": {
+            "device_name": "Unknown",
+            "browser_name": "Microsoft Edge",
+            "platform_name": "Windows",
+            "browser_version": "142.0.0.0",
+            "platform_version": "10.0"
+        },
+        "referer": "http://agent.cc.cc/",
+        "initiated_at": {
+            "timestamp": "Sat Nov 15 2025 11:35:11 GMT+0800 (中国标准时间)"
+        },
+        "browser_language": "zh"
+    },
+    "can_reply": true,
+    "channel": "Channel::WebWidget",
+    "contact_inbox": {
+        "id": 163,
+        "contact_id": 163,
+        "inbox_id": 1,
+        "source_id": "f8cf369d-2d88-40b8-9253-887b675a33d3",
+        "created_at": "2025-11-15T03:32:25.816Z",
+        "updated_at": "2025-11-15T03:32:25.816Z",
+        "hmac_verified": false,
+        "pubsub_token": "zJJMyipUDmJCzHAreZD1XyeH"
+    },
+    "id": 150,
+    "inbox_id": 1,
+    "messages": [
+        {
+            "id": 810,
+            "content": "你好",
+            "account_id": 1,
+            "inbox_id": 1,
+            "conversation_id": 150,
+            "message_type": 0,
+            "created_at": 1763177714,
+            "updated_at": "2025-11-15T03:35:14.179Z",
+            "private": false,
+            "status": "sent",
+            "source_id": null,
+            "content_type": "text",
+            "content_attributes": {
+                "in_reply_to": null
+            },
+            "sender_type": "Contact",
+            "sender_id": 163,
+            "external_source_ids": {},
+            "additional_attributes": {},
+            "processed_message_content": "你好",
+            "sentiment": {},
+            "conversation": {
+                "assignee_id": null,
+                "unread_count": 1,
+                "last_activity_at": 1763177714,
+                "contact_inbox": {
+                    "source_id": "f8cf369d-2d88-40b8-9253-887b675a33d3"
+                }
+            },
+            "sender": {
+                "additional_attributes": {},
+                "custom_attributes": {
+                    "goods_id": "prod_12345",
+                    "goods_image": "https://wjyqtj.oss-cn-guangzhou.aliyuncs.com/temp/f966babe-031c-4ef7-b29f-ff4d56f5d897.png",
+                    "goods_title": "Qwen3-72B 限量版纪念T恤"
+                },
+                "email": null,
+                "id": 163,
+                "identifier": null,
+                "name": "billowing-night-17",
+                "phone_number": null,
+                "thumbnail": "",
+                "blocked": false,
+                "type": "contact"
+            }
+        }
+    ],
+    "labels": [],
+    "meta": {
+        "sender": {
+            "additional_attributes": {},
+            "custom_attributes": {
+                "goods_id": "prod_12345",
+                "goods_image": "https://wjyqtj.oss-cn-guangzhou.aliyuncs.com/temp/f966babe-031c-4ef7-b29f-ff4d56f5d897.png",
+                "goods_title": "Qwen3-72B 限量版纪念T恤"
+            },
+            "email": null,
+            "id": 163,
+            "identifier": null,
+            "name": "billowing-night-17",
+            "phone_number": null,
+            "thumbnail": "",
+            "blocked": false,
+            "type": "contact"
+        },
+        "assignee": null,
+        "team": null,
+        "hmac_verified": false
+    },
+    "status": "pending",
+    "custom_attributes": {},
+    "snoozed_until": null,
+    "unread_count": 1,
+    "first_reply_created_at": null,
+    "priority": null,
+    "waiting_since": 1763177714,
+    "agent_last_seen_at": 0,
+    "contact_last_seen_at": 1763177714,
+    "last_activity_at": 1763177714,
+    "timestamp": 1763177714,
+    "created_at": 1763177714,
+    "updated_at": 1763177714.230474,
+    "event": "conversation_updated",
+    "changed_attributes": [
+        {
+            "id": {
+                "previous_value": null,
+                "current_value": 150
+            }
+        },
+        {
+            "account_id": {
+                "previous_value": null,
+                "current_value": 1
+            }
+        },
+        {
+            "inbox_id": {
+                "previous_value": null,
+                "current_value": 1
+            }
+        },
+        {
+            "status": {
+                "previous_value": "open",
+                "current_value": "pending"
+            }
+        },
+        {
+            "created_at": {
+                "previous_value": null,
+                "current_value": "2025-11-15T03:35:14.155Z"
+            }
+        },
+        {
+            "updated_at": {
+                "previous_value": null,
+                "current_value": "2025-11-15T03:35:14.155Z"
+            }
+        },
+        {
+            "contact_id": {
+                "previous_value": null,
+                "current_value": 163
+            }
+        },
+        {
+            "additional_attributes": {
+                "previous_value": {},
+                "current_value": {
+                    "browser_language": "zh",
+                    "browser": {
+                        "browser_name": "Microsoft Edge",
+                        "browser_version": "142.0.0.0",
+                        "device_name": "Unknown",
+                        "platform_name": "Windows",
+                        "platform_version": "10.0"
+                    },
+                    "initiated_at": {
+                        "timestamp": "Sat Nov 15 2025 11:35:11 GMT+0800 (中国标准时间)"
+                    },
+                    "referer": "http://agent.cc.cc/"
+                }
+            }
+        },
+        {
+            "contact_inbox_id": {
+                "previous_value": null,
+                "current_value": 163
+            }
+        },
+        {
+            "uuid": {
+                "previous_value": null,
+                "current_value": "1e6f3370-43ab-47fa-b3a1-41d4c617b87b"
+            }
+        },
+        {
+            "last_activity_at": {
+                "previous_value": null,
+                "current_value": "2025-11-15T03:35:14.151Z"
+            }
+        },
+        {
+            "waiting_since": {
+                "previous_value": null,
+                "current_value": "2025-11-15T03:35:14.155Z"
+            }
+        }
+    ]
+}
+```
+
+```json
+{
+    "event": "conversation_typing_off",
+    "user": {
+        "account": {
+            "id": 1,
+            "name": "tj"
+        },
+        "additional_attributes": {},
+        "avatar": "",
+        "custom_attributes": {
+            "goods_id": "prod_12345",
+            "goods_image": "https://wjyqtj.oss-cn-guangzhou.aliyuncs.com/temp/f966babe-031c-4ef7-b29f-ff4d56f5d897.png",
+            "goods_title": "Qwen3-72B 限量版纪念T恤"
+        },
+        "email": null,
+        "id": 163,
+        "identifier": null,
+        "name": "billowing-night-17",
+        "phone_number": null,
+        "thumbnail": "",
+        "blocked": false
+    },
+    "conversation": {
+        "additional_attributes": {
+            "browser": {
+                "device_name": "Unknown",
+                "browser_name": "Microsoft Edge",
+                "platform_name": "Windows",
+                "browser_version": "142.0.0.0",
+                "platform_version": "10.0"
+            },
+            "referer": "http://agent.cc.cc/",
+            "initiated_at": {
+                "timestamp": "Sat Nov 15 2025 11:35:11 GMT+0800 (中国标准时间)"
+            },
+            "browser_language": "zh"
+        },
+        "can_reply": true,
+        "channel": "Channel::WebWidget",
+        "contact_inbox": {
+            "id": 163,
+            "contact_id": 163,
+            "inbox_id": 1,
+            "source_id": "f8cf369d-2d88-40b8-9253-887b675a33d3",
+            "created_at": "2025-11-15T03:32:25.816Z",
+            "updated_at": "2025-11-15T03:32:25.816Z",
+            "hmac_verified": false,
+            "pubsub_token": "zJJMyipUDmJCzHAreZD1XyeH"
+        },
+        "id": 150,
+        "inbox_id": 1,
+        "messages": [
+            {
+                "id": 810,
+                "content": "你好",
+                "account_id": 1,
+                "inbox_id": 1,
+                "conversation_id": 150,
+                "message_type": 0,
+                "created_at": 1763177714,
+                "updated_at": "2025-11-15T03:35:14.179Z",
+                "private": false,
+                "status": "sent",
+                "source_id": null,
+                "content_type": "text",
+                "content_attributes": {
+                    "in_reply_to": null
+                },
+                "sender_type": "Contact",
+                "sender_id": 163,
+                "external_source_ids": {},
+                "additional_attributes": {},
+                "processed_message_content": "你好",
+                "sentiment": {},
+                "conversation": {
+                    "assignee_id": null,
+                    "unread_count": 1,
+                    "last_activity_at": 1763177714,
+                    "contact_inbox": {
+                        "source_id": "f8cf369d-2d88-40b8-9253-887b675a33d3"
+                    }
+                },
+                "sender": {
+                    "additional_attributes": {},
+                    "custom_attributes": {
+                        "goods_id": "prod_12345",
+                        "goods_image": "https://wjyqtj.oss-cn-guangzhou.aliyuncs.com/temp/f966babe-031c-4ef7-b29f-ff4d56f5d897.png",
+                        "goods_title": "Qwen3-72B 限量版纪念T恤"
+                    },
+                    "email": null,
+                    "id": 163,
+                    "identifier": null,
+                    "name": "billowing-night-17",
+                    "phone_number": null,
+                    "thumbnail": "",
+                    "blocked": false,
+                    "type": "contact"
+                }
+            }
+        ],
+        "labels": [],
+        "meta": {
+            "sender": {
+                "additional_attributes": {},
+                "custom_attributes": {
+                    "goods_id": "prod_12345",
+                    "goods_image": "https://wjyqtj.oss-cn-guangzhou.aliyuncs.com/temp/f966babe-031c-4ef7-b29f-ff4d56f5d897.png",
+                    "goods_title": "Qwen3-72B 限量版纪念T恤"
+                },
+                "email": null,
+                "id": 163,
+                "identifier": null,
+                "name": "billowing-night-17",
+                "phone_number": null,
+                "thumbnail": "",
+                "blocked": false,
+                "type": "contact"
+            },
+            "assignee": null,
+            "team": null,
+            "hmac_verified": false
+        },
+        "status": "pending",
+        "custom_attributes": {},
+        "snoozed_until": null,
+        "unread_count": 1,
+        "first_reply_created_at": null,
+        "priority": null,
+        "waiting_since": 1763177714,
+        "agent_last_seen_at": 0,
+        "contact_last_seen_at": 1763177714,
+        "last_activity_at": 1763177714,
+        "timestamp": 1763177714,
+        "created_at": 1763177714,
+        "updated_at": 1763177714.230474
+    },
+    "is_private": false
+}
+```

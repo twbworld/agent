@@ -2,9 +2,61 @@
 <html>
 
 <head>
+  <title>商品详情页</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      background-color: #f4f4f9;
+    }
+
+    .product-card {
+      background-color: white;
+      border-radius: 10px;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+      overflow: hidden;
+      width: 350px;
+      text-align: center;
+    }
+
+    .product-card img {
+      width: 100%;
+      height: auto;
+    }
+
+    .product-card h1 {
+      font-size: 1.5em;
+      margin: 0.8em 0;
+    }
+
+    .product-card div {
+      color: #e44d26;
+      font-size: 1.8em;
+      font-weight: bold;
+      margin-bottom: 1em;
+    }
+
+  </style>
+</head>
+
+<body>
+
+  <div class="product-card">
+    <img id="goods_image"
+      src="https://wjyqtj.oss-cn-guangzhou.aliyuncs.com/temp/f966babe-031c-4ef7-b29f-ff4d56f5d897.png" alt="商品图片">
+    <h1 id="goods_title">Qwen3-72B 限量版纪念T恤</h1>
+    <div id="price">¥199.00</div>
+    <p>点击右下角聊天框，咨询此商品</p>
+    <span id="goods_id" style="display: none;">663</span>
+  </div>
+
+
   <script>
     (function (d, t) {
-      var BASE_URL = "http://chatwoot.cc.cc";
+      var BASE_URL = "http://127.0.0.1:3000";
       var g = d.createElement(t), s = d.getElementsByTagName(t)[0];
       g.src = BASE_URL + "/packs/js/sdk.js";
       g.async = true;
@@ -14,13 +66,31 @@
           websiteToken: '7Lwg9fZnczpy18q8ZqvPfW1V',
           baseUrl: BASE_URL
         })
+
+        // 当chatwoot加载完成后，设置自定义属性
+        window.addEventListener('chatwoot:ready', function () {
+          try {
+            const goodsId = document.getElementById('goods_id').innerText;
+            const goodsTitle = document.getElementById('goods_title').innerText;
+            const goodsImage = document.getElementById('goods_image').src;
+            const goodsPrice = document.getElementById('price').innerText;
+            const goodsUrl = window.location.href;
+
+            // 设置自定义属性，这些属性将附加到会话中
+            window.$chatwoot.setCustomAttributes({
+              goods_id: goodsId,
+              goods_title: goodsTitle,
+              goods_image: goodsImage,
+              goods_price: goodsPrice,
+              goods_url: goodsUrl,
+            });
+          } catch (error) {
+            console.error('设置Chatwoot自定义属性失败:', error);
+          }
+        });
       }
     })(document, "script");
   </script>
-</head>
-
-<body>
-  <h1 style="text-align: center;">右下角 聊天室</h1>
 </body>
 
 </html>

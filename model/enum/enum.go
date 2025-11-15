@@ -57,7 +57,9 @@ const (
 type ChatwootEvent string
 
 const (
-	// 来自联系人的新消息。
+	// 用户打开小部件,即点击浮窗(机器人+集成 都会Webhooks)
+	EventWebwidgetTriggered ChatwootEvent = "webwidget_triggered"
+	// 来自联系人的新消息。(机器人+集成 都会Webhooks)
 	EventMessageCreated ChatwootEvent = "message_created"
 	// 消息已更新。
 	EventMessageUpdated ChatwootEvent = "message_updated"
@@ -182,8 +184,9 @@ const (
 每个JSON对象都必须包含 "name" (string, 工具的名称) 和 "arguments" (object, 一个包含所有参数键值对的对象), 不要包含任何无关内容。
 
 **重要**:
-1.  **如果调用工具所需的参数不完整，你必须向用户提问以获取缺失的信息，而不是直接放弃或猜测。**
-2.  工具的 "name" 必须使用 "客户端名称.工具名称" 的格式，例如 "mall.query_goods"。
+1.  **如果对话历史中出现相关的信息，请优先根据相关信息回答。只有当用户对你的回答不满意，或者明确要求更详细的信息时，才考虑使用工具查询。**
+2.  **如果调用工具所需的参数不完整，你必须向用户提问以获取缺失的信息，而不是直接放弃或猜测。**
+3.  工具的 "name" 必须使用 "客户端名称.工具名称" 的格式，例如 "mall.query_goods"。
 
 例如:
 - 用户说: "帮我查下订单"

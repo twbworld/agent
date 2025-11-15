@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"strings"
 	"sync"
 	"time"
@@ -55,6 +54,15 @@ func (d *ChatApi) HandleChat(ctx *gin.Context) {
 		}
 		d.handleMessageCreated(ctx, req)
 
+	case enum.EventConversationCreated:
+		var req common.ConversationCreatedRequest
+		if err := json.Unmarshal(bodyBytes, &req); err != nil {
+			common.Fail(ctx, "参数无效")
+			return
+		}
+		go d.handleConversationCreated(ctx, req)
+		common.Success(ctx, nil)
+
 	case enum.EventConversationResolved:
 		var req common.ConversationResolvedRequest
 		if err := json.Unmarshal(bodyBytes, &req); err != nil {
@@ -69,6 +77,16 @@ func (d *ChatApi) HandleChat(ctx *gin.Context) {
 	}
 }
 
+// handleConversationCreated 处理新会话创建事件，这是用户发送第一条消息时触发的
+func (d *ChatApi) handleConversationCreated(ctx *gin.Context, req common.ConversationCreatedRequest) {
+	attrs := req.Meta.Sender.CustomAttributes
+	if attrs.GoodsID == "" {
+		return
+	}
+	service.Service.UserServiceGroup.ActionService.SendProductCard(req.ID, attrs)
+}
+
+// handleConversationResolved 收到消息处理
 func (d *ChatApi) handleMessageCreated(ctx *gin.Context, req common.ChatRequest) {
 	// 兼容; 新版 webhook 结构中, account_id 不在 conversation 内, 在根对象上
 	if req.Account.ID != 0 {
@@ -158,7 +176,7 @@ func (d *ChatApi) processMessageAsync(ctx context.Context, req common.ChatReques
 	// 匹配到快捷回复
 	if cannedAnswer != "" {
 		service.Service.UserServiceGroup.ActionService.SendMessage(req.Conversation.ConversationID, cannedAnswer)
-		go d.updateConversationHistory(req.Conversation.ConversationID, req.Content, cannedAnswer)
+		go service.Service.UserServiceGroup.HistoryService.Append(context.Background(), req.Conversation.ConversationID, common.LlmMessage{Role: "user", Content: req.Content}, common.LlmMessage{Role: "assistant", Content: cannedAnswer})
 		return
 	}
 
@@ -178,7 +196,12 @@ func (d *ChatApi) processMessageAsync(ctx context.Context, req common.ChatReques
 		}
 	}
 
-	// --- 进入智能处理路径 --- //
+	// --- 进入智能处理路径 ---
+
+	go service.Service.UserServiceGroup.ActionService.ToggleTyping(req.Conversation.ConversationID, true)
+	defer func() {
+		go service.Service.UserServiceGroup.ActionService.ToggleTyping(req.Conversation.ConversationID, false)
+	}()
 
 	// 2. 并发获取向量搜索结果和会话历史
 	var vectorResults []dao.SearchResult
@@ -201,7 +224,7 @@ func (d *ChatApi) processMessageAsync(ctx context.Context, req common.ChatReques
 	// 获取会话历史
 	g.Go(func() error {
 		var historyErr error
-		fullHistory, historyErr = d.getConversationHistory(gCtx, req.Conversation.AccountID, req.Conversation.ConversationID, req.Content)
+		fullHistory, historyErr = service.Service.UserServiceGroup.HistoryService.GetOrFetch(gCtx, req.Conversation.AccountID, req.Conversation.ConversationID, req.Content)
 		if historyErr != nil {
 			global.Log.Warnf("[processMessageAsync] 获取历史记录失败: %v", historyErr)
 		}
@@ -219,7 +242,7 @@ func (d *ChatApi) processMessageAsync(ctx context.Context, req common.ChatReques
 		chosenVectorAnswer := vectorResults[0].Answer
 		global.Log.Debugf("[processMessageAsync] 向量搜索高相似度匹配，提前响应, 相似度: %.4f, 会话ID: %d", vectorResults[0].Similarity, req.Conversation.ConversationID)
 		service.Service.UserServiceGroup.ActionService.SendMessage(req.Conversation.ConversationID, chosenVectorAnswer)
-		go d.updateConversationHistory(req.Conversation.ConversationID, req.Content, chosenVectorAnswer)
+		go service.Service.UserServiceGroup.HistoryService.Append(context.Background(), req.Conversation.ConversationID, common.LlmMessage{Role: "user", Content: req.Content}, common.LlmMessage{Role: "assistant", Content: chosenVectorAnswer})
 		return
 	}
 
@@ -233,7 +256,8 @@ func (d *ChatApi) processMessageAsync(ctx context.Context, req common.ChatReques
 		fullHistory = fullHistory[startIndex:]
 		global.Log.Debugf("会话 %d 历史记录已限制为最近 %d 条消息", req.Conversation.ConversationID, global.Config.Ai.MaxLlmHistoryMessages)
 	}
-	// global.Log.Debugln("会话历史=========", fullHistory)
+
+	global.Log.Debugln("会话历史=========", fullHistory)
 
 	// 4. 分诊台 (Triage) & 智能路由
 	processed, err := d.runTriage(ctx, req, fullHistory, vectorResults)
@@ -246,7 +270,7 @@ func (d *ChatApi) processMessageAsync(ctx context.Context, req common.ChatReques
 		return
 	}
 
-	// --- 分诊通过，进入深度处理路径 --- //
+	// --- 分诊通过，进入深度处理路径 ---
 
 	// 5. 调用大型LLM服务 (含RAG和工具调用)
 	llmAnswer, err := d.runComplexGeneration(ctx, req, fullHistory, vectorResults)
@@ -299,7 +323,7 @@ func (d *ChatApi) processMessageAsync(ctx context.Context, req common.ChatReques
 
 	// 8. 发送消息并更新历史
 	service.Service.UserServiceGroup.ActionService.SendMessage(req.Conversation.ConversationID, llmAnswer)
-	go d.updateConversationHistory(req.Conversation.ConversationID, req.Content, llmAnswer)
+	go service.Service.UserServiceGroup.HistoryService.Append(context.Background(), req.Conversation.ConversationID, common.LlmMessage{Role: "user", Content: req.Content}, common.LlmMessage{Role: "assistant", Content: llmAnswer})
 }
 
 // runTriage 执行分诊与智能路由
@@ -359,7 +383,7 @@ func (d *ChatApi) runTriage(ctx context.Context, req common.ChatRequest, fullHis
 	if enum.TriageIntent(triageResult.Intent) == enum.TriageIntentOffTopic {
 		global.Log.Debugf("[Triage] 识别为无关问题，已礼貌拒绝, 会话ID: %d", req.Conversation.ConversationID)
 		service.Service.UserServiceGroup.ActionService.SendMessage(req.Conversation.ConversationID, string(enum.ReplyMsgOffTopic))
-		go d.updateConversationHistory(req.Conversation.ConversationID, req.Content, string(enum.ReplyMsgOffTopic))
+		go service.Service.UserServiceGroup.HistoryService.Append(context.Background(), req.Conversation.ConversationID, common.LlmMessage{Role: "user", Content: req.Content}, common.LlmMessage{Role: "assistant", Content: string(enum.ReplyMsgOffTopic)})
 		return true, nil
 	}
 
@@ -368,12 +392,6 @@ func (d *ChatApi) runTriage(ctx context.Context, req common.ChatRequest, fullHis
 
 // runComplexGeneration 执行复杂的RAG+LLM生成，并处理工具调用
 func (d *ChatApi) runComplexGeneration(ctx context.Context, req common.ChatRequest, fullHistory []common.LlmMessage, vectorResults []dao.SearchResult) (string, error) {
-	// 告诉用户“机器人正在输入中...”
-	go service.Service.UserServiceGroup.ActionService.ToggleTyping(req.Conversation.ConversationID, true)
-	defer func() {
-		go service.Service.UserServiceGroup.ActionService.ToggleTyping(req.Conversation.ConversationID, false)
-	}()
-
 	// 准备给大型LLM的参考资料 (RAG)
 	var llmReferenceDocs []dao.SearchResult
 	if len(vectorResults) > 0 {
@@ -485,154 +503,12 @@ func (d *ChatApi) runComplexGeneration(ctx context.Context, req common.ChatReque
 	return llmAnswer, nil
 }
 
-// fetchAndCacheHistory 从Chatwoot获取数据、格式化并存入Redis
-func (d *ChatApi) fetchAndCacheHistory(ctx context.Context, accountID, conversationID uint, currentMessage string) ([]common.LlmMessage, error) {
-	// 从Chatwoot API获取完整的历史记录
-	chatwootMessages, err := global.ChatwootService.GetConversationMessages(accountID, conversationID)
-	if err != nil {
-		return nil, fmt.Errorf("从Chatwoot API获取会话 %d 消息失败: %w", conversationID, err)
-	}
-
-	// 格式化历史记录为LLM需要的格式
-	var formattedHistory []common.LlmMessage
-	for _, msg := range chatwootMessages {
-		// 过滤掉私信备注、没有内容的附件消息
-		if msg.Private || msg.Content == "" {
-			continue
-		}
-
-		// 过滤掉当前用户消息，因为它会作为LLM的content参数传入，避免重复
-		if msg.MessageType == 0 && msg.Sender.Type == string(enum.SenderTypeContact) && msg.Content == currentMessage {
-			continue
-		}
-
-		var role string
-		if msg.MessageType == 0 && msg.Sender.Type == string(enum.SenderTypeContact) {
-			role = "user"
-		} else if msg.MessageType == 1 {
-			role = "assistant" // 假设所有outgoing消息都是AI或客服的回复
-		} else {
-			continue // 忽略其他类型的消息
-		}
-		formattedHistory = append(formattedHistory, common.LlmMessage{Role: role, Content: msg.Content})
-	}
-
-	// 将格式化后的历史记录存入Redis
-	ttl := utils.GetTTLWithJitter(global.Config.Redis.ConversationHistoryTTL)
-	if err := global.RedisClient.SetConversationHistory(context.Background(), conversationID, formattedHistory, ttl); err != nil {
-		global.Log.Errorf("将会话 %d 历史记录存入Redis失败: %v", conversationID, err)
-	}
-
-	return formattedHistory, nil
-}
-
-// getConversationHistory 获取会话历史记录，优先从Redis获取，否则从Chatwoot API获取
-func (d *ChatApi) getConversationHistory(ctx context.Context, accountID, conversationID uint, currentMessage string) ([]common.LlmMessage, error) {
-	if global.RedisClient == nil {
-		return nil, fmt.Errorf("Redis客户端未初始化")
-	}
-
-	// 1. 尝试从Redis获取聊天记录
-	history, err := global.RedisClient.GetConversationHistory(ctx, conversationID)
-	if err != nil && err != redis.ErrNil { // Redis error other than miss
-		global.Log.Warnf("从Redis获取会话 %d 历史记录失败: %v, 将尝试从Chatwoot获取", conversationID, err)
-	} else if history != nil { // Cache hit
-		global.Log.Debugf("会话 %d 历史记录从Redis缓存命中", conversationID)
-		return history, nil
-	}
-
-	// --- 缓存未命中，进入回源逻辑 ---
-	if global.ChatwootService == nil {
-		return nil, fmt.Errorf("Chatwoot客户端未初始化")
-	}
-
-	// 2. 使用分布式锁防止缓存击穿
-	lockKey := fmt.Sprintf("%s%d", redis.KeyPrefixHistoryLock, conversationID)
-	lockExpiry := time.Duration(global.Config.Redis.HistoryLockExpiry) * time.Second
-	agentID, _ := os.Hostname()
-	if agentID == "" {
-		agentID = "unknown-agent"
-	}
-
-	locked, err := global.RedisClient.SetNX(ctx, lockKey, agentID, lockExpiry).Result()
-	if err != nil {
-		global.Log.Errorf("尝试获取会话 %d 历史记录锁失败: %v", conversationID, err)
-		// 即使获取锁失败，也尝试从源获取，作为降级策略
-		return d.fetchAndCacheHistory(ctx, accountID, conversationID, currentMessage)
-	}
-
-	if locked {
-		// 2a. 成功获取锁，从Chatwoot API获取数据并缓存
-		global.Log.Debugf("会话 %d 历史记录Redis缓存未命中，成功获取锁，从Chatwoot API获取", conversationID)
-		defer func() {
-			// 使用后台 context 确保即使原始请求取消，锁释放也能执行
-			if err := global.RedisClient.Del(context.Background(), lockKey).Err(); err != nil {
-				global.Log.Warnf("释放会话 %d 历史记录锁失败: %v", conversationID, err)
-			}
-		}()
-		// 在获取锁后，再次检查缓存，防止在获取锁的过程中，已有其他请求完成了缓存填充（双重检查锁定）
-		history, err := global.RedisClient.GetConversationHistory(ctx, conversationID)
-		if err == nil && history != nil {
-			global.Log.Debugf("获取锁后发现会话 %d 缓存已存在", conversationID)
-			return history, nil
-		}
-		return d.fetchAndCacheHistory(ctx, accountID, conversationID, currentMessage)
-	}
-
-	// 2b. 未获取到锁，说明其他goroutine正在回源，等待后重试
-	global.Log.Debugf("会话 %d 历史记录锁被占用，等待后重试", conversationID)
-	time.Sleep(200 * time.Millisecond) // 短暂等待
-
-	history, err = global.RedisClient.GetConversationHistory(ctx, conversationID)
-	if err == nil && history != nil {
-		global.Log.Debugf("等待后，会话 %d 历史记录从Redis缓存命中", conversationID)
-		return history, nil
-	}
-
-	// 如果等待后仍然没有缓存，作为降级策略，直接从源获取数据
-	global.Log.Warnf("等待后会话 %d 缓存仍未命中，直接回源作为降级策略", conversationID)
-	return d.fetchAndCacheHistory(ctx, accountID, conversationID, currentMessage)
-}
-
-// updateConversationHistory 在LLM回复后，更新Redis中的会话历史记录
-func (d *ChatApi) updateConversationHistory(conversationID uint, userMessage, aiResponse string) {
-	if global.RedisClient == nil {
-		global.Log.Warnf("Redis客户端未初始化，无法更新会话 %d 历史记录", conversationID)
-		return
-	}
-
-	ttl := utils.GetTTLWithJitter(global.Config.Redis.ConversationHistoryTTL)
-
-	// 统一追加用户消息和AI回复
-	messagesToAppend := []common.LlmMessage{
-		{Role: "user", Content: userMessage},
-		{Role: "assistant", Content: aiResponse},
-	}
-
-	if err := global.RedisClient.AppendToConversationHistory(context.Background(), conversationID, ttl, messagesToAppend...); err != nil {
-		global.Log.Errorf("追加用户消息和AI回复到会话 %d 历史记录失败: %v", conversationID, err)
-	}
-}
-
 // updateHistoryWithHumanMessage 将人工客服的回复追加到Redis历史记录中
 func (d *ChatApi) updateHistoryWithHumanMessage(req common.ChatRequest) {
-	if global.RedisClient == nil {
-		global.Log.Warnf("Redis客户端未初始化，无法更新会话 %d 的人工客服历史记录", req.Conversation.ConversationID)
-		return
-	}
 	if req.Content == "" {
 		return
 	}
-
-	ttl := utils.GetTTLWithJitter(global.Config.Redis.ConversationHistoryTTL)
-	messageToAppend := common.LlmMessage{
-		Role:    "assistant",
-		Content: req.Content,
-	}
-
-	if err := global.RedisClient.AppendToConversationHistory(context.Background(), req.Conversation.ConversationID, ttl, messageToAppend); err != nil {
-		global.Log.Errorf("追加人工客服消息到会话 %d 历史记录失败: %v", req.Conversation.ConversationID, err)
-	}
+	go service.Service.UserServiceGroup.HistoryService.Append(context.Background(), req.Conversation.ConversationID, common.LlmMessage{Role: "assistant", Content: req.Content})
 }
 
 // handleConversationResolved 处理会话解决事件，取消正在进行的AI任务

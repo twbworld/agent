@@ -31,21 +31,59 @@ type ConversationMessagesResponse struct {
 	Payload []Message `json:"payload"`
 }
 
-// Message 结构体定义了Chatwoot API返回的单条消息结构
-type Message struct {
-	ID          uint         `json:"id"`
-	Content     string       `json:"content"`
-	MessageType int          `json:"message_type"` // 0: incoming, 1: outgoing
-	CreatedAt   int64        `json:"created_at"`
-	Sender      Sender       `json:"sender"`
-	Private     bool         `json:"private"`     // 是否是私信备注
-	Attachments []Attachment `json:"attachments"` // 附件列表
+// CreateMessageRequest 定义了创建消息API的请求体
+type CreateMessageRequest struct {
+	Content          string      `json:"content,omitempty"` // Make content optional
+	MessageType      string      `json:"message_type"`
+	Private          bool        `json:"private"`
+	ContentType      string      `json:"content_type"`
+	ContentAttributes interface{} `json:"content_attributes,omitempty"` // Add ContentAttributes
 }
 
-// Sender 结构体定义了消息发送者的信息
-type Sender struct {
-	ID   uint   `json:"id"`
-	Type string `json:"type"` // "contact", "agent"
+// CardAction 定义了卡片中的动作按钮
+type CardAction struct {
+	Type string `json:"type"` // e.g., "link", "buy"
+	Text string `json:"text"`
+	URI  string `json:"uri"`
+}
+
+// CardItem 定义了单个卡片的内容
+type CardItem struct {
+	MediaURL    string       `json:"media_url,omitempty"`
+	Title       string       `json:"title"`
+	Description string       `json:"description,omitempty"`
+	Actions     []CardAction `json:"actions,omitempty"`
+}
+
+// CardContentAttributes 定义了卡片消息的 content_attributes 结构
+type CardContentAttributes struct {
+	Items []CardItem `json:"items"`
+}
+
+// 定义了创建私信备注的请求体
+type CreatePrivateNoteRequest struct {
+	Content     string `json:"content"`
+	MessageType string `json:"message_type"`
+	Private     bool   `json:"private"`
+}
+
+// ToggleTypingRequest 定义了切换输入状态API的请求体
+type ToggleTypingRequest struct {
+	TypingStatus string `json:"typing_status"` // "on" or "off"
+}
+
+// Message 结构体定义了Chatwoot API返回的单条消息结构
+type Message struct {
+	ID          uint   `json:"id"`
+	Content     string `json:"content"`
+	MessageType int    `json:"message_type"` // 0: incoming, 1: outgoing
+	CreatedAt   int64  `json:"created_at"`
+	Sender      struct {
+		ID   uint   `json:"id"`
+		Type string `json:"type"` // "contact", "agent"
+	} `json:"sender"`
+	Private     bool         `json:"private"`     // 是否是私信备注
+	Attachments []Attachment `json:"attachments"` // 附件列表
 }
 
 // Attachment 结构体定义了消息附件的信息
@@ -68,6 +106,8 @@ type Service interface {
 	ToggleTypingStatus(conversationID uint, status string) error
 	// 在指定对话中创建一条新消息 (通常是回复)
 	CreateMessage(conversationID uint, content string) error
+	// 在指定对话中创建一条卡片消息
+	CreateCardMessage(conversationID uint, content string, cardItems []CardItem) error
 	// 从Chatwoot API获取指定会话的历史消息
 	GetConversationMessages(accountID, conversationID uint) ([]Message, error)
 }
@@ -175,13 +215,6 @@ func (c *Client) GetCannedResponses() ([]CannedResponse, error) {
 	return responses, nil
 }
 
-// 定义了创建私信备注的请求体
-type CreatePrivateNoteRequest struct {
-	Content     string `json:"content"`
-	MessageType string `json:"message_type"`
-	Private     bool   `json:"private"`
-}
-
 func (c *Client) CreatePrivateNote(conversationID uint, content string) error {
 	path := fmt.Sprintf("/api/v1/accounts/%d/conversations/%d/messages", c.AccountID, conversationID)
 	notePayload := CreatePrivateNoteRequest{
@@ -200,11 +233,6 @@ func (c *Client) SetConversationStatus(conversationID uint, status enum.Conversa
 	return c.sendRequest("POST", path, botToken, payload, nil)
 }
 
-// ToggleTypingRequest 定义了切换输入状态API的请求体
-type ToggleTypingRequest struct {
-	TypingStatus string `json:"typing_status"` // "on" or "off"
-}
-
 func (c *Client) ToggleTypingStatus(conversationID uint, status string) error {
 	if status != "on" && status != "off" {
 		return fmt.Errorf("无效的输入状态: %s", status)
@@ -216,14 +244,6 @@ func (c *Client) ToggleTypingStatus(conversationID uint, status string) error {
 	return c.sendRequest("POST", path, agentToken, payload, nil)
 }
 
-// CreateMessageRequest 定义了创建消息API的请求体
-type CreateMessageRequest struct {
-	Content     string `json:"content"`
-	MessageType string `json:"message_type"`
-	Private     bool   `json:"private"`
-	ContentType string `json:"content_type"`
-}
-
 func (c *Client) CreateMessage(conversationID uint, content string) error {
 	path := fmt.Sprintf("/api/v1/accounts/%d/conversations/%d/messages", c.AccountID, conversationID)
 	payload := CreateMessageRequest{
@@ -231,6 +251,22 @@ func (c *Client) CreateMessage(conversationID uint, content string) error {
 		MessageType: string(enum.MessageTypeOutgoing), // 代表是机器人或客服发出的消息
 		Private:     false,
 		ContentType: "text",
+	}
+	return c.sendRequest("POST", path, botToken, payload, nil)
+}
+
+// content 给客服看的文本
+// cardItems 给客户看的卡片
+func (c *Client) CreateCardMessage(conversationID uint, content string, cardItems []CardItem) error {
+	path := fmt.Sprintf("/api/v1/accounts/%d/conversations/%d/messages", c.AccountID, conversationID)
+	payload := CreateMessageRequest{
+		Content:     content,
+		MessageType: string(enum.MessageTypeOutgoing),
+		Private:     false,
+		ContentType: "cards",
+		ContentAttributes: CardContentAttributes{
+			Items: cardItems,
+		},
 	}
 	return c.sendRequest("POST", path, botToken, payload, nil)
 }

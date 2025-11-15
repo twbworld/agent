@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"gitee.com/taoJie_1/mall-agent/global"
+	"gitee.com/taoJie_1/mall-agent/internal/chatwoot"
 	"gitee.com/taoJie_1/mall-agent/internal/redis"
 	"gitee.com/taoJie_1/mall-agent/model/common"
 	"gitee.com/taoJie_1/mall-agent/model/enum"
@@ -15,6 +16,8 @@ import (
 )
 
 type ActionService interface {
+	// 发送商品信息卡片
+	SendProductCard(conversationID uint, attrs common.CustomAttributes)
 	// 转接人工客服
 	TransferToHuman(ConversationID uint, remark enum.TransferToHuman, message ...string) error
 	// 将会话状态设置为机器人处理
@@ -39,7 +42,7 @@ var noGracePeriodReasons = []enum.TransferToHuman{
 	enum.TransferToHuman5,
 }
 
-func NewActionService() *actionService {
+func NewActionService() ActionService {
 	// 初始化转人工的关键词列表,避免在每次调用时都创建map
 	transferSet := make(map[string]struct{})
 	keywordsList := global.Config.Ai.TransferKeywords
@@ -171,4 +174,32 @@ func (d *actionService) CannedResponses(chatRequest *common.ChatRequest) (string
 	}
 
 	return "", false, nil
+}
+
+func (d *actionService) SendProductCard(conversationID uint, attrs common.CustomAttributes) {
+	if global.ChatwootService == nil {
+		global.Log.Warnf("[action] Chatwoot客户端未初始化，无法为会话 %d 发送商品卡片", conversationID)
+		return
+	}
+
+	// 构建卡片项
+	cardItem := chatwoot.CardItem{
+		MediaURL:    attrs.GoodsImage,
+		Title:       attrs.GoodsTitle,
+		Description: "您正在咨询的商品",
+		Actions: []chatwoot.CardAction{
+			{
+				Type: "link",
+				Text: "查看详情",
+				URI:  attrs.GoodsUrl,
+			},
+		},
+	}
+	content := fmt.Sprintf("商品名称：**%s**\n价格：%s\ngoods_id：%s\n[![%s](%s)](%s)", attrs.GoodsTitle, attrs.GoodsPrice, attrs.GoodsID, attrs.GoodsTitle, attrs.GoodsImage, attrs.GoodsUrl)
+
+	//(当前消息不加入缓存)
+	if err := global.ChatwootService.CreateCardMessage(conversationID, content, []chatwoot.CardItem{cardItem}); err != nil {
+		global.Log.Errorf("[action]向会话 %d 发送商品卡片失败: %v", conversationID, err)
+		return
+	}
 }

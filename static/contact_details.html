@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>客户详情</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+      color: #333;
+      background-color: #f8f9fa;
+      margin: 0;
+      padding: 15px;
+    }
+
+    .card {
+      background-color: #fff;
+      border: 1px solid #dee2e6;
+      border-radius: .25rem;
+      margin-bottom: 15px;
+      box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, .075);
+    }
+
+    .card-header {
+      padding: .75rem 1.25rem;
+      margin-bottom: 0;
+      background-color: rgba(0, 0, 0, .03);
+      border-bottom: 1px solid rgba(0, 0, 0, .125);
+      font-weight: 600;
+    }
+
+    .card-body {
+      padding: 1.25rem;
+    }
+
+    .info-grid {
+      display: grid;
+      grid-template-columns: 100px 1fr;
+      gap: 8px 15px;
+    }
+
+    .info-grid dt {
+      font-weight: 500;
+      color: #6c757d;
+      text-align: right;
+    }
+
+    .info-grid dd {
+      margin: 0;
+    }
+
+    .product-header {
+      /* Renamed for clarity */
+      display: flex;
+      align-items: center;
+    }
+
+    .product-header img {
+      width: 60px;
+      height: 60px;
+      object-fit: cover;
+      border-radius: .25rem;
+      margin-right: 15px;
+    }
+
+    .order-status {
+      display: inline-block;
+      padding: .25em .6em;
+      font-size: 75%;
+      font-weight: 700;
+      line-height: 1;
+      text-align: center;
+      white-space: nowrap;
+      vertical-align: baseline;
+      border-radius: .25rem;
+    }
+
+    .status-shipped {
+      color: #fff;
+      background-color: #17a2b8;
+    }
+
+    #loader {
+      text-align: center;
+      color: #6c757d;
+      padding: 20px;
+    }
+
+    #error {
+      text-align: center;
+      color: #dc3545;
+      padding: 20px;
+      display: none;
+    }
+
+    .hidden {
+      display: none;
+    }
+
+  </style>
+</head>
+
+<body>
+  <div id="loader">正在加载数据...</div>
+  <div id="error" class="hidden"></div>
+  <div id="details-container" class="hidden">
+    <div class="card user-info-card">
+      <div class="card-header">用户信息</div>
+      <div class="card-body">
+        <dl class="info-grid">
+          <dt>客户ID</dt>
+          <dd id="user-id">-</dd>
+          <dt>姓名</dt>
+          <dd id="user-name">-</dd>
+          <dt>电话</dt>
+          <dd id="user-phone">-</dd>
+          <dt>邮箱</dt>
+          <dd id="user-email">-</dd>
+          <dt>会员等级</dt>
+          <dd id="user-level">-</dd>
+        </dl>
+      </div>
+    </div>
+    <div class="card product-info-card hidden">
+      <div class="card-header">当前咨询商品</div>
+      <div class="card-body">
+        <div class="product-header">
+          <img id="product-image" src="" alt="">
+          <div>
+            <p id="product-name" style="margin: 0; font-weight: 600;"></p>
+            <p id="product-price" style="margin: 5px 0 0; color: #dc3545; font-size: 16px;"></p>
+          </div>
+        </div>
+        <hr style="border-top: 1px solid #eee; margin: 15px 0;">
+        <dl class="info-grid">
+          <dt>描述</dt>
+          <dd id="product-desc">-</dd>
+          <dt>SKU详情</dt>
+          <dd id="product-sku-summary">-</dd>
+          <dt>状态</dt>
+          <dd id="product-status">-</dd>
+          <dt>库存</dt>
+          <dd id="product-stock">-</dd>
+          <dt>销量</dt>
+          <dd id="product-sales-count">-</dd>
+          <dt>标签</dt>
+          <dd id="product-tags">-</dd>
+        </dl>
+      </div>
+    </div>
+    <div class="card order-info-card hidden">
+      <div class="card-header">最近订单</div>
+      <div class="card-body">
+        <dl class="info-grid">
+          <dt>订单号</dt>
+          <dd id="order-id">-</dd>
+          <dt>下单时间</dt>
+          <dd id="order-created_at">-</dd>
+          <dt>订单状态</dt>
+          <dd><span id="order-status" class="order-status"></span></dd>
+          <dt>总金额</dt>
+          <dd id="order-total_amount">-</dd>
+          <dt>收货地址</dt>
+          <dd id="order-address">-</dd>
+        </dl>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      const loader = document.getElementById('loader');
+      const errorContainer = document.getElementById('error');
+      const detailsContainer = document.getElementById('details-container');
+      let hasFetched = false; // 添加一个标志位，防止重复请求
+
+      window.addEventListener('message', function (event) {
+        // 标志位检查，如果已经触发过一次请求，则忽略后续所有message事件
+        if (hasFetched) {
+          return;
+        }
+
+        let parsedData; // 重命名为parsedData以避免与event.data.data混淆
+        try {
+          // Chatwoot可能发送JSON字符串或直接发送对象
+          parsedData = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+        } catch (e) {
+          return; // 忽略无法解析的message
+        }
+
+        // --- 核心修正 START ---
+        // 1. 检查事件类型是否为 "appContext"
+        if (parsedData.event !== 'appContext' || !parsedData.data) {
+          return; // 如果不是 appContext 事件或没有data字段，则忽略
+        }
+
+        // 2. 访问嵌套在 parsedData.data 中的实际数据
+        const actualContextData = parsedData.data;
+        const customAttributes = actualContextData?.contact?.custom_attributes;
+        // --- 核心修正 END ---
+
+        // 如果这个message里没有我们需要的 customAttributes，则静默忽略，等待下一个事件
+        if (!customAttributes) {
+          return;
+        }
+
+        // 找到了！现在处理数据
+        hasFetched = true; // 立刻设置标志位，确保后续事件不会再次触发
+
+        const goodsId = customAttributes.goods_id;
+        const orderId = customAttributes.order_id; // 从custom_attributes中提取order_id
+
+        if (goodsId || orderId) {
+          fetchDetails(goodsId, orderId);
+        } else {
+          loader.classList.add('hidden');
+          errorContainer.textContent = '未在自定义属性中找到商品ID或订单ID。';
+          errorContainer.classList.remove('hidden');
+        }
+      });
+
+      function fetchDetails(goodsId, orderId) {
+        const requestBody = {};
+        if (goodsId) requestBody.goods_id = goodsId;
+        if (orderId) requestBody.order_id = orderId;
+
+        fetch(`/api/v1/dashboard/details`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(requestBody),
+        }).then(response => {
+          if (!response.ok) {
+            return response.json().then(err => { throw new Error(err.message || '网络响应错误'); });
+          }
+          return response.json();
+        }).then(apiResponse => {
+          if (apiResponse.code !== 0) {
+            throw new Error(apiResponse.message || '获取数据失败');
+          }
+          populateDetails(apiResponse.data);
+          loader.classList.add('hidden');
+          detailsContainer.classList.remove('hidden');
+        }).catch(error => {
+          loader.classList.add('hidden');
+          errorContainer.textContent = `加载失败: ${error.message}`;
+          errorContainer.classList.remove('hidden');
+        });
+      }
+
+      function populateDetails(dataFromAPI) { // 重命名参数为dataFromAPI以明确其来源
+        // 用户信息部分（如果API不返回，则保持默认的'-'）
+        // 如果后端API /api/v1/dashboard/details 最终返回了user数据，需要根据实际结构在此处补充解析
+        // 例如：
+        // if (dataFromAPI.user) {
+        //   document.getElementById('user-id').textContent = dataFromAPI.user.id || '-';
+        //   // ... 其他用户字段
+        // }
+
+        const productCard = document.querySelector('.product-info-card');
+        const orderCard = document.querySelector('.order-info-card');
+
+        productCard.classList.add('hidden'); // 默认隐藏商品卡片
+        orderCard.classList.add('hidden');   // 默认隐藏订单卡片
+
+        // 检查是否为商品数据（根据提供的JSON结构：有title, picUrl, price等字段）
+        if (dataFromAPI.title && dataFromAPI.picUrl && dataFromAPI.price !== undefined) {
+          productCard.classList.remove('hidden');
+          document.getElementById('product-image').src = dataFromAPI.picUrl || '';
+          document.getElementById('product-image').alt = dataFromAPI.title || '';
+          document.getElementById('product-name').textContent = dataFromAPI.title || '-';
+          document.getElementById('product-price').textContent = `¥${dataFromAPI.price}` || '-';
+
+          // 填充更多商品详情
+          document.getElementById('product-desc').textContent = dataFromAPI.desc || '-';
+          document.getElementById('product-sku-summary').textContent = dataFromAPI.sku_summary?.trim() || '-';
+          document.getElementById('product-status').textContent = dataFromAPI.status || '-';
+          document.getElementById('product-stock').textContent = dataFromAPI.stock !== undefined ? dataFromAPI.stock : '-';
+          document.getElementById('product-sales-count').textContent = dataFromAPI.sales_count !== undefined ? dataFromAPI.sales_count : '-';
+          document.getElementById('product-tags').textContent = (dataFromAPI.tags && dataFromAPI.tags.length > 0) ? dataFromAPI.tags.join(', ') : '-';
+        }
+        // 检查是否为订单数据（假设订单数据有id, created_at, status, total_amount等字段）
+        // 这里的字段名需要根据实际的订单API响应结构来调整
+        else if (dataFromAPI.id && dataFromAPI.created_at && dataFromAPI.status && dataFromAPI.total_amount !== undefined) {
+          orderCard.classList.remove('hidden');
+          document.getElementById('order-id').textContent = dataFromAPI.id || '-';
+          document.getElementById('order-created_at').textContent = dataFromAPI.created_at || '-';
+          const statusSpan = document.getElementById('order-status');
+          statusSpan.textContent = dataFromAPI.status || '-';
+          // 如果API返回status_class字段，可以这样设置：statusSpan.className = `order-status ${dataFromAPI.status_class || ''}`;
+          document.getElementById('order-total_amount').textContent = `¥${dataFromAPI.total_amount}` || '-';
+          document.getElementById('order-address').textContent = dataFromAPI.address || '-';
+        }
+      }
+    }
+    );
+  </script>
+</body>
+
+</html>

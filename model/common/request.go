@@ -90,3 +90,9 @@ type CustomAttributes struct {
 	GoodsPrice string `json:"goods_price,omitempty"`
 	GoodsUrl   string `json:"goods_url,omitempty"`
 }
+
+// 定义了仪表板详情请求的JSON结构
+type DashboardDetailsRequest struct {
+	GoodsID string `json:"goods_id"`
+	OrderID string `json:"order_id"`
+}

@@ -50,6 +50,12 @@ func Start(ginServer *gin.Engine) {
 	{
 		v1.POST("/chat", controller.Api.UserApiGroup.ChatApi.HandleChat)
 		v1.POST("/mcp/reload", controller.Api.UserApiGroup.BaseApi.Reload)
+		v1.POST("/dashboard/details", controller.Api.UserApiGroup.DashboardApi.GetDashboardDetails)
+
+		v1.GET("/chatwoot/widget/contact-details", func(ctx *gin.Context) {
+			// 此接口现在只负责提供静态的HTML框架，所有动态数据均由前端JS通过postMessage获取
+			ctx.HTML(http.StatusOK, "contact_details.html", nil)
+		})
 	}
 
 }

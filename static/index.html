@@ -51,6 +51,7 @@
     <div id="price">¥199.00</div>
     <p>点击右下角聊天框，咨询此商品</p>
     <span id="goods_id" style="display: none;">663</span>
+    <span id="order_id" style="display: none;">777</span>
   </div>
 
 
@@ -71,6 +72,7 @@
         window.addEventListener('chatwoot:ready', function () {
           try {
             const goodsId = document.getElementById('goods_id').innerText;
+            // const orderId = document.getElementById('order_id').innerText;
             const goodsTitle = document.getElementById('goods_title').innerText;
             const goodsImage = document.getElementById('goods_image').src;
             const goodsPrice = document.getElementById('price').innerText;
@@ -79,6 +81,7 @@
             // 设置自定义属性，这些属性将附加到会话中
             window.$chatwoot.setCustomAttributes({
               goods_id: goodsId,
+              // order_id: orderId,
               goods_title: goodsTitle,
               goods_image: goodsImage,
               goods_price: goodsPrice,

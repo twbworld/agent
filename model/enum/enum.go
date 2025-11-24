@@ -30,6 +30,18 @@ const (
 	ModelLarge  LlmSize = "large"
 )
 
+// KeywordType 定义了知识库中问题的匹配类型
+type KeywordType string
+
+const (
+	// KeywordTypeSemantic 仅用于AI语义匹配
+	KeywordTypeSemantic KeywordType = "AI_SEMANTIC"
+	// KeywordTypeHybrid 用于精确匹配和AI语义匹配
+	KeywordTypeHybrid KeywordType = "HYBRID"
+	// KeywordTypeExact 仅用于精确匹配
+	KeywordTypeExact KeywordType = "EXACT"
+)
+
 type ChatwootWebhook string
 
 const (

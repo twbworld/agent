@@ -10,7 +10,8 @@ func (i *Initializer) timerStart(taskManager *task.Manager) error {
 	i.cron = cron.New([]cron.Option{
 		cron.WithLocation(global.Tz),
 	}...)
-	if err := i.startCronJob(taskManager.KeywordReloader, "*/30 * * * *"); err != nil {
+	// 每天凌晨1点执行，作为兜底
+	if err := i.startCronJob(taskManager.KeywordReloader, "0 1 * * *"); err != nil {
 		return err
 	}
 

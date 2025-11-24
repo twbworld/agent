@@ -9,6 +9,7 @@ import (
 
 	"gitee.com/taoJie_1/mall-agent/global"
 	"gitee.com/taoJie_1/mall-agent/model/config"
+	"gitee.com/taoJie_1/mall-agent/task"
 	"github.com/fsnotify/fsnotify"
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/viper"
@@ -25,7 +26,7 @@ func init() {
 }
 
 // New 创建一个新的初始化器，并加载配置文件
-func New() *Initializer {
+func New(taskManager *task.Manager) *Initializer {
 	var configPath string
 	if gin.Mode() != gin.TestMode {
 		flag.Parse()
@@ -38,7 +39,7 @@ func New() *Initializer {
 	}
 
 	// 将 Initializer 实例创建提前
-	i := &Initializer{}
+	i := &Initializer{taskManager: taskManager}
 
 	v := viper.New()
 	v.SetConfigFile(configPath)

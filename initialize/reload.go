@@ -126,7 +126,7 @@ func (i *Initializer) HandleConfigChange(oldConfig, newConfig *config.Config) {
 	if !reflect.DeepEqual(oldConfig.Ai, newConfig.Ai) {
 		eg.Go(func() error {
 			// ActionService依赖于Ai.TransferKeywords，需要重新初始化
-			service.Service.UserServiceGroup = user.NewServiceGroup()
+			service.Service.UserServiceGroup = user.NewServiceGroup(i.taskManager)
 			return nil
 		})
 	}

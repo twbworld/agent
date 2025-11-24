@@ -16,6 +16,7 @@ type Initializer struct {
 	cron           *cron.Cron
 	logFileClosers []io.Closer
 	reloadLock     sync.Mutex // 用于热重载的锁
+	taskManager    *task.Manager
 }
 
 // Run 并发执行所有核心服务的初始化

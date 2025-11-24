@@ -2,6 +2,7 @@ package task
 
 import (
 	"fmt"
+	"gitee.com/taoJie_1/mall-agent/utils"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -41,7 +42,7 @@ func (m *Manager) CleanUpLogs() error {
 		}
 
 		// 从文件名中解析日期, e.g., run.log.2025-10-28
-		fileDate, ok := parseDateFromLogFileName(d.Name())
+		fileDate, ok := utils.ParseDateFromLogFileName(d.Name())
 		if !ok {
 			return nil // 不是带日期的日志文件，跳过
 		}
@@ -70,22 +71,4 @@ func (m *Manager) CleanUpLogs() error {
 
 	global.Log.Infof("日志清理任务完成，共删除 %d 个文件", deletedCount)
 	return nil
-}
-
-// parseDateFromLogFileName 从日志文件名中解析日期
-// 文件名格式如: gin.log.2025-10-28, run.log.2025-10-28
-func parseDateFromLogFileName(filename string) (time.Time, bool) {
-	parts := strings.Split(filename, ".")
-	if len(parts) < 2 {
-		return time.Time{}, false
-	}
-
-	// 日期部分应在最后
-	dateStr := parts[len(parts)-1]
-	// 使用 "2006-01-02" 格式解析
-	t, err := time.ParseInLocation("2006-01-02", dateStr, global.Tz)
-	if err != nil {
-		return time.Time{}, false
-	}
-	return t, true
 }

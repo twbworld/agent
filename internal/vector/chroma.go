@@ -20,6 +20,8 @@ type Service interface {
 	GetOrCreateCollection(ctx context.Context, name string) (chroma.Collection, error)
 	// 批量插入或更新文档到指定的集合中
 	Upsert(ctx context.Context, collectionName string, documents []Document) error
+	// 根据ID批量删除文档
+	DeleteByIDs(ctx context.Context, collectionName string, ids []string) (int, error)
 }
 
 type client struct {
@@ -102,4 +104,26 @@ func (c *client) Upsert(ctx context.Context, collectionName string, documents []
 		chroma.WithMetadatas(chromaMetadatas...),
 		chroma.WithEmbeddings(chromaEmbeddings...),
 	)
+}
+
+func (c *client) DeleteByIDs(ctx context.Context, collectionName string, ids []string) (int, error) {
+	if len(ids) == 0 {
+		return 0, nil
+	}
+	col, err := c.GetOrCreateCollection(ctx, collectionName)
+	if err != nil {
+		return 0, err
+	}
+
+	docIDs := make([]chroma.DocumentID, len(ids))
+	for i, id := range ids {
+		docIDs[i] = chroma.DocumentID(id)
+	}
+
+	err = col.Delete(ctx, chroma.WithIDsDelete(docIDs...))
+	if err != nil {
+		return 0, err
+	}
+
+	return len(ids), nil
 }

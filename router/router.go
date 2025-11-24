@@ -52,10 +52,25 @@ func Start(ginServer *gin.Engine) {
 		v1.POST("/mcp/reload", controller.Api.UserApiGroup.BaseApi.Reload)
 		v1.POST("/dashboard/details", controller.Api.UserApiGroup.DashboardApi.GetDashboardDetails)
 
+		// 知识库管理页面的 API 路由
+		keywordRoutes := v1.Group("/keywords")
+		{
+			keywordRoutes.GET("", controller.Api.UserApiGroup.KeywordApi.ListItems)
+			keywordRoutes.POST("", controller.Api.UserApiGroup.KeywordApi.UpsertItem)
+			keywordRoutes.DELETE("/:id", controller.Api.UserApiGroup.KeywordApi.DeleteItem)
+			keywordRoutes.POST("/generate-questions", controller.Api.UserApiGroup.KeywordApi.GenerateQuestions)
+			keywordRoutes.POST("/force-sync", controller.Api.UserApiGroup.KeywordApi.ForceSync)
+		}
+
 		v1.GET("/chatwoot/widget/contact-details", func(ctx *gin.Context) {
 			// 此接口现在只负责提供静态的HTML框架，所有动态数据均由前端JS通过postMessage获取
 			ctx.HTML(http.StatusOK, "contact_details.html", nil)
 		})
 	}
+
+	// 知识库管理 HTML 页面路由
+	ginServer.GET("/keyword", func(ctx *gin.Context) {
+		ctx.HTML(http.StatusOK, "keyword.html", nil)
+	})
 
 }

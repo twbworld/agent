@@ -184,3 +184,21 @@ func GetTTLWithJitter(baseTTLInSeconds int64) time.Duration {
 	jitter := rand.Int63n(baseTTLInSeconds / 10)
 	return time.Duration(baseTTLInSeconds+jitter) * time.Second
 }
+
+// ParseDateFromLogFileName 从日志文件名中解析日期
+// 文件名格式如: gin.log.2025-10-28, run.log.2025-10-28
+func ParseDateFromLogFileName(filename string) (time.Time, bool) {
+	parts := strings.Split(filename, ".")
+	if len(parts) < 2 {
+		return time.Time{}, false
+	}
+
+	// 日期部分应在最后
+	dateStr := parts[len(parts)-1]
+	// 使用 "2006-01-02" 格式解析
+	t, err := time.ParseInLocation("2006-01-02", dateStr, global.Tz)
+	if err != nil {
+		return time.Time{}, false
+	}
+	return t, true
+}

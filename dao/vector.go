@@ -209,3 +209,10 @@ func (d *VectorDb) Search(ctx context.Context, query string, topK int) ([]Search
 
 	return results, nil
 }
+
+func (d *VectorDb) DeleteByIDs(ctx context.Context, ids []string) (int, error) {
+	if global.VectorDb == nil {
+		return 0, fmt.Errorf("向量数据库客户端未初始化")
+	}
+	return global.VectorDb.DeleteByIDs(ctx, d.CollectionName, ids)
+}

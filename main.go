@@ -11,7 +11,9 @@ import (
 
 func main() {
 	startTime := time.Now()
-	initSvc := initialize.New()
+	// taskManager 必须在 initialize.New() 之前创建，因为 New() 会将其存储到 Initializer 实例中。
+	taskManager := task.NewManager(global.EmbeddingService)
+	initSvc := initialize.New(taskManager)
 
 	if err := initSvc.InitTz(); err != nil {
 		panic(fmt.Sprintf("初始化时区失败: %v", err))
@@ -33,8 +35,6 @@ func main() {
 	defer initSvc.Close()
 
 	initSvc.InitLogger()
-
-	taskManager := task.NewManager(global.EmbeddingService)
 
 	if initialize.Act != "" {
 		dispatchAction(initialize.Act, taskManager)

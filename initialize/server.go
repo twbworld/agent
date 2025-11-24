@@ -28,7 +28,7 @@ func Start(initializer *Initializer, taskManager *task.Manager, startTime time.T
 	initializer.StartSystem(taskManager)
 
 	service.Service.CommonServiceGroup = common.NewServiceGroup()
-	service.Service.UserServiceGroup = user.NewServiceGroup()
+	service.Service.UserServiceGroup = user.NewServiceGroup(taskManager)
 	service.Service.AdminServiceGroup = admin.NewServiceGroup()
 
 	initGinServer()

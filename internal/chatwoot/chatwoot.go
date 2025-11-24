@@ -96,6 +96,12 @@ type Attachment struct {
 type Service interface {
 	// 获取所有的预设回复
 	GetCannedResponses() ([]CannedResponse, error)
+	// 创建一个新的预设回复
+	CreateCannedResponse(shortCode, content string) (*CannedResponse, error)
+	// 更新一个已存在的预设回复
+	UpdateCannedResponse(id int, shortCode, content string) (*CannedResponse, error)
+	// 删除一个预设回复
+	DeleteCannedResponse(id int) error
 	//获取用户信息
 	GetAccountDetails() (*AccountDetails, error)
 	// 在指定的对话中创建一条私信备注
@@ -213,6 +219,39 @@ func (c *Client) GetCannedResponses() ([]CannedResponse, error) {
 		return nil, err
 	}
 	return responses, nil
+}
+
+func (c *Client) CreateCannedResponse(shortCode, content string) (*CannedResponse, error) {
+	path := fmt.Sprintf("/api/v1/accounts/%d/canned_responses", c.AccountID)
+	payload := map[string]string{
+		"short_code": shortCode,
+		"content":    content,
+	}
+	var response CannedResponse
+	err := c.sendRequest("POST", path, agentToken, payload, &response)
+	if err != nil {
+		return nil, err
+	}
+	return &response, nil
+}
+
+func (c *Client) UpdateCannedResponse(id int, shortCode, content string) (*CannedResponse, error) {
+	path := fmt.Sprintf("/api/v1/accounts/%d/canned_responses/%d", c.AccountID, id)
+	payload := map[string]string{
+		"short_code": shortCode,
+		"content":    content,
+	}
+	var response CannedResponse
+	err := c.sendRequest("PATCH", path, agentToken, payload, &response)
+	if err != nil {
+		return nil, err
+	}
+	return &response, nil
+}
+
+func (c *Client) DeleteCannedResponse(id int) error {
+	path := fmt.Sprintf("/api/v1/accounts/%d/canned_responses/%d", c.AccountID, id)
+	return c.sendRequest("DELETE", path, agentToken, nil, nil)
 }
 
 func (c *Client) CreatePrivateNote(conversationID uint, content string) error {

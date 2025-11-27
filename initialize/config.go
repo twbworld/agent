@@ -194,4 +194,10 @@ func handleConfig(c *config.Config) {
 	if c.Ai.MaxLlmHistoryMessages == 0 {
 		c.Ai.MaxLlmHistoryMessages = 20
 	}
+	if c.Ai.KeywordSyncInterval == 0 {
+		c.Ai.KeywordSyncInterval = 300
+	}
+	if c.Ai.KeywordReloadDebounce == 0 {
+		c.Ai.KeywordReloadDebounce = 600
+	}
 }

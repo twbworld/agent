@@ -110,6 +110,10 @@ ai:
   async_job_timeout: 60
   # 传递给大型LLM的最大历史消息数量 (0表示不限制)
   max_llm_history_messages: 20
+  # (秒) 知识库定时同步的最小间隔，防止任务被过于频繁地触发。
+  keyword_sync_interval: 300
+  # (秒) 通过UI操作知识库后，触发自动重载的防抖延迟时间。
+  keyword_reload_debounce: 600
   # 用于触发转人工的关键词列表
   transfer_keywords:
     - "人工客服"

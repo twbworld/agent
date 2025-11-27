@@ -11,8 +11,8 @@ import (
 
 func main() {
 	startTime := time.Now()
-	// taskManager 必须在 initialize.New() 之前创建，因为 New() 会将其存储到 Initializer 实例中。
-	taskManager := task.NewManager(global.EmbeddingService)
+
+	taskManager := task.NewManager()
 	initSvc := initialize.New(taskManager)
 
 	if err := initSvc.InitTz(); err != nil {

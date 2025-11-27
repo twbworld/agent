@@ -18,8 +18,6 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-const minSyncInterval = 5 * time.Minute
-
 // KeywordReloader 作为总同步/审计任务，从 Chatwoot 拉取全量数据，
 // 并与上次同步时间对比，找出增量数据进行处理，同时清理已不存在的旧数据。
 func (m *Manager) KeywordReloader() error {
@@ -29,6 +27,7 @@ func (m *Manager) KeywordReloader() error {
 		agentID = "unknown_agent"
 	}
 
+	// --- 获取分布式锁 ---
 	locked, err := dao.App.KeywordsDb.AcquireSyncLock(ctx, agentID)
 	if err != nil {
 		return fmt.Errorf("检查同步锁失败: %w", err)
@@ -37,13 +36,14 @@ func (m *Manager) KeywordReloader() error {
 		global.Log.Info("同步锁被其他实例持有，跳过本次同步任务")
 		return nil
 	}
+	// 确保函数退出时释放锁
 	defer func() {
 		if releaseErr := dao.App.KeywordsDb.ReleaseSyncLock(ctx, agentID); releaseErr != nil {
 			global.Log.Errorf("释放Redis同步锁失败: %v", releaseErr)
 		}
 	}()
 
-	global.Log.Info("获取同步锁成功，开始执行关键词重同步任务...")
+	global.Log.Debugln("获取同步锁成功，开始执行关键词重同步任务...")
 
 	if global.ChatwootService == nil {
 		return errors.New("Chatwoot客户端未初始化")
@@ -59,6 +59,7 @@ func (m *Manager) KeywordReloader() error {
 	}
 
 	// 增加“自冷却”机制，避免短时间内重复执行
+	minSyncInterval := time.Duration(global.Config.Ai.KeywordSyncInterval) * time.Second
 	if !lastSyncTime.IsZero() && time.Since(lastSyncTime) < minSyncInterval {
 		global.Log.Infof("距离上次成功同步不足 %v，跳过本次任务", minSyncInterval)
 		return nil
@@ -116,7 +117,7 @@ func (m *Manager) KeywordReloader() error {
 	var wg errgroup.Group
 	wg.Go(func() error {
 		// 使用全量精确匹配规则重建Redis和内存缓存，确保数据完全一致
-		return m.syncExactMatchCache(ctx, allResponses)
+		return m.syncExactMatchCache(ctx, exactMatchRules)
 	})
 	wg.Go(func() error {
 		// 清理向量数据库中已失效的条目
@@ -130,7 +131,7 @@ func (m *Manager) KeywordReloader() error {
 	if processErr == nil && syncErr == nil {
 		if global.RedisClient != nil && newLatestSyncTime.After(lastSyncTime) {
 			global.RedisClient.Set(ctx, redis.KeyLastSyncCannedResponses, newLatestSyncTime.Format(time.RFC3339Nano), 0)
-			global.Log.Infof("同步时间戳已更新为: %s", newLatestSyncTime.Format(time.RFC3339Nano))
+			global.Log.Debugln("同步时间戳已更新为: %s", newLatestSyncTime.Format(time.RFC3339Nano))
 		}
 	} else {
 		global.Log.Warn("由于同步过程中发生错误，本次将不更新同步时间戳，以便下次重试")
@@ -203,7 +204,7 @@ func (m *Manager) ProcessAndCacheResponses(ctx context.Context, responses []chat
 
 // generateVectorDocs 为语义规则生成向量文档。
 func (m *Manager) generateVectorDocs(ctx context.Context, rules []chatwoot.CannedResponse) ([]vector.Document, error) {
-	if global.LlmService == nil || m.embeddingService == nil {
+	if global.LlmService == nil || global.EmbeddingService == nil {
 		return nil, errors.New("LLM或Embedding服务未初始化")
 	}
 
@@ -246,6 +247,7 @@ func (m *Manager) generateVectorDocs(ctx context.Context, rules []chatwoot.Canne
 		return nil, nil
 	}
 
+	// 批量为所有生成的标准问题创建向量(其实也可以在上一步的LLM生成向量, 但向量质量不如Embedding模型)
 	questionsToEmbed := make([]string, len(completedJobs))
 	for i, job := range completedJobs {
 		questionsToEmbed[i] = job.standardQuestion
@@ -253,7 +255,7 @@ func (m *Manager) generateVectorDocs(ctx context.Context, rules []chatwoot.Canne
 
 	embedCtx, cancel := context.WithTimeout(ctx, time.Duration(global.Config.LlmEmbedding.BatchTimeout)*time.Second)
 	defer cancel()
-	embeddings, err := m.embeddingService.CreateEmbeddings(embedCtx, questionsToEmbed)
+	embeddings, err := global.EmbeddingService.CreateEmbeddings(embedCtx, questionsToEmbed)
 	if err != nil {
 		return nil, fmt.Errorf("批量创建向量失败: %w", err)
 	}
@@ -275,22 +277,14 @@ func (m *Manager) generateVectorDocs(ctx context.Context, rules []chatwoot.Canne
 }
 
 // syncExactMatchCache 使用给定的规则列表重建Redis和内存中的精确匹配缓存。
-func (m *Manager) syncExactMatchCache(ctx context.Context, allRules []chatwoot.CannedResponse) error {
-	
-	// 1. 从全量规则中提取用于精确匹配的规则
-	var exactMatchRules []chatwoot.CannedResponse
-	tempMap := make(map[string]string)
-
-	for _, resp := range allRules {
-		qType, qText := m.parseShortCode(resp.ShortCode)
-		if qText != "" && (qType == enum.KeywordTypeExact || qType == enum.KeywordTypeHybrid) {
-			rule := resp
-			rule.ShortCode = strings.ToLower(qText)
-			exactMatchRules = append(exactMatchRules, rule)
-			tempMap[rule.ShortCode] = rule.Content
-		}
+func (m *Manager) syncExactMatchCache(ctx context.Context, exactMatchRules []chatwoot.CannedResponse) error {
+	// 1. 从精确匹配规则构建map
+	tempMap := make(map[string]string, len(exactMatchRules))
+	for _, rule := range exactMatchRules {
+		// 假设传入的 rule.ShortCode 已经是处理过的
+		tempMap[rule.ShortCode] = rule.Content
 	}
-	
+
 	// 2. 重建Redis缓存
 	if global.RedisClient != nil {
 		// a. 删除旧的Hash
@@ -304,7 +298,7 @@ func (m *Manager) syncExactMatchCache(ctx context.Context, allRules []chatwoot.C
 			}
 		}
 	}
-	
+
 	// 3. 原子性地替换内存Map
 	global.CannedResponses.Lock()
 	global.CannedResponses.Data = tempMap

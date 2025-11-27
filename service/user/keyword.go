@@ -20,8 +20,6 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-const keywordReloadDebounceDelay = 10 * time.Minute
-
 // KeywordService 定义知识库条目管理接口。
 type KeywordService interface {
 	// ListItems 从 Chatwoot 获取所有预设回复，并归类为知识条目。
@@ -170,8 +168,9 @@ func (s *keywordService) UpsertItem(ctx context.Context, req *dto.UpsertKnowledg
 		}()
 	}
 
-	// 4. 调度一个10分钟后的“延迟重同步校准”任务
-	s.taskManager.DebounceKeywordReload(keywordReloadDebounceDelay)
+	// 4. 调度一个延迟后的“延迟重同步校准”任务
+	debounceDelay := time.Duration(global.Config.Ai.KeywordReloadDebounce) * time.Second
+	s.taskManager.DebounceKeywordReload(debounceDelay)
 
 	return nil
 }

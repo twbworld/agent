@@ -25,7 +25,7 @@ func (m *BaseApi) Reload(ctx *gin.Context) {
 	}
 
 	go func() {
-		taskManager := task.NewManager(nil)
+		taskManager := task.NewManager()
 		if err := taskManager.McpCapabilitiesReloader(data.Name); err != nil {
 			global.Log.Warnf("通过API触发MCP能力刷新任务执行时发生错误: %v", err)
 		}

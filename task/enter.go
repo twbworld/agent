@@ -1,16 +1,8 @@
 package task
 
-import (
-	"gitee.com/taoJie_1/mall-agent/internal/embedding"
-)
-
-type Manager struct {
-	embeddingService embedding.Service
-}
+type Manager struct{}
 
 // 任务管理器
-func NewManager(embeddingService embedding.Service) *Manager {
-	return &Manager{
-		embeddingService: embeddingService,
-	}
+func NewManager() *Manager {
+	return &Manager{}
 }

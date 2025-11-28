@@ -405,7 +405,7 @@
 
         async initData() {
           try {
-            const data = await this.request('/api/v1/keywords');
+            const data = await this.request('/api/v1/admin/keywords');
             this.allItems = (data || []).map(item => ({
               ...item, isEditing: false, editBuffer: this.createBuffer(item.answer, item.questions)
             }));
@@ -418,7 +418,7 @@
 
         async handleGen(buffer, payload, insertIdx = -1) {
           try {
-            const data = await this.request('/api/v1/keywords/generate-questions', 'POST', payload);
+            const data = await this.request('/api/v1/admin/keywords/generate-questions', 'POST', payload);
             const newQs = (data.questions || []).filter(q => !buffer.questions.some(e => e.question === q));
 
             const remaining = this.maxQuestions - buffer.questions.length;
@@ -469,7 +469,7 @@
           }
 
           try {
-            await this.request('/api/v1/keywords', 'POST', { id: item.id, answer: buf.answer, questions: buf.questions });
+            await this.request('/api/v1/admin/keywords', 'POST', { id: item.id, answer: buf.answer, questions: buf.questions });
             this.showToast('保存成功');
             this.newItem = null;
             await this.initData();
@@ -479,7 +479,7 @@
         async deleteItem(id) {
           if (!confirm('确定删除?')) return;
           try {
-            await this.request(`/api/v1/keywords/${id}`, 'DELETE');
+            await this.request(`/api/v1/admin/keywords/${id}`, 'DELETE');
             this.showToast('已删除');
             await this.initData();
           } catch (e) { }
@@ -488,7 +488,7 @@
         async forceSync() {
           if (!confirm('确定要强制立即生效吗？')) return;
           try {
-            await this.request('/api/v1/keywords/force-sync', 'POST');
+            await this.request('/api/v1/admin/keywords/force-sync', 'POST');
             this.showToast('同步任务已触发');
           } catch (e) { }
         },

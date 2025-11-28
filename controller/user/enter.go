@@ -4,5 +4,4 @@ type ApiGroup struct {
 	BaseApi
 	ChatApi
 	DashboardApi
-	KeywordApi
 }

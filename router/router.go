@@ -53,13 +53,16 @@ func Start(ginServer *gin.Engine) {
 		v1.POST("/dashboard/details", controller.Api.UserApiGroup.DashboardApi.GetDashboardDetails)
 
 		// 知识库管理页面的 API 路由
-		keywordRoutes := v1.Group("/keywords")
+		adminRoutes := v1.Group("/admin")
 		{
-			keywordRoutes.GET("", controller.Api.UserApiGroup.KeywordApi.ListItems)
-			keywordRoutes.POST("", controller.Api.UserApiGroup.KeywordApi.UpsertItem)
-			keywordRoutes.DELETE("/:id", controller.Api.UserApiGroup.KeywordApi.DeleteItem)
-			keywordRoutes.POST("/generate-questions", controller.Api.UserApiGroup.KeywordApi.GenerateQuestions)
-			keywordRoutes.POST("/force-sync", controller.Api.UserApiGroup.KeywordApi.ForceSync)
+			keywordRoutes := adminRoutes.Group("/keywords")
+			{
+				keywordRoutes.GET("", controller.Api.AdminApiGroup.KeywordApi.ListItems)
+				keywordRoutes.POST("", controller.Api.AdminApiGroup.KeywordApi.UpsertItem)
+				keywordRoutes.DELETE("/:id", controller.Api.AdminApiGroup.KeywordApi.DeleteItem)
+				keywordRoutes.POST("/generate-questions", controller.Api.AdminApiGroup.KeywordApi.GenerateQuestions)
+				keywordRoutes.POST("/force-sync", controller.Api.AdminApiGroup.KeywordApi.ForceSync)
+			}
 		}
 
 		v1.GET("/chatwoot/widget/contact-details", func(ctx *gin.Context) {

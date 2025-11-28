@@ -8,7 +8,6 @@ type ServiceGroup struct {
 	VectorService    VectorService
 	HistoryService   HistoryService
 	DashboardService DashboardService
-	KeywordService   KeywordService
 	Validator        Validator
 }
 
@@ -19,7 +18,6 @@ func NewServiceGroup(taskManager *task.Manager) ServiceGroup {
 		VectorService:    NewVectorService(),
 		HistoryService:   NewHistoryService(),
 		DashboardService: NewDashboardService(),
-		KeywordService:   NewKeywordService(taskManager),
 		Validator:        &validator{},
 	}
 }

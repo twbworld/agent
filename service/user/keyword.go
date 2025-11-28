@@ -53,7 +53,7 @@ func (s *keywordService) ListItems(ctx context.Context) ([]*dto.KnowledgeItem, e
 		return nil, fmt.Errorf("从 Chatwoot 获取预设回复失败: %w", err)
 	}
 
-	// 按答案内容对问题进行分组，并记录最新的更新时间
+	// 按答案内容的哈希值对问题进行分组，并记录最新的更新时间
 	groupedItems := make(map[string]*dto.KnowledgeItem)
 	for _, resp := range responses {
 		if resp.Content == "" {
@@ -68,21 +68,23 @@ func (s *keywordService) ListItems(ctx context.Context) ([]*dto.KnowledgeItem, e
 		// 解析更新时间
 		updatedAt, err := time.Parse(time.RFC3339, resp.UpdatedAt)
 		if err != nil {
-			// 如果解析失败，使用一个很早的时间，确保其排序在后
 			updatedAt = time.Time{}
 			global.Log.Warnf("解析预设回复 #%d 的更新时间 '%s' 失败: %v", resp.Id, resp.UpdatedAt, err)
 		}
 		updatedAtUnix := updatedAt.Unix()
 
-		item, exists := groupedItems[resp.Content]
+		// 使用内容的哈希值作为分组的键
+		contentHash := utils.Hash(resp.Content)
+
+		item, exists := groupedItems[contentHash]
 		if !exists {
 			item = &dto.KnowledgeItem{
-				ID:        utils.Hash(resp.Content),
+				ID:        contentHash,
 				Answer:    resp.Content,
 				Questions: []*dto.Question{},
 				UpdatedAt: updatedAtUnix,
 			}
-			groupedItems[resp.Content] = item
+			groupedItems[contentHash] = item
 		}
 
 		// 追加问题

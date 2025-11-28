@@ -18,45 +18,31 @@
 
   <div x-data="kbApp()" x-init="initData()" class="w-full lg:w-[90%] xl:w-[80%] mx-auto p-6 pb-24">
 
-    <div class="sticky top-4 z-40 bg-white p-3 rounded-lg shadow-sm border border-gray-100 mb-6 flex justify-between items-center gap-4">
+    <!-- 顶部导航栏 -->
+    <div class="sticky top-4 z-50 bg-white p-3 rounded-lg shadow-sm border border-gray-100 mb-6 flex justify-between items-center gap-4 transition-all duration-300"
+         :class="{'ring-2 ring-indigo-50 border-indigo-100 shadow-md': activeItem}">
 
       <!-- 左侧: 搜索栏 + 分页 -->
-      <div class="flex-1 flex gap-4 items-center max-w-xl z-10">
-        <!-- 搜索框容器 -->
+      <div class="flex-1 flex gap-4 items-center max-w-xl z-10" :class="{'opacity-30 pointer-events-none blur-[1px]': activeItem}">
         <div class="relative group">
-          <!-- 修改: 增加判断 searchQuery ? 'w-64' 实现有内容时保持展开 -->
           <input type="text" x-model.debounce.300ms="searchQuery"
-            :disabled="isEditingMode"
             :class="searchQuery ? 'w-64' : (totalPages > 1 ? 'w-12' : 'w-20')"
-            class="disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-100 focus:w-64 transition-all duration-300 ease-in-out pl-10 pr-8 py-2 border rounded-md focus:ring-2 focus:ring-indigo-500 focus:outline-none text-sm">
+            class="focus:w-64 transition-all duration-300 ease-in-out pl-10 pr-8 py-2 border rounded-md focus:ring-2 focus:ring-indigo-500 focus:outline-none text-sm">
 
           <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
           </svg>
 
-          <!-- 清空按钮 -->
-          <button x-show="searchQuery"
-            @click="searchQuery = ''"
-            @mousedown.prevent
-            :disabled="isEditingMode"
-            x-transition:enter="transition ease-out duration-200"
-            x-transition:enter-start="opacity-0 scale-90"
-            x-transition:enter-end="opacity-100 scale-100"
-            x-transition:leave="transition ease-in duration-100"
-            x-transition:leave-start="opacity-100 scale-100"
-            x-transition:leave-end="opacity-0 scale-90"
-            class="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100 focus:outline-none transition-colors disabled:opacity-0 disabled:pointer-events-none"
-            title="清空">
+          <button x-show="searchQuery" @click="searchQuery = ''"
+            class="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100 focus:outline-none transition-colors">
             <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
             </svg>
           </button>
         </div>
 
-        <!-- 修改: 移除 x-show="totalPages > 1" 以始终显示条数 -->
         <div class="text-xs text-gray-600 flex gap-2 items-center whitespace-nowrap">
           <span x-text="`共 ${filteredItems.length} 条`"></span>
-          <!-- 当只有一页时隐藏翻页按钮, 保持界面整洁, 或根据需求移除 x-show 始终显示禁用状态的按钮 -->
           <div class="flex gap-2 items-center" x-show="totalPages > 1">
             <button @click="prevPage" :disabled="page === 1" class="disabled:opacity-30 hover:text-indigo-600 px-1 font-bold">◀</button>
             <span x-text="`${page}/${totalPages || 1}`"></span>
@@ -67,30 +53,69 @@
 
       <!-- 中间: 标题 -->
       <div class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none">
-        <h1 class="text-xl font-bold text-indigo-600 whitespace-nowrap">AI 客服知识库</h1>
+        <h1 class="text-xl font-bold transition-colors duration-300"
+            :class="activeItem ? 'text-gray-400' : 'text-indigo-600'"
+            x-text="activeItem ? (activeItem.id ? '编辑模式' : '新增模式') : 'AI 客服知识库'"></h1>
       </div>
 
       <!-- 右侧: 按钮组 -->
-      <div class="flex gap-3 justify-end items-center z-10" :class="{'opacity-50 pointer-events-none': isEditingMode}">
-        <button @click="forceSync()" :disabled="loading"
-          class="group relative w-9 h-9 flex items-center justify-center bg-white border border-blue-200 text-blue-600 hover:bg-blue-50 hover:shadow-md rounded-full shadow-sm transition disabled:opacity-50">
-          <svg x-show="loading" class="animate-spin h-4 w-4 absolute" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-          </svg>
-          <svg x-show="!loading" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-          </svg>
-          <span class="absolute top-full mt-2 left-1/2 -translate-x-1/2 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap hidden group-hover:block z-[100] shadow-xl">强制立即生效</span>
-        </button>
+      <div class="flex gap-3 justify-end items-center z-10 min-w-[140px]">
 
-        <button @click="createNew()"
-          class="group relative w-9 h-9 flex items-center justify-center bg-indigo-600 hover:bg-indigo-700 text-white rounded-full shadow-md transition hover:scale-105">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
-          </svg>
-          <span class="absolute top-full mt-2 left-1/2 -translate-x-1/2 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap hidden group-hover:block z-[100] shadow-xl">新增</span>
-        </button>
+        <!-- 默认状态显示 -->
+        <template x-if="!activeItem">
+          <div class="flex gap-3" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100">
+            <button @click="forceSync()" :disabled="loading"
+              class="group relative w-9 h-9 flex items-center justify-center bg-white border border-blue-200 text-blue-600 hover:bg-blue-50 hover:shadow-md rounded-full shadow-sm transition disabled:opacity-50">
+              <svg x-show="loading" class="animate-spin h-4 w-4 absolute" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              <svg x-show="!loading" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              <span class="absolute top-full mt-2 left-1/2 -translate-x-1/2 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap hidden group-hover:block z-[100] shadow-xl">强制立即生效</span>
+            </button>
+
+            <button @click="createNew()"
+              class="group relative w-9 h-9 flex items-center justify-center bg-indigo-600 hover:bg-indigo-700 text-white rounded-full shadow-md transition hover:scale-105">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+              </svg>
+              <span class="absolute top-full mt-2 left-1/2 -translate-x-1/2 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap hidden group-hover:block z-[100] shadow-xl">新增</span>
+            </button>
+          </div>
+        </template>
+
+        <!-- 编辑/新增状态显示 -->
+        <template x-if="activeItem">
+          <div class="flex gap-3" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 translate-y-2" x-transition:enter-end="opacity-100 translate-y-0">
+
+            <button x-show="activeItem.id" @click="deleteItem(activeItem.id)" :disabled="loading"
+              class="group relative w-9 h-9 flex items-center justify-center bg-red-50 text-red-600 border border-red-200 rounded-full hover:bg-red-600 hover:text-white transition shadow-sm disabled:opacity-50">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+              </svg>
+              <span class="absolute top-full mt-2 left-1/2 -translate-x-1/2 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap hidden group-hover:block z-[100] shadow-xl">删除</span>
+            </button>
+
+            <button @click="cancelEdit(activeItem)"
+              class="group relative w-9 h-9 flex items-center justify-center bg-gray-100 text-gray-500 rounded-full hover:bg-gray-200 hover:text-gray-700 transition">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+              </svg>
+              <span class="absolute top-full mt-2 left-1/2 -translate-x-1/2 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap hidden group-hover:block z-[100] shadow-xl">取消</span>
+            </button>
+
+            <button @click="saveItem(activeItem)" :disabled="loading" x-show="hasChanges(activeItem)"
+              x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 scale-50" x-transition:enter-end="opacity-100 scale-100"
+              class="group relative w-9 h-9 flex items-center justify-center bg-green-500 text-white rounded-full hover:bg-green-600 shadow-md hover:shadow-lg transition transform hover:scale-105 disabled:opacity-50 disabled:scale-100">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+              </svg>
+              <span class="absolute top-full mt-2 left-1/2 -translate-x-1/2 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap hidden group-hover:block z-[100] shadow-xl">保存</span>
+            </button>
+          </div>
+        </template>
       </div>
 
     </div>
@@ -101,9 +126,6 @@
       <!-- 新增条目容器 -->
       <template x-if="newItem">
         <div class="bg-white rounded-lg shadow-xl border-2 border-indigo-500 p-6 relative mb-6 ring-4 ring-indigo-50">
-          <div class="flex justify-between items-center mb-4 border-b pb-2 border-gray-100">
-            <h3 class="font-bold text-lg text-indigo-900 flex items-center gap-2"><span>🆕</span> 新增</h3>
-          </div>
 
           <div class="space-y-6">
             <div>
@@ -178,35 +200,16 @@
               </div>
             </div>
 
-            <div class="relative flex justify-between items-center mt-6 border-t pt-4 border-indigo-100">
-               <div></div>
-               <div class="absolute left-1/2 -translate-x-1/2">
-                 <button @click="addQuestion(newItem.editBuffer)"
-                   :disabled="newItem.editBuffer.questions.length >= maxQuestions"
-                   class="group relative w-6 h-6 flex items-center justify-center bg-indigo-100 text-indigo-600 rounded-full hover:bg-indigo-600 hover:text-white transition disabled:opacity-50 disabled:hover:bg-indigo-100 disabled:hover:text-indigo-600">
-                   <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
-                   </svg>
-                   <span class="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap hidden group-hover:block z-[100] shadow-xl">添加关联问题</span>
-                 </button>
-               </div>
-
-              <div class="flex gap-4">
-                <button @click="cancelEdit(newItem)"
-                  class="group relative w-10 h-10 flex items-center justify-center bg-gray-100 text-gray-500 rounded-full hover:bg-gray-200 hover:text-gray-700 transition">
-                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                  </svg>
-                  <span class="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap hidden group-hover:block z-[100] shadow-xl">取消</span>
-                </button>
-                <button @click="saveItem(newItem)" :disabled="loading" x-show="hasChanges(newItem)"
-                  class="group relative w-10 h-10 flex items-center justify-center bg-green-500 text-white rounded-full hover:bg-green-600 shadow-lg hover:shadow-xl transition transform hover:scale-105 disabled:opacity-50 disabled:scale-100">
-                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-                  </svg>
-                  <span class="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap hidden group-hover:block z-[100] shadow-xl">保存</span>
-                </button>
-              </div>
+            <!-- 按钮修改: 移除分层, 放大按钮 -->
+            <div class="flex justify-center mt-4">
+               <button @click="addQuestion(newItem.editBuffer)"
+                 :disabled="newItem.editBuffer.questions.length >= maxQuestions"
+                 class="group relative w-9 h-9 flex items-center justify-center bg-indigo-100 text-indigo-600 rounded-full hover:bg-indigo-600 hover:text-white transition disabled:opacity-50 disabled:hover:bg-indigo-100 disabled:hover:text-indigo-600 shadow-sm hover:shadow-md">
+                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                 </svg>
+                 <span class="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap hidden group-hover:block z-[100] shadow-xl">添加关联问题</span>
+               </button>
             </div>
           </div>
         </div>
@@ -215,7 +218,7 @@
       <!-- 数据列表循环 -->
       <template x-for="(item, idx) in pagedItems" :key="item.id">
         <div class="bg-white rounded-lg shadow border border-gray-200 transition hover:shadow-md group/card"
-             :class="{'opacity-60 cursor-not-allowed': isEditingMode && !item.isEditing}">
+             :class="{'opacity-30 pointer-events-none blur-[1px]': isEditingMode && !item.isEditing}">
 
           <!-- 查看模式 -->
           <div x-show="!item.isEditing" @click="startEdit(item)"
@@ -242,7 +245,7 @@
           </div>
 
           <!-- 编辑模式 (内联) -->
-          <div x-show="item.isEditing" class="p-6 bg-indigo-50 border-t border-indigo-200" x-cloak>
+          <div x-show="item.isEditing" class="p-6 bg-indigo-50 ring-2 ring-indigo-200 rounded-lg" x-cloak>
             <div class="space-y-6">
               <div>
                 <label class="block text-xs font-bold text-gray-500 mb-1 uppercase text-center">回复内容 (知识库答案)</label>
@@ -315,44 +318,16 @@
                 </div>
               </div>
 
-              <div class="relative flex justify-between items-center mt-6 border-t border-indigo-200 pt-4">
-                <div>
-                  <button @click="deleteItem(item.id)" :disabled="loading"
-                    class="group relative w-10 h-10 flex items-center justify-center bg-red-50 text-red-600 border border-red-200 rounded-full hover:bg-red-600 hover:text-white transition shadow-sm disabled:opacity-50">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-                    </svg>
-                    <span class="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap hidden group-hover:block z-[100] shadow-xl">删除</span>
-                  </button>
-                </div>
-
-                <div class="absolute left-1/2 -translate-x-1/2">
-                   <button @click="addQuestion(item.editBuffer)"
-                    :disabled="item.editBuffer.questions.length >= maxQuestions"
-                    class="group relative w-6 h-6 self-center flex items-center justify-center bg-white border border-indigo-200 text-indigo-600 rounded-full hover:bg-indigo-600 hover:text-white transition disabled:opacity-50 disabled:hover:bg-white disabled:hover:text-indigo-600">
-                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
-                    </svg>
-                    <span class="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap hidden group-hover:block z-[100] shadow-xl">添加关联问题</span>
-                  </button>
-                </div>
-
-                <div class="flex gap-4">
-                  <button @click="cancelEdit(item)"
-                    class="group relative w-10 h-10 flex items-center justify-center bg-white border border-gray-200 text-gray-500 rounded-full hover:bg-gray-100 hover:text-gray-700 transition shadow-sm">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                    </svg>
-                    <span class="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap hidden group-hover:block z-[100] shadow-xl">取消</span>
-                  </button>
-                  <button @click="saveItem(item)" :disabled="loading" x-show="hasChanges(item)"
-                    class="group relative w-10 h-10 flex items-center justify-center bg-green-500 text-white rounded-full hover:bg-green-600 shadow-md hover:shadow-lg transition transform hover:scale-105 disabled:opacity-50 disabled:scale-100">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-                    </svg>
-                    <span class="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap hidden group-hover:block z-[100] shadow-xl">保存</span>
-                  </button>
-                </div>
+              <!-- 按钮修改: 移除分层, 放大按钮 -->
+              <div class="flex justify-center mt-4">
+                 <button @click="addQuestion(item.editBuffer)"
+                  :disabled="item.editBuffer.questions.length >= maxQuestions"
+                  class="group relative w-9 h-9 self-center flex items-center justify-center bg-white border border-indigo-200 text-indigo-600 rounded-full hover:bg-indigo-600 hover:text-white transition disabled:opacity-50 disabled:hover:bg-white disabled:hover:text-indigo-600 shadow-sm hover:shadow-md">
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                  </svg>
+                  <span class="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap hidden group-hover:block z-[100] shadow-xl">添加关联问题</span>
+                </button>
               </div>
             </div>
           </div>
@@ -538,7 +513,12 @@
         nextPage() { if (this.page < this.totalPages) this.page++; },
         showToast(msg) { this.toast.msg = msg; this.toast.show = true; setTimeout(() => this.toast.show = false, 3000); },
 
-        get isEditingMode() { return !!this.newItem || this.allItems.some(item => item.isEditing); }
+        get isEditingMode() { return !!this.newItem || this.allItems.some(item => item.isEditing); },
+
+        get activeItem() {
+            if (this.newItem) return this.newItem;
+            return this.allItems.find(item => item.isEditing) || null;
+        }
       }
     }
   </script>

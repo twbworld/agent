@@ -129,7 +129,15 @@
 
           <div class="space-y-6">
             <div>
-              <label class="block text-xs font-bold text-gray-500 mb-1 uppercase text-center">回复内容 (知识库答案)</label>
+              <div class="flex justify-between items-center mb-1">
+                <label class="block text-xs font-bold text-gray-500 uppercase">回复内容 (知识库答案)</label>
+                <label class="group relative text-xs bg-gray-100 border border-gray-300 text-gray-600 px-3 py-1.5 rounded hover:bg-gray-200 flex items-center gap-1 cursor-pointer transition-colors shadow-sm">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                  <span>上传图片</span>
+                  <input type="file" @change="uploadImage($event, newItem.editBuffer)" accept="image/png, image/jpeg, image/gif, image/webp" class="hidden">
+                  <span class="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap hidden group-hover:block z-[100] shadow-xl">支持PNG,JPG,GIF,WEBP,小于5MB</span>
+                </label>
+              </div>
               <textarea x-model="newItem.editBuffer.answer" rows="5" placeholder="支持 markdown 语法"
                 class="w-full p-3 border rounded bg-gray-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 text-sm transition-colors"></textarea>
             </div>
@@ -238,9 +246,10 @@
                   </span>
                 </template>
               </div>
-              <div
-                class="bg-gray-50 p-3 rounded border border-gray-200 text-gray-800 whitespace-pre-wrap text-sm leading-relaxed"
-                x-text="item.answer" @click.stop></div>
+              <div class="bg-gray-50 p-3 rounded border border-gray-200 text-gray-800 whitespace-pre-wrap text-sm leading-relaxed"
+                   @click.stop>
+                <div x-html="renderMarkdown(item.answer)"></div>
+              </div>
             </div>
           </div>
 
@@ -248,7 +257,15 @@
           <div x-show="item.isEditing" class="p-6 bg-indigo-50 ring-2 ring-indigo-200 rounded-lg" x-cloak>
             <div class="space-y-6">
               <div>
-                <label class="block text-xs font-bold text-gray-500 mb-1 uppercase text-center">回复内容 (知识库答案)</label>
+                <div class="flex justify-between items-center mb-1">
+                  <label class="block text-xs font-bold text-gray-500 uppercase">回复内容 (知识库答案)</label>
+                  <label class="group relative text-xs bg-white border border-gray-300 text-gray-600 px-3 py-1.5 rounded hover:bg-gray-50 flex items-center gap-1 cursor-pointer transition-colors shadow-sm">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                    <span>上传图片</span>
+                    <input type="file" @change="uploadImage($event, item.editBuffer)" accept="image/png, image/jpeg, image/gif, image/webp" class="hidden">
+                    <span class="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap hidden group-hover:block z-[100] shadow-xl">支持PNG,JPG,GIF,WEBP,小于5MB</span>
+                  </label>
+                </div>
                 <textarea x-model="item.editBuffer.answer" rows="5" placeholder="支持 markdown 语法"
                   class="w-full p-3 border rounded bg-white focus:ring-2 focus:ring-indigo-500 text-sm shadow-sm"></textarea>
               </div>
@@ -361,21 +378,26 @@
         allItems: [], searchQuery: '', page: 1, pageSize: 10, loading: false, newItem: null, maxQuestions: 20,
         toast: { show: false, msg: '' },
 
-        async request(url, method = 'GET', body = null) {
-          this.loading = true;
-          try {
-            const opts = { method, headers: { 'Content-Type': 'application/json' } };
-            if (body) opts.body = JSON.stringify(body);
-            const res = await fetch(url, opts);
-            const json = await res.json();
-            if (json.code !== 0) throw new Error(json.message);
-            return json.data;
-          } catch (e) {
-            this.showToast(e.message || '请求失败');
-            throw e;
-          } finally {
-            this.loading = false;
-          }
+        async request(url, method = 'GET', body = null, isFormData = false) {
+            this.loading = true;
+            try {
+                const opts = { method };
+                if (isFormData) {
+                    opts.body = body;
+                } else {
+                    opts.headers = { 'Content-Type': 'application/json' };
+                    if (body) opts.body = JSON.stringify(body);
+                }
+                const res = await fetch(url, opts);
+                const json = await res.json();
+                if (json.code !== 0) throw new Error(json.message);
+                return json.data;
+            } catch (e) {
+                this.showToast(e.message || '请求失败');
+                throw e;
+            } finally {
+                this.loading = false;
+            }
         },
 
         async initData() {
@@ -466,6 +488,45 @@
             await this.request('/api/v1/admin/keywords/force-sync', 'POST');
             this.showToast('同步任务已触发');
           } catch (e) { }
+        },
+
+        async uploadImage(event, buffer) {
+            const file = event.target.files[0];
+            event.target.value = ''; // Reset input
+            if (!file) return;
+
+            const MAX_SIZE = 5 * 1024 * 1024;
+            const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+
+            if (file.size > MAX_SIZE) return this.showToast('图片大小不能超过 5MB');
+            if (!ALLOWED_TYPES.includes(file.type)) return this.showToast('仅支持 JPG, PNG, GIF, WEBP格式');
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const data = await this.request('/api/v1/admin/upload/image', 'POST', formData, true);
+                if (data && data.url) {
+                    const markdown = `\n![image](${data.url})\n`;
+                    buffer.answer += markdown;
+                    try {
+                        await navigator.clipboard.writeText(markdown);
+                        this.showToast('图片上传成功, Markdown已复制并添加');
+                    } catch (clipErr) {
+                        this.showToast('图片上传成功, 已添加到内容中');
+                    }
+                }
+            } catch (e) { /* request handles toast */ }
+        },
+
+        renderMarkdown(text) {
+            if (!text) return '';
+            // Escape HTML to prevent XSS, except for our own generated tags
+            const escapedText = text.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            // Convert markdown image to img tag
+            return escapedText.replace(/!\[(.*?)\]\((.*?)\)/g,
+                `<img src="$2" alt="$1" class="max-w-xs my-2 rounded-md shadow-sm border inline-block">`
+            );
         },
 
         createNew() {

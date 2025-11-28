@@ -166,6 +166,20 @@ func (i *Initializer) HandleConfigChange(oldConfig, newConfig *config.Config) {
 		})
 	}
 
+	// OSS 服务重载
+	if !reflect.DeepEqual(oldConfig.Oss, newConfig.Oss) {
+		eg.Go(func() error {
+			if err := i.ossClose(); err != nil {
+				global.Log.Warnf("关闭旧OSS客户端失败: %v", err)
+			}
+			if err := i.initOss(); err != nil {
+				global.Log.Errorf("热重载OSS客户端失败: %v", err)
+				return err
+			}
+			return nil
+		})
+	}
+
 	if err := eg.Wait(); err != nil {
 		global.Log.Errorf("并发热重载过程中发生错误: %v", err)
 	}

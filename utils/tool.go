@@ -14,8 +14,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"gitee.com/taoJie_1/mall-agent/global"
 )
 
 type timeNumber interface {
@@ -37,12 +35,16 @@ func Base64Decode(str string) string {
 	return string(bstr)
 }
 func Hash(str string) string {
-	b := sha256.Sum224([]byte(str))
+	return HashBytes([]byte(str))
+}
+
+func HashBytes(data []byte) string {
+	b := sha256.Sum224(data)
 	return hex.EncodeToString(b[:])
 }
 
-func TimeFormat[T timeNumber](t T) string {
-	return time.Unix(int64(t), 0).In(global.Tz).Format(time.DateTime)
+func TimeFormat[T timeNumber](t T, loc *time.Location) string {
+	return time.Unix(int64(t), 0).In(loc).Format(time.DateTime)
 }
 
 // 四舍五入保留小数位
@@ -161,7 +163,7 @@ func Union[T string | Number](slice1, slice2 []T) []T {
 }
 
 // 生成文件路径和文件名
-func ReadyFile(fileExt ...string) (string, string) {
+func ReadyFile(staticDir string, loc *time.Location, fileExt ...string) (string, string) {
 	ext := ""
 	if len(fileExt) > 0 {
 		ext = fileExt[0]
@@ -172,7 +174,7 @@ func ReadyFile(fileExt ...string) (string, string) {
 		return "", ""
 	}
 
-	return filepath.Join(global.Config.StaticDir, time.Now().In(global.Tz).Format("2006/01/")) + "/", Hash(strconv.FormatInt(time.Now().UnixNano()+n.Int64(), 10))[:10] + ext
+	return filepath.Join(staticDir, time.Now().In(loc).Format("2006/01/")) + "/", Hash(strconv.FormatInt(time.Now().UnixNano()+n.Int64(), 10))[:10] + ext
 }
 
 // GetTTLWithJitter 为缓存TTL增加随机抖动，防止缓存雪崩
@@ -187,7 +189,7 @@ func GetTTLWithJitter(baseTTLInSeconds int64) time.Duration {
 
 // ParseDateFromLogFileName 从日志文件名中解析日期
 // 文件名格式如: gin.log.2025-10-28, run.log.2025-10-28
-func ParseDateFromLogFileName(filename string) (time.Time, bool) {
+func ParseDateFromLogFileName(filename string, loc *time.Location) (time.Time, bool) {
 	parts := strings.Split(filename, ".")
 	if len(parts) < 2 {
 		return time.Time{}, false
@@ -196,7 +198,7 @@ func ParseDateFromLogFileName(filename string) (time.Time, bool) {
 	// 日期部分应在最后
 	dateStr := parts[len(parts)-1]
 	// 使用 "2006-01-02" 格式解析
-	t, err := time.ParseInLocation("2006-01-02", dateStr, global.Tz)
+	t, err := time.ParseInLocation("2006-01-02", dateStr, loc)
 	if err != nil {
 		return time.Time{}, false
 	}

@@ -45,6 +45,10 @@ func (i *Initializer) Run() error {
 		_ = i.initMcp()
 		return nil
 	})
+	eg.Go(func() error {
+		_ = i.initOss()
+		return nil
+	})
 
 	return eg.Wait()
 }
@@ -53,6 +57,9 @@ func (i *Initializer) Run() error {
 func (i *Initializer) Close() {
 	if i.mcpClose() == nil {
 		global.Log.Info("MCP客户端已关闭")
+	}
+	if i.ossClose() == nil {
+		global.Log.Info("OSS客户端已关闭")
 	}
 	if i.vectorDbClose() == nil {
 		global.Log.Info("VectorDb客户端已关闭")

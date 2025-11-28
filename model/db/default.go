@@ -4,6 +4,7 @@ import (
 	"reflect"
 	"sync"
 
+	"gitee.com/taoJie_1/mall-agent/global"
 	"gitee.com/taoJie_1/mall-agent/utils"
 )
 
@@ -20,11 +21,11 @@ type BaseField struct {
 }
 
 func (b *BaseField) CreatedAtFormat() string {
-	return utils.TimeFormat(b.CreatedAt)
+	return utils.TimeFormat(b.CreatedAt, global.Tz)
 }
 
 func (b *BaseField) UpdateAtFormat() string {
-	return utils.TimeFormat(b.UpdatedAt)
+	return utils.TimeFormat(b.UpdatedAt, global.Tz)
 }
 
 var (

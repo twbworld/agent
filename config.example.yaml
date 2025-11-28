@@ -126,3 +126,17 @@ mcp_servers:
     url: "http://127.0.0.1:8080"
     # MCP服务的认证Token
     auth: ""
+# 对象存储配置 (以阿里云为例)
+oss:
+  # OSS Endpoint, 无需协议头
+  endpoint: "oss-cn-guangzhou.aliyuncs.com"
+  # OSS Access Key ID
+  access_key_id: ""
+  # OSS Access Key Secret
+  access_key_secret: ""
+  # OSS Bucket 名称
+  bucket: ""
+  # 文件在Bucket中的存储基础路径 (需要以 / 结尾)
+  storage_path: "agent/"
+  # 用于访问的 CDN 域名 (可选, 为空则使用原始OSS域名), 需要包含协议头
+  cdn_domain: "https://cdn.domain.com"

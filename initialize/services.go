@@ -14,6 +14,7 @@ import (
 	"gitee.com/taoJie_1/mall-agent/internal/embedding"
 	"gitee.com/taoJie_1/mall-agent/internal/llm"
 	"gitee.com/taoJie_1/mall-agent/internal/mcp"
+	"gitee.com/taoJie_1/mall-agent/internal/oss"
 	"gitee.com/taoJie_1/mall-agent/internal/redis"
 	"gitee.com/taoJie_1/mall-agent/internal/vector"
 	"gitee.com/taoJie_1/mall-agent/model/enum"
@@ -260,6 +261,32 @@ func (i *Initializer) initMcp() error {
 func (i *Initializer) mcpClose() error {
 	if global.McpService != nil {
 		return global.McpService.Close()
+	}
+	return nil
+}
+
+func (i *Initializer) initOss() error {
+	cfg := global.Config.Oss
+	// 检查OSS配置是否完整，使用新的 Bucket 字段名
+	if cfg.Endpoint == "" || cfg.Bucket == "" || cfg.AccessKeyId == "" || cfg.AccessKeySecret == "" {
+		global.Log.Info("OSS配置不完整，跳过初始化")
+		return nil
+	}
+
+	// 传递全局时区信息给OSS客户端
+	client, err := oss.NewClient(cfg, global.Tz)
+	if err != nil {
+		global.Log.Warnf("初始化OSS服务失败: %v", err)
+		return err
+	}
+	global.OssService = client
+	global.Log.Info("初始化OSS服务成功")
+	return nil
+}
+
+func (i *Initializer) ossClose() error {
+	if global.OssService != nil {
+		return global.OssService.Close()
 	}
 	return nil
 }

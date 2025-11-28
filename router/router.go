@@ -63,6 +63,7 @@ func Start(ginServer *gin.Engine) {
 				keywordRoutes.POST("/generate-questions", controller.Api.AdminApiGroup.KeywordApi.GenerateQuestions)
 				keywordRoutes.POST("/force-sync", controller.Api.AdminApiGroup.KeywordApi.ForceSync)
 			}
+			adminRoutes.POST("/upload/image", controller.Api.AdminApiGroup.UploadApi.UploadImage)
 		}
 
 		v1.GET("/chatwoot/widget/contact-details", func(ctx *gin.Context) {

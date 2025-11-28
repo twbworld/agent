@@ -200,4 +200,7 @@ func handleConfig(c *config.Config) {
 	if c.Ai.KeywordReloadDebounce == 0 {
 		c.Ai.KeywordReloadDebounce = 600
 	}
+	if c.Oss.StoragePath == "" {
+		c.Oss.StoragePath = "agent/"
+	}
 }

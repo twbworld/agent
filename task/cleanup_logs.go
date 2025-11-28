@@ -42,7 +42,7 @@ func (m *Manager) CleanUpLogs() error {
 		}
 
 		// 从文件名中解析日期, e.g., run.log.2025-10-28
-		fileDate, ok := utils.ParseDateFromLogFileName(d.Name())
+		fileDate, ok := utils.ParseDateFromLogFileName(d.Name(), global.Tz)
 		if !ok {
 			return nil // 不是带日期的日志文件，跳过
 		}

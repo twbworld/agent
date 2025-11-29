@@ -1,302 +1,301 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
-
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>客户详情</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+    }
+  </script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.13.3/dist/cdn.min.js"></script>
   <style>
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-      font-size: 14px;
-      line-height: 1.5;
-      color: #333;
-      background-color: #f8f9fa;
-      margin: 0;
-      padding: 15px;
-    }
-
-    .card {
-      background-color: #fff;
-      border: 1px solid #dee2e6;
-      border-radius: .25rem;
-      margin-bottom: 15px;
-      box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, .075);
-    }
-
-    .card-header {
-      padding: .75rem 1.25rem;
-      margin-bottom: 0;
-      background-color: rgba(0, 0, 0, .03);
-      border-bottom: 1px solid rgba(0, 0, 0, .125);
-      font-weight: 600;
-    }
-
-    .card-body {
-      padding: 1.25rem;
-    }
-
-    .info-grid {
-      display: grid;
-      grid-template-columns: 100px 1fr;
-      gap: 8px 15px;
-    }
-
-    .info-grid dt {
-      font-weight: 500;
-      color: #6c757d;
-      text-align: right;
-    }
-
-    .info-grid dd {
-      margin: 0;
-    }
-
-    .product-header {
-      /* Renamed for clarity */
-      display: flex;
-      align-items: center;
-    }
-
-    .product-header img {
-      width: 60px;
-      height: 60px;
-      object-fit: cover;
-      border-radius: .25rem;
-      margin-right: 15px;
-    }
-
-    .order-status {
-      display: inline-block;
-      padding: .25em .6em;
-      font-size: 75%;
-      font-weight: 700;
-      line-height: 1;
-      text-align: center;
-      white-space: nowrap;
-      vertical-align: baseline;
-      border-radius: .25rem;
-    }
-
-    .status-shipped {
-      color: #fff;
-      background-color: #17a2b8;
-    }
-
-    #loader {
-      text-align: center;
-      color: #6c757d;
-      padding: 20px;
-    }
-
-    #error {
-      text-align: center;
-      color: #dc3545;
-      padding: 20px;
-      display: none;
-    }
-
-    .hidden {
-      display: none;
-    }
-
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+    [x-cloak] { display: none !important; }
+    .animate-fade-in { animation: fadeIn 0.5s ease-in-out; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
   </style>
 </head>
 
-<body>
-  <div id="loader">正在加载数据...</div>
-  <div id="error" class="hidden"></div>
-  <div id="details-container" class="hidden">
-    <div class="card user-info-card">
-      <div class="card-header">用户信息</div>
-      <div class="card-body">
-        <dl class="info-grid">
-          <dt>客户ID</dt>
-          <dd id="user-id">-</dd>
-          <dt>姓名</dt>
-          <dd id="user-name">-</dd>
-          <dt>电话</dt>
-          <dd id="user-phone">-</dd>
-          <dt>邮箱</dt>
-          <dd id="user-email">-</dd>
-          <dt>会员等级</dt>
-          <dd id="user-level">-</dd>
+<body class="bg-gray-100 text-gray-800 p-4 transition-colors duration-300 min-h-screen"
+      :class="{ 'dark bg-gray-900 text-gray-100': darkMode }"
+      x-data="customerDetailApp()"
+      x-init="initApp()"
+      x-cloak>
+
+  <!-- 全局 Toast 提示组件 (修改为顶部居中) -->
+  <div x-show="toast.visible"
+       x-transition:enter="transition ease-out duration-300"
+       x-transition:enter-start="opacity-0 translate-y-[-1rem]"
+       x-transition:enter-end="opacity-100 translate-y-0"
+       x-transition:leave="transition ease-in duration-200"
+       x-transition:leave-start="opacity-100 translate-y-0"
+       x-transition:leave-end="opacity-0 translate-y-[-1rem]"
+       class="fixed top-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-5 py-3 rounded-lg shadow-lg border backdrop-blur-sm min-w-[300px] justify-center"
+       :class="toast.type === 'success' ? 'bg-green-50/95 text-green-700 border-green-200 dark:bg-green-900/90 dark:text-green-100 dark:border-green-800' : 'bg-red-50/95 text-red-700 border-red-200 dark:bg-red-900/90 dark:text-red-100 dark:border-red-800'"
+       style="display: none;">
+       <svg x-show="toast.type === 'success'" class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+       <svg x-show="toast.type === 'error'" class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+       <span class="text-sm font-medium" x-text="toast.message"></span>
+  </div>
+
+  <div class="flex justify-end items-center mb-6 gap-3 w-[95%] lg:w-[80%] mx-auto">
+    <button @click="toggleTheme" class="group relative p-2.5 rounded-full border border-gray-200 bg-white text-gray-600 shadow-sm hover:shadow-md hover:bg-gray-50 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-700 transition-all duration-300">
+      <svg x-show="!darkMode" class="w-5 h-5 transition-transform duration-300 group-hover:rotate-12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+      <svg x-show="darkMode" class="w-5 h-5 transition-transform duration-300 group-hover:-rotate-12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
+      <span class="absolute top-full mt-2 left-1/2 transform -translate-x-1/2 px-2 py-1 bg-gray-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap dark:bg-gray-200 dark:text-gray-900 z-10">切换主题</span>
+    </button>
+
+    <button
+      @click="refreshData"
+      :disabled="isFetching || (!context.goodsId && !context.orderId)"
+      class="group relative p-2.5 rounded-full border border-gray-200 bg-white text-gray-600 shadow-sm hover:shadow-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-gray-800 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-700 transition-all duration-300">
+      <svg x-show="!isFetching" class="w-5 h-5 transition-transform duration-300 group-hover:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+      <svg x-show="isFetching" class="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+      <span class="absolute top-full mt-2 left-1/2 transform -translate-x-1/2 px-2 py-1 bg-gray-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap dark:bg-gray-200 dark:text-gray-900 z-10">刷新数据</span>
+    </button>
+  </div>
+
+  <div x-show="isLoading" class="flex justify-center items-center py-10 animate-pulse">
+    <div class="w-3 h-3 bg-gray-400 rounded-full mx-1"></div>
+    <div class="w-3 h-3 bg-gray-400 rounded-full mx-1"></div>
+    <div class="w-3 h-3 bg-gray-400 rounded-full mx-1"></div>
+  </div>
+
+  <div x-show="!isLoading"
+       x-transition:enter="transition ease-out duration-300"
+       x-transition:enter-start="opacity-0 translate-y-4"
+       x-transition:enter-end="opacity-100 translate-y-0"
+       class="space-y-6 w-[95%] lg:w-[80%] mx-auto">
+
+    <div class="bg-white border border-gray-200 rounded-xl shadow-md hover:shadow-lg transition-shadow duration-300 overflow-hidden dark:bg-gray-800 dark:border-gray-700">
+      <div class="px-6 py-4 border-b border-gray-100 bg-gray-50/80 font-semibold text-gray-700 dark:bg-gray-700/40 dark:text-gray-200 dark:border-gray-700 flex items-center">
+        <span class="w-1 h-5 bg-blue-500 rounded-full mr-3"></span>用户信息
+      </div>
+      <div class="p-6">
+        <dl class="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4 text-sm">
+          <div class="flex"><dt class="w-24 font-medium text-gray-500 dark:text-gray-400">客户ID</dt><dd class="flex-1 text-gray-900 dark:text-gray-100">-</dd></div>
+          <div class="flex"><dt class="w-24 font-medium text-gray-500 dark:text-gray-400">姓名</dt><dd class="flex-1 text-gray-900 dark:text-gray-100 font-medium">-</dd></div>
+          <div class="flex"><dt class="w-24 font-medium text-gray-500 dark:text-gray-400">电话</dt><dd class="flex-1 text-gray-900 dark:text-gray-100 font-mono tracking-wide">-</dd></div>
+          <div class="flex"><dt class="w-24 font-medium text-gray-500 dark:text-gray-400">邮箱</dt><dd class="flex-1 text-gray-900 dark:text-gray-100">-</dd></div>
+          <div class="flex"><dt class="w-24 font-medium text-gray-500 dark:text-gray-400">会员等级</dt><dd class="flex-1 text-gray-900 dark:text-gray-100">-</dd></div>
         </dl>
       </div>
     </div>
-    <div class="card product-info-card hidden">
-      <div class="card-header">当前咨询商品</div>
-      <div class="card-body">
-        <div class="product-header">
-          <img id="product-image" src="" alt="">
-          <div>
-            <p id="product-name" style="margin: 0; font-weight: 600;"></p>
-            <p id="product-price" style="margin: 5px 0 0; color: #dc3545; font-size: 16px;"></p>
+
+    <div x-show="context.goodsId" class="bg-white border border-gray-200 rounded-xl shadow-md hover:shadow-lg transition-shadow duration-300 overflow-hidden dark:bg-gray-800 dark:border-gray-700">
+      <div class="px-6 py-4 border-b border-gray-100 bg-gray-50/80 font-semibold text-gray-700 dark:bg-gray-700/40 dark:text-gray-200 dark:border-gray-700 flex items-center">
+        <span class="w-1 h-5 bg-purple-500 rounded-full mr-3"></span>当前咨询商品
+      </div>
+      <div class="p-6">
+        <template x-if="productData">
+          <div class="flex flex-col md:flex-row gap-6">
+            <div class="w-full md:w-48 flex-shrink-0 flex flex-col items-center text-center space-y-3">
+              <div class="w-full aspect-square rounded-lg overflow-hidden border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 flex justify-center items-center group relative">
+                <img :src="productData.picUrl" :alt="productData.title" class="max-w-full max-h-full object-contain transition-transform duration-500 group-hover:scale-110">
+              </div>
+              <h3 class="font-bold text-gray-900 leading-tight dark:text-gray-100 text-base" x-text="productData.title || '-'"></h3>
+              <p class="text-xl font-bold text-red-600 dark:text-red-400 tracking-tight" x-text="`¥${productData.price || '-'}`"></p>
+            </div>
+
+            <div class="flex-grow md:border-l md:border-gray-100 md:pl-6 dark:border-gray-700 flex flex-col justify-center">
+              <dl class="grid grid-cols-[80px_1fr] gap-y-4 text-sm">
+                <dt class="font-medium text-gray-500 dark:text-gray-400">描述</dt>
+                <dd class="text-gray-700 dark:text-gray-300 leading-relaxed" x-text="productData.desc || '-'"></dd>
+                <dt class="font-medium text-gray-500 dark:text-gray-400">SKU</dt>
+                <dd class="text-gray-700 dark:text-gray-300 font-medium" x-text="productData.sku_summary || '-'"></dd>
+                <dt class="font-medium text-gray-500 dark:text-gray-400">状态</dt>
+                <dd>
+                   <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-100 dark:bg-emerald-900 dark:text-emerald-200 dark:border-emerald-800" x-text="productData.status || '-'"></span>
+                </dd>
+                <dt class="font-medium text-gray-500 dark:text-gray-400">库存</dt>
+                <dd class="text-gray-800 dark:text-gray-200 font-mono font-medium" x-text="productData.stock ?? '-'"></dd>
+                <dt class="font-medium text-gray-500 dark:text-gray-400">销量</dt>
+                <dd class="text-gray-800 dark:text-gray-200 font-mono font-medium" x-text="productData.sales_count ?? '-'"></dd>
+                <dt class="font-medium text-gray-500 dark:text-gray-400">标签</dt>
+                <dd class="text-gray-700 dark:text-gray-300 flex flex-wrap gap-2">
+                  <template x-if="productData.tags && productData.tags.length">
+                    <template x-for="tag in productData.tags" :key="tag">
+                      <span class="px-2.5 py-1 rounded-md bg-indigo-50 text-indigo-700 text-xs border border-indigo-100 font-medium dark:bg-indigo-900/50 dark:text-indigo-300 dark:border-indigo-800" x-text="tag"></span>
+                    </template>
+                  </template>
+                  <span x-show="!productData.tags || !productData.tags.length">-</span>
+                </dd>
+              </dl>
+            </div>
           </div>
-        </div>
-        <hr style="border-top: 1px solid #eee; margin: 15px 0;">
-        <dl class="info-grid">
-          <dt>描述</dt>
-          <dd id="product-desc">-</dd>
-          <dt>SKU详情</dt>
-          <dd id="product-sku-summary">-</dd>
-          <dt>状态</dt>
-          <dd id="product-status">-</dd>
-          <dt>库存</dt>
-          <dd id="product-stock">-</dd>
-          <dt>销量</dt>
-          <dd id="product-sales-count">-</dd>
-          <dt>标签</dt>
-          <dd id="product-tags">-</dd>
-        </dl>
+        </template>
+        <template x-if="!productData">
+           <div class="text-gray-400 text-sm text-center py-8">暂无商品数据或加载中...</div>
+        </template>
       </div>
     </div>
-    <div class="card order-info-card hidden">
-      <div class="card-header">最近订单</div>
-      <div class="card-body">
-        <dl class="info-grid">
-          <dt>订单号</dt>
-          <dd id="order-id">-</dd>
-          <dt>下单时间</dt>
-          <dd id="order-created_at">-</dd>
-          <dt>订单状态</dt>
-          <dd><span id="order-status" class="order-status"></span></dd>
-          <dt>总金额</dt>
-          <dd id="order-total_amount">-</dd>
-          <dt>收货地址</dt>
-          <dd id="order-address">-</dd>
-        </dl>
+
+    <div x-show="context.orderId" class="bg-white border border-gray-200 rounded-xl shadow-md hover:shadow-lg transition-shadow duration-300 overflow-hidden dark:bg-gray-800 dark:border-gray-700">
+      <div class="px-6 py-4 border-b border-gray-100 bg-gray-50/80 font-semibold text-gray-700 dark:bg-gray-700/40 dark:text-gray-200 dark:border-gray-700 flex items-center">
+        <span class="w-1 h-5 bg-emerald-500 rounded-full mr-3"></span>最近订单
+      </div>
+      <div class="p-6">
+        <template x-if="orderData">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <dl class="grid grid-cols-[80px_1fr] gap-y-3 text-sm">
+              <dt class="font-medium text-gray-500 dark:text-gray-400">订单号</dt>
+              <dd class="font-mono text-gray-800 dark:text-gray-200 tracking-tight" x-text="orderData.id || '-'"></dd>
+              <dt class="font-medium text-gray-500 dark:text-gray-400">下单时间</dt>
+              <dd class="text-gray-800 dark:text-gray-200 font-medium" x-text="orderData.created_at || '-'"></dd>
+              <dt class="font-medium text-gray-500 dark:text-gray-400">订单状态</dt>
+              <dd>
+                <span class="inline-block px-2.5 py-0.5 text-xs font-bold text-cyan-700 bg-cyan-50 border border-cyan-100 rounded-full dark:bg-cyan-900 dark:text-cyan-200 dark:border-cyan-800" x-text="orderData.status || '-'"></span>
+              </dd>
+            </dl>
+            <div class="md:border-l md:border-gray-100 md:pl-6 dark:border-gray-700 flex flex-col justify-center">
+               <dl class="grid grid-cols-[80px_1fr] gap-y-3 text-sm">
+                <dt class="font-medium text-gray-500 dark:text-gray-400">总金额</dt>
+                <dd class="text-lg font-bold text-gray-900 dark:text-gray-100" x-text="`¥${orderData.total_amount || '-'}`"></dd>
+                <dt class="font-medium text-gray-500 dark:text-gray-400">收货地址</dt>
+                <dd class="text-gray-700 dark:text-gray-300 leading-snug" x-text="orderData.address || '-'"></dd>
+               </dl>
+            </div>
+          </div>
+        </template>
+        <template x-if="!orderData">
+            <div class="text-gray-400 text-sm text-center py-8">暂无订单数据或加载中...</div>
+        </template>
       </div>
     </div>
   </div>
 
   <script>
-    document.addEventListener('DOMContentLoaded', function () {
-      const loader = document.getElementById('loader');
-      const errorContainer = document.getElementById('error');
-      const detailsContainer = document.getElementById('details-container');
-      let hasFetched = false; // 添加一个标志位，防止重复请求
+    function customerDetailApp() {
+      return {
+        darkMode: false,
+        isLoading: true,
+        isFetching: false,
+        hasFetched: false,
+        toast: {
+          visible: false,
+          message: '',
+          type: 'success',
+          timeoutId: null
+        },
+        context: {
+          goodsId: null,
+          orderId: null
+        },
+        productData: null,
+        orderData: null,
 
-      window.addEventListener('message', function (event) {
-        // 标志位检查，如果已经触发过一次请求，则忽略后续所有message事件
-        if (hasFetched) {
-          return;
-        }
-
-        let parsedData; // 重命名为parsedData以避免与event.data.data混淆
-        try {
-          // Chatwoot可能发送JSON字符串或直接发送对象
-          parsedData = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
-        } catch (e) {
-          return; // 忽略无法解析的message
-        }
-
-        // --- 核心修正 START ---
-        // 1. 检查事件类型是否为 "appContext"
-        if (parsedData.event !== 'appContext' || !parsedData.data) {
-          return; // 如果不是 appContext 事件或没有data字段，则忽略
-        }
-
-        // 2. 访问嵌套在 parsedData.data 中的实际数据
-        const actualContextData = parsedData.data;
-        const customAttributes = actualContextData?.contact?.custom_attributes;
-        // --- 核心修正 END ---
-
-        // 如果这个message里没有我们需要的 customAttributes，则静默忽略，等待下一个事件
-        if (!customAttributes) {
-          return;
-        }
-
-        // 找到了！现在处理数据
-        hasFetched = true; // 立刻设置标志位，确保后续事件不会再次触发
-
-        const goodsId = customAttributes.goods_id;
-        const orderId = customAttributes.order_id; // 从custom_attributes中提取order_id
-
-        if (goodsId || orderId) {
-          fetchDetails(goodsId, orderId);
-        } else {
-          loader.classList.add('hidden');
-          errorContainer.textContent = '未在自定义属性中找到商品ID或订单ID。';
-          errorContainer.classList.remove('hidden');
-        }
-      });
-
-      function fetchDetails(goodsId, orderId) {
-        const requestBody = {};
-        if (goodsId) requestBody.goods_id = goodsId;
-        if (orderId) requestBody.order_id = orderId;
-
-        fetch(`/api/v1/dashboard/details`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(requestBody),
-        }).then(response => {
-          if (!response.ok) {
-            return response.json().then(err => { throw new Error(err.message || '网络响应错误'); });
+        initApp() {
+          if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+            this.darkMode = true;
           }
-          return response.json();
-        }).then(apiResponse => {
-          if (apiResponse.code !== 0) {
-            throw new Error(apiResponse.message || '获取数据失败');
+
+          window.addEventListener('message', (event) => {
+            if (this.hasFetched) return;
+
+            let parsedData;
+            try {
+              parsedData = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+            } catch (e) { return; }
+
+            if (parsedData.event !== 'appContext' || !parsedData.data) return;
+
+            const customAttributes = parsedData.data.contact?.custom_attributes;
+            if (!customAttributes) return;
+
+            this.hasFetched = true;
+            this.context.goodsId = customAttributes.goods_id;
+            this.context.orderId = customAttributes.order_id;
+
+            this.isLoading = false;
+
+            if (this.context.goodsId || this.context.orderId) {
+              // 自动加载不触发 Toast
+              this.fetchDetails(false);
+            } else {
+              this.showToast('未在自定义属性中找到商品ID或订单ID', 'error');
+            }
+          });
+        },
+
+        toggleTheme() {
+          this.darkMode = !this.darkMode;
+        },
+
+        refreshData() {
+          if (this.isFetching) return;
+          if (!this.context.goodsId && !this.context.orderId) {
+            this.showToast('暂无关联的商品或订单信息', 'error');
+            return;
           }
-          populateDetails(apiResponse.data);
-          loader.classList.add('hidden');
-          detailsContainer.classList.remove('hidden');
-        }).catch(error => {
-          loader.classList.add('hidden');
-          errorContainer.textContent = `加载失败: ${error.message}`;
-          errorContainer.classList.remove('hidden');
-        });
-      }
+          // 手动刷新，传入 true 以触发 Toast
+          this.fetchDetails(true);
+        },
 
-      function populateDetails(dataFromAPI) { // 重命名参数为dataFromAPI以明确其来源
-        // 用户信息部分（如果API不返回，则保持默认的'-'）
-        // 如果后端API /api/v1/dashboard/details 最终返回了user数据，需要根据实际结构在此处补充解析
-        // 例如：
-        // if (dataFromAPI.user) {
-        //   document.getElementById('user-id').textContent = dataFromAPI.user.id || '-';
-        //   // ... 其他用户字段
-        // }
+        // 显示通知辅助函数
+        showToast(message, type = 'success') {
+          this.toast.message = message;
+          this.toast.type = type;
+          this.toast.visible = true;
 
-        const productCard = document.querySelector('.product-info-card');
-        const orderCard = document.querySelector('.order-info-card');
+          if (this.toast.timeoutId) clearTimeout(this.toast.timeoutId);
+          this.toast.timeoutId = setTimeout(() => {
+            this.toast.visible = false;
+          }, 3000);
+        },
 
-        productCard.classList.add('hidden'); // 默认隐藏商品卡片
-        orderCard.classList.add('hidden');   // 默认隐藏订单卡片
+        async fetchDetails(isManual = false) {
+          this.isFetching = true;
 
-        // 检查是否为商品数据（根据提供的JSON结构：有title, picUrl, price等字段）
-        if (dataFromAPI.title && dataFromAPI.picUrl && dataFromAPI.price !== undefined) {
-          productCard.classList.remove('hidden');
-          document.getElementById('product-image').src = dataFromAPI.picUrl || '';
-          document.getElementById('product-image').alt = dataFromAPI.title || '';
-          document.getElementById('product-name').textContent = dataFromAPI.title || '-';
-          document.getElementById('product-price').textContent = `¥${dataFromAPI.price}` || '-';
+          const requestBody = {};
+          if (this.context.goodsId) requestBody.goods_id = this.context.goodsId;
+          if (this.context.orderId) requestBody.order_id = this.context.orderId;
 
-          // 填充更多商品详情
-          document.getElementById('product-desc').textContent = dataFromAPI.desc || '-';
-          document.getElementById('product-sku-summary').textContent = dataFromAPI.sku_summary?.trim() || '-';
-          document.getElementById('product-status').textContent = dataFromAPI.status || '-';
-          document.getElementById('product-stock').textContent = dataFromAPI.stock !== undefined ? dataFromAPI.stock : '-';
-          document.getElementById('product-sales-count').textContent = dataFromAPI.sales_count !== undefined ? dataFromAPI.sales_count : '-';
-          document.getElementById('product-tags').textContent = (dataFromAPI.tags && dataFromAPI.tags.length > 0) ? dataFromAPI.tags.join(', ') : '-';
-        }
-        // 检查是否为订单数据（假设订单数据有id, created_at, status, total_amount等字段）
-        // 这里的字段名需要根据实际的订单API响应结构来调整
-        else if (dataFromAPI.id && dataFromAPI.created_at && dataFromAPI.status && dataFromAPI.total_amount !== undefined) {
-          orderCard.classList.remove('hidden');
-          document.getElementById('order-id').textContent = dataFromAPI.id || '-';
-          document.getElementById('order-created_at').textContent = dataFromAPI.created_at || '-';
-          const statusSpan = document.getElementById('order-status');
-          statusSpan.textContent = dataFromAPI.status || '-';
-          // 如果API返回status_class字段，可以这样设置：statusSpan.className = `order-status ${dataFromAPI.status_class || ''}`;
-          document.getElementById('order-total_amount').textContent = `¥${dataFromAPI.total_amount}` || '-';
-          document.getElementById('order-address').textContent = dataFromAPI.address || '-';
+          try {
+            const response = await fetch(`/api/v1/dashboard/details`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(requestBody),
+            });
+
+            if (!response.ok) {
+              const err = await response.json();
+              throw new Error(err.message || '网络响应错误');
+            }
+
+            const apiResponse = await response.json();
+            if (apiResponse.code !== 0) {
+              throw new Error(apiResponse.message || '获取数据失败');
+            }
+
+            this.populateDetails(apiResponse.data);
+
+            // 仅在手动刷新且成功时显示
+            if (isManual) {
+              this.showToast('数据刷新成功', 'success');
+            }
+
+          } catch (error) {
+            this.showToast(`加载失败: ${error.message}`, 'error');
+          } finally {
+            this.isFetching = false;
+          }
+        },
+
+        populateDetails(data) {
+          this.productData = null;
+          this.orderData = null;
+
+          if (data.title && data.picUrl !== undefined) {
+            this.productData = data;
+          } else if (data.id && data.created_at) {
+            this.orderData = data;
+          }
         }
       }
     }
-    );
   </script>
 </body>
-
 </html>

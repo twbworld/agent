@@ -50,47 +50,75 @@
     <h1 id="goods_title">Qwen3-72B 限量版纪念T恤</h1>
     <div id="price">¥199.00</div>
     <p>点击右下角聊天框，咨询此商品</p>
+
     <span id="goods_id" style="display: none;">663</span>
     <span id="order_id" style="display: none;">777</span>
   </div>
 
 
-  <script>
+<script>
     (function (d, t) {
-      var BASE_URL = "http://127.0.0.1:3000";
+      var BASE_URL = "http://chatwoot.cc.cc:3000";
       var g = d.createElement(t), s = d.getElementsByTagName(t)[0];
       g.src = BASE_URL + "/packs/js/sdk.js";
       g.async = true;
       s.parentNode.insertBefore(g, s);
+
       g.onload = function () {
-        window.chatwootSDK.run({
-          websiteToken: '7Lwg9fZnczpy18q8ZqvPfW1V',
-          baseUrl: BASE_URL
-        })
+        // --- 核心改动：在 SDK run 之前准备好所有信息 ---
+        try {
+          // 1. 准备商品信息
+          const goodsId = document.getElementById('goods_id').innerText;
+          const goodsTitle = document.getElementById('goods_title').innerText;
+          const goodsImage = document.getElementById('goods_image').src;
+          const goodsPrice = document.getElementById('price').innerText;
+          const goodsUrl = window.location.href;
+          const origin = window.location.origin;
 
-        // 当chatwoot加载完成后，设置自定义属性
-        window.addEventListener('chatwoot:ready', function () {
-          try {
-            const goodsId = document.getElementById('goods_id').innerText;
-            // const orderId = document.getElementById('order_id').innerText;
-            const goodsTitle = document.getElementById('goods_title').innerText;
-            const goodsImage = document.getElementById('goods_image').src;
-            const goodsPrice = document.getElementById('price').innerText;
-            const goodsUrl = window.location.href;
+          // 2. 准备用户信息 (逻辑与之前相同)
+          let userId;
+          let userName;
+          let avatarUrl;
+          let loginUserId = localStorage.getItem('user_id');
 
-            // 设置自定义属性，这些属性将附加到会话中
-            window.$chatwoot.setCustomAttributes({
+          if (loginUserId) {
+            userId = loginUserId;
+            userName = localStorage.getItem('user_name') || `用户 ${userId}`;
+            avatarUrl = localStorage.getItem('avatar_url') || `${origin}/favicon.ico`;
+          } else {
+            userId = `visitor-${Date.now()}${Math.floor(100000 + Math.random() * 900000)}`;
+            userName = `访客-${userId.slice(-6)}`;
+            avatarUrl = `${origin}/favicon.ico`;
+            localStorage.setItem('user_id', userId);
+            localStorage.setItem('user_name', userName);
+            localStorage.setItem('avatar_url', avatarUrl);
+          }
+
+          // 3. 将用户信息和自定义属性直接传入 run 方法
+          window.chatwootSDK.run({
+            websiteToken: '7Lwg9fZnczpy18q8ZqvPfW1V',
+            baseUrl: BASE_URL,
+            // --- 这是解决问题的关键 ---
+            user: {
+              identifier: userId, // 直接提供用户唯一标识
+              name: userName,
+              avatar_url: avatarUrl,
+            },
+            custom_attributes: {
               goods_id: goodsId,
-              // order_id: orderId,
               goods_title: goodsTitle,
               goods_image: goodsImage,
               goods_price: goodsPrice,
               goods_url: goodsUrl,
-            });
-          } catch (error) {
-            console.error('设置Chatwoot自定义属性失败:', error);
-          }
-        });
+            }
+          });
+
+        } catch (error) {
+          console.error('配置 Chatwoot SDK 失败:', error);
+        }
+
+        // 注意：现在我们不再需要 'chatwoot:ready' 事件监听和 setUser 调用了
+        // 因为所有事情都在 run 的时候一次性完成了。
       }
     })(document, "script");
   </script>

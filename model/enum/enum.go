@@ -71,7 +71,7 @@ type ChatwootEvent string
 const (
 	// 用户打开小部件,即点击浮窗(机器人+集成 都会Webhooks)
 	EventWebwidgetTriggered ChatwootEvent = "webwidget_triggered"
-	// 来自联系人的新消息。(机器人+集成 都会Webhooks)
+	// 来自联系人的新消息。(机器人和集成 都会Webhooks)
 	EventMessageCreated ChatwootEvent = "message_created"
 	// 消息已更新。
 	EventMessageUpdated ChatwootEvent = "message_updated"

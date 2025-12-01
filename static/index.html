@@ -59,27 +59,24 @@
 <script>
     (function (d, t) {
       var BASE_URL = "http://chatwoot.cc.cc:3000";
+      var WEBSITE_TOKEN = '7Lwg9fZnczpy18q8ZqvPfW1V';
+
       var g = d.createElement(t), s = d.getElementsByTagName(t)[0];
       g.src = BASE_URL + "/packs/js/sdk.js";
       g.async = true;
       s.parentNode.insertBefore(g, s);
 
-      g.onload = function () {
-        // --- 核心改动：在 SDK run 之前准备好所有信息 ---
-        try {
-          // 1. 准备商品信息
-          const goodsId = document.getElementById('goods_id').innerText;
-          const goodsTitle = document.getElementById('goods_title').innerText;
-          const goodsImage = document.getElementById('goods_image').src;
-          const goodsPrice = document.getElementById('price').innerText;
-          const goodsUrl = window.location.href;
-          const origin = window.location.origin;
-
-          // 2. 准备用户信息 (逻辑与之前相同)
+      // --- 封装：获取或创建用户信息 (使用 localStorage) ---
+      function getOrSetUserInfo() {
+          // 准备用户信息 (逻辑与之前相同)
           let userId;
           let userName;
           let avatarUrl;
-          let loginUserId = localStorage.getItem('user_id');
+
+          // let loginUserId = localStorage.getItem('user_id');
+          let loginUserId = "22334";
+          // 只有 ID 为 22334 时，这个 hash 才是有效的, userHash需要请求后端获取, 这只为了测试而硬编码
+          userHash = "f5fabd53697045e98ab77f8c07fc76b175fe6b50f136d621889191c15cb8ead7";
 
           if (loginUserId) {
             userId = loginUserId;
@@ -94,31 +91,59 @@
             localStorage.setItem('avatar_url', avatarUrl);
           }
 
-          // 3. 将用户信息和自定义属性直接传入 run 方法
-          window.chatwootSDK.run({
-            websiteToken: '7Lwg9fZnczpy18q8ZqvPfW1V',
-            baseUrl: BASE_URL,
-            // --- 这是解决问题的关键 ---
-            user: {
-              identifier: userId, // 直接提供用户唯一标识
-              name: userName,
-              avatar_url: avatarUrl,
-            },
-            custom_attributes: {
-              goods_id: goodsId,
-              goods_title: goodsTitle,
-              goods_image: goodsImage,
-              goods_price: goodsPrice,
-              goods_url: goodsUrl,
+
+        return { userId, userName, avatarUrl, userHash };
+      }
+
+      g.onload = function () {
+        try {
+          // --- 准备商品信息 ---
+          const goodsInfo = {
+             goods_id: document.getElementById('goods_id').innerText,
+             goods_title: document.getElementById('goods_title').innerText,
+             goods_image: document.getElementById('goods_image').src,
+             goods_price: document.getElementById('price').innerText,
+             goods_url: window.location.href
+          };
+
+          // --- 关键修改：监听 chatwoot:ready 事件 ---
+          window.addEventListener('chatwoot:ready', function () {
+
+            // 1. 获取用户信息 (读取或写入)
+            const user = getOrSetUserInfo();
+
+            // 2. 构造 setUser 对象
+            const userConfig = {
+              name: user.userName,
+              avatar_url: user.avatarUrl,
+            };
+
+            // ⚠️ 极其重要：
+            // 如果你开启了 Identity Validation，identifier_hash 必须传且必须正确。
+            // 如果是随机生成的访客ID，通常不要传错误的 hash，否则会被拒绝连接。
+            // 这里因为我们确信 userId "22334" 对应这个 hash，所以可以传。
+            if (user.userHash && user.userId === "22334") {
+                userConfig.identifier_hash = user.userHash;
             }
+
+            console.log("向 Chatwoot 设置用户:", user.userId, userConfig);
+
+            // 3. 设置用户唯一标识 (找回历史记录的核心)
+            window.$chatwoot.setUser(user.userId, userConfig);
+
+            // 4. 设置商品自定义属性
+            window.$chatwoot.setCustomAttributes(goodsInfo);
+          });
+
+          // --- SDK 启动 (只负责配置) ---
+          window.chatwootSDK.run({
+            websiteToken: WEBSITE_TOKEN,
+            baseUrl: BASE_URL
           });
 
         } catch (error) {
           console.error('配置 Chatwoot SDK 失败:', error);
         }
-
-        // 注意：现在我们不再需要 'chatwoot:ready' 事件监听和 setUser 调用了
-        // 因为所有事情都在 run 的时候一次性完成了。
       }
     })(document, "script");
   </script>

@@ -56,7 +56,7 @@
   </div>
 
 
-<script>
+  <script>
     (function (d, t) {
       var BASE_URL = "http://chatwoot.cc.cc:3000";
       var WEBSITE_TOKEN = '7Lwg9fZnczpy18q8ZqvPfW1V';
@@ -66,70 +66,58 @@
       g.async = true;
       s.parentNode.insertBefore(g, s);
 
-      // --- 封装：获取或创建用户信息 (使用 localStorage) ---
-      function getOrSetUserInfo() {
-          // 准备用户信息 (逻辑与之前相同)
-          let userId;
-          let userName;
-          let avatarUrl;
-
-          // let loginUserId = localStorage.getItem('user_id');
-          let loginUserId = "22334";
-          // 只有 ID 为 22334 时，这个 hash 才是有效的, userHash需要请求后端获取, 这只为了测试而硬编码
-          userHash = "f5fabd53697045e98ab77f8c07fc76b175fe6b50f136d621889191c15cb8ead7";
-
-          if (loginUserId) {
-            userId = loginUserId;
-            userName = localStorage.getItem('user_name') || `用户 ${userId}`;
-            avatarUrl = localStorage.getItem('avatar_url') || `${origin}/favicon.ico`;
-          } else {
-            userId = `visitor-${Date.now()}${Math.floor(100000 + Math.random() * 900000)}`;
-            userName = `访客-${userId.slice(-6)}`;
-            avatarUrl = `${origin}/favicon.ico`;
-            localStorage.setItem('user_id', userId);
-            localStorage.setItem('user_name', userName);
-            localStorage.setItem('avatar_url', avatarUrl);
-          }
-
-
-        return { userId, userName, avatarUrl, userHash };
-      }
-
       g.onload = function () {
         try {
           // --- 准备商品信息 ---
           const goodsInfo = {
-             goods_id: document.getElementById('goods_id').innerText,
-             goods_title: document.getElementById('goods_title').innerText,
-             goods_image: document.getElementById('goods_image').src,
-             goods_price: document.getElementById('price').innerText,
-             goods_url: window.location.href
+            goods_id: document.getElementById('goods_id').innerText,
+            goods_title: document.getElementById('goods_title').innerText,
+            goods_image: document.getElementById('goods_image').src,
+            goods_price: document.getElementById('price').innerText,
+            goods_url: window.location.href
           };
 
           // --- 关键修改：监听 chatwoot:ready 事件 ---
           window.addEventListener('chatwoot:ready', function () {
-
             // 1. 获取用户信息 (读取或写入)
-            const user = getOrSetUserInfo();
+            // 准备用户信息 (逻辑与之前相同)
+            let userId;
+            let userName;
+            let avatarUrl;
+
+            // let loginUserId = localStorage.getItem('user_id');
+            let loginUserId = "22334";
+            // 只有 ID 为 22334 时，这个 hash 才是有效的, userHash需要请求后端获取, 这只为了测试而硬编码
+            let userHash = "f5fabd53697045e98ab77f8c07fc76b175fe6b50f136d621889191c15cb8ead7";
+
+            if (loginUserId) {
+              userId = loginUserId;
+              userName = localStorage.getItem('user_name') || `用户 ${userId}`;
+              avatarUrl = localStorage.getItem('avatar_url') || `${origin}/favicon.ico`;
+            } else {
+              userId = `visitor-${Date.now()}${Math.floor(100000 + Math.random() * 900000)}`;
+              userName = `访客-${userId.slice(-6)}`;
+              avatarUrl = `${origin}/favicon.ico`;
+              localStorage.setItem('user_id', userId);
+              localStorage.setItem('user_name', userName);
+              localStorage.setItem('avatar_url', avatarUrl);
+            }
 
             // 2. 构造 setUser 对象
             const userConfig = {
-              name: user.userName,
-              avatar_url: user.avatarUrl,
+              name: userName,
+              avatar_url: avatarUrl,
             };
 
             // ⚠️ 极其重要：
-            // 如果你开启了 Identity Validation，identifier_hash 必须传且必须正确。
+            // identifier_hash 必须传且必须正确。
             // 如果是随机生成的访客ID，通常不要传错误的 hash，否则会被拒绝连接。
-            // 这里因为我们确信 userId "22334" 对应这个 hash，所以可以传。
-            if (user.userHash && user.userId === "22334") {
-                userConfig.identifier_hash = user.userHash;
+            if (userHash) {
+              userConfig.identifier_hash = userHash;
             }
 
-            console.log("向 Chatwoot 设置用户:", user.userId, userConfig);
-
             // 3. 设置用户唯一标识 (找回历史记录的核心)
-            window.$chatwoot.setUser(user.userId, userConfig);
+            window.$chatwoot.setUser(userId, userConfig);
 
             // 4. 设置商品自定义属性
             window.$chatwoot.setCustomAttributes(goodsInfo);

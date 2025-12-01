@@ -83,7 +83,7 @@ func (d *actionService) TransferToHuman(ConversationID uint, remark enum.Transfe
 		})
 	}
 	g.Go(func() error {
-		if err := global.ChatwootService.SetConversationStatus(ConversationID, enum.ConversationStatusOpen); err != nil {
+		if err := global.ChatwootService.SetConversationStatus(ConversationID, chatwoot.ConversationStatusOpen); err != nil {
 			global.Log.Errorf("[action]转接会话 %d 至人工客服失败: %v", ConversationID, err)
 			return err
 		}
@@ -124,7 +124,7 @@ func (d *actionService) SetConversationPending(conversationID uint) error {
 	if global.ChatwootService == nil {
 		return fmt.Errorf("Chatwoot客户端未初始化")
 	}
-	return global.ChatwootService.SetConversationStatus(conversationID, enum.ConversationStatusPending)
+	return global.ChatwootService.SetConversationStatus(conversationID, chatwoot.ConversationStatusPending)
 }
 
 func (d *actionService) ToggleTyping(conversationID uint, status bool) {

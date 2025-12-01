@@ -12,8 +12,10 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"gitee.com/taoJie_1/mall-agent/internal/chatwoot"
 	"gitee.com/taoJie_1/mall-agent/internal/redis"
 	"gitee.com/taoJie_1/mall-agent/utils"
+	"github.com/sashabaranov/go-openai"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/gin-gonic/gin"
@@ -35,7 +37,7 @@ func (d *ChatApi) HandleChat(ctx *gin.Context) {
 		common.Fail(ctx, "参数无效")
 		return
 	}
-	// global.Log.Debugln(string(bodyBytes))
+	bb := bodyBytes
 
 	ctx.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 
@@ -45,8 +47,9 @@ func (d *ChatApi) HandleChat(ctx *gin.Context) {
 		return
 	}
 
-	switch eventFinder.Event {
-	case enum.EventMessageCreated:
+	switch chatwoot.ChatwootEvent(eventFinder.Event) {
+	case chatwoot.EventMessageCreated:
+		global.Log.Debugln(string(bb))
 		var req common.ChatRequest
 		if err := json.Unmarshal(bodyBytes, &req); err != nil {
 			common.Fail(ctx, "参数无效")
@@ -54,7 +57,8 @@ func (d *ChatApi) HandleChat(ctx *gin.Context) {
 		}
 		d.handleMessageCreated(ctx, req)
 
-	case enum.EventConversationCreated:
+	case chatwoot.EventConversationCreated:
+		// global.Log.Debugln(string(bb))
 		var req common.ConversationCreatedRequest
 		if err := json.Unmarshal(bodyBytes, &req); err != nil {
 			common.Fail(ctx, "参数无效")
@@ -63,7 +67,7 @@ func (d *ChatApi) HandleChat(ctx *gin.Context) {
 		go d.handleConversationCreated(ctx, req)
 		common.Success(ctx, nil)
 
-	case enum.EventConversationResolved:
+	case chatwoot.EventConversationResolved:
 		var req common.ConversationResolvedRequest
 		if err := json.Unmarshal(bodyBytes, &req); err != nil {
 			common.Fail(ctx, "参数无效")
@@ -88,22 +92,18 @@ func (d *ChatApi) handleConversationCreated(ctx *gin.Context, req common.Convers
 
 // handleConversationResolved 收到消息处理
 func (d *ChatApi) handleMessageCreated(ctx *gin.Context, req common.ChatRequest) {
-	// 兼容; 新版 webhook 结构中, account_id 不在 conversation 内, 在根对象上
-	if req.Account.ID != 0 {
-		req.Conversation.AccountID = req.Account.ID
-	}
-
 	// 处理"人工客服"消息: 将其计入Redis历史
-	if req.MessageType == string(enum.MessageTypeOutgoing) && req.Sender.Type == "user" {
-		//理论上不会进入此处, 因为转人工后不需要用到LLM,也就不需要历史记录;以防万一
+	if req.MessageType == chatwoot.MessageTypeOutgoing && req.Sender.Type == chatwoot.SenderUser {
+		//转人工后不需要用到LLM,也就不需要历史记录;以防万一还是加上
 		common.Success(ctx, nil)
-		reqCopy := req
-		go d.updateHistoryWithHumanMessage(reqCopy)
+		if req.Content != "" {
+			go service.Service.UserServiceGroup.HistoryService.Append(context.Background(), req.Conversation.ConversationID, common.LlmMessage{Role: openai.ChatMessageRoleAssistant, Content: req.Content})
+		}
 		return
 	}
 
-	// 处理非"用户"消息
-	if req.MessageType != string(enum.MessageTypeIncoming) || req.Conversation.Meta.Sender.Type != string(enum.SenderTypeContact) {
+	// 处理非"用户"消息(即req.Conversation.Meta.Sender.Type=="agent_bot"机器人消息)
+	if req.MessageType != chatwoot.MessageTypeIncoming || req.Conversation.Meta.Sender.Type != chatwoot.SenderContact {
 		common.Success(ctx, nil)
 		return
 	}
@@ -176,12 +176,12 @@ func (d *ChatApi) processMessageAsync(ctx context.Context, req common.ChatReques
 	// 匹配到快捷回复
 	if cannedAnswer != "" {
 		service.Service.UserServiceGroup.ActionService.SendMessage(req.Conversation.ConversationID, cannedAnswer)
-		go service.Service.UserServiceGroup.HistoryService.Append(context.Background(), req.Conversation.ConversationID, common.LlmMessage{Role: "user", Content: req.Content}, common.LlmMessage{Role: "assistant", Content: cannedAnswer})
+		go service.Service.UserServiceGroup.HistoryService.Append(context.Background(), req.Conversation.ConversationID, common.LlmMessage{Role: openai.ChatMessageRoleUser, Content: req.Content}, common.LlmMessage{Role: openai.ChatMessageRoleAssistant, Content: cannedAnswer})
 		return
 	}
 
 	// 如果会话状态为 "open"，则检查宽限期
-	if req.Conversation.Status == string(enum.ConversationStatusOpen) {
+	if req.Conversation.Status == chatwoot.ConversationStatusOpen {
 		gracePeriodKey := fmt.Sprintf("%s%d", redis.KeyPrefixTransferGracePeriod, req.Conversation.ConversationID)
 		err := global.RedisClient.Get(ctx, gracePeriodKey).Err()
 
@@ -224,7 +224,7 @@ func (d *ChatApi) processMessageAsync(ctx context.Context, req common.ChatReques
 	// 获取会话历史
 	g.Go(func() error {
 		var historyErr error
-		fullHistory, historyErr = service.Service.UserServiceGroup.HistoryService.GetOrFetch(gCtx, req.Conversation.AccountID, req.Conversation.ConversationID, req.Content)
+		fullHistory, historyErr = service.Service.UserServiceGroup.HistoryService.GetOrFetch(gCtx, req.Account.ID, req.Conversation.ConversationID, req.Content)
 		if historyErr != nil {
 			global.Log.Warnf("[processMessageAsync] 获取历史记录失败: %v", historyErr)
 		}
@@ -242,7 +242,7 @@ func (d *ChatApi) processMessageAsync(ctx context.Context, req common.ChatReques
 		chosenVectorAnswer := vectorResults[0].Answer
 		global.Log.Debugf("[processMessageAsync] 向量搜索高相似度匹配，提前响应, 相似度: %.4f, 会话ID: %d", vectorResults[0].Similarity, req.Conversation.ConversationID)
 		service.Service.UserServiceGroup.ActionService.SendMessage(req.Conversation.ConversationID, chosenVectorAnswer)
-		go service.Service.UserServiceGroup.HistoryService.Append(context.Background(), req.Conversation.ConversationID, common.LlmMessage{Role: "user", Content: req.Content}, common.LlmMessage{Role: "assistant", Content: chosenVectorAnswer})
+		go service.Service.UserServiceGroup.HistoryService.Append(context.Background(), req.Conversation.ConversationID, common.LlmMessage{Role: openai.ChatMessageRoleUser, Content: req.Content}, common.LlmMessage{Role: openai.ChatMessageRoleAssistant, Content: chosenVectorAnswer})
 		return
 	}
 
@@ -323,7 +323,7 @@ func (d *ChatApi) processMessageAsync(ctx context.Context, req common.ChatReques
 
 	// 8. 发送消息并更新历史
 	service.Service.UserServiceGroup.ActionService.SendMessage(req.Conversation.ConversationID, llmAnswer)
-	go service.Service.UserServiceGroup.HistoryService.Append(context.Background(), req.Conversation.ConversationID, common.LlmMessage{Role: "user", Content: req.Content}, common.LlmMessage{Role: "assistant", Content: llmAnswer})
+	go service.Service.UserServiceGroup.HistoryService.Append(context.Background(), req.Conversation.ConversationID, common.LlmMessage{Role: openai.ChatMessageRoleUser, Content: req.Content}, common.LlmMessage{Role: openai.ChatMessageRoleAssistant, Content: llmAnswer})
 }
 
 // runTriage 执行分诊与智能路由
@@ -383,7 +383,7 @@ func (d *ChatApi) runTriage(ctx context.Context, req common.ChatRequest, fullHis
 	if enum.TriageIntent(triageResult.Intent) == enum.TriageIntentOffTopic {
 		global.Log.Debugf("[Triage] 识别为无关问题，已礼貌拒绝, 会话ID: %d", req.Conversation.ConversationID)
 		service.Service.UserServiceGroup.ActionService.SendMessage(req.Conversation.ConversationID, string(enum.ReplyMsgOffTopic))
-		go service.Service.UserServiceGroup.HistoryService.Append(context.Background(), req.Conversation.ConversationID, common.LlmMessage{Role: "user", Content: req.Content}, common.LlmMessage{Role: "assistant", Content: string(enum.ReplyMsgOffTopic)})
+		go service.Service.UserServiceGroup.HistoryService.Append(context.Background(), req.Conversation.ConversationID, common.LlmMessage{Role: openai.ChatMessageRoleUser, Content: req.Content}, common.LlmMessage{Role: openai.ChatMessageRoleAssistant, Content: string(enum.ReplyMsgOffTopic)})
 		return true, nil
 	}
 
@@ -424,7 +424,7 @@ func (d *ChatApi) runComplexGeneration(ctx context.Context, req common.ChatReque
 			if err := json.Unmarshal([]byte(toolCodeBlock), &toolCalls); err != nil {
 				global.Log.Errorf("[runComplexGeneration] 解析工具调用JSON数组失败: %v", err)
 				toolResult := fmt.Sprintf("工具调用格式错误: %v", err)
-				conversationHistory = append(conversationHistory, common.LlmMessage{Role: "user", Content: req.Content}, common.LlmMessage{Role: "assistant", Content: llmAnswer}, common.LlmMessage{Role: "tool", Content: toolResult})
+				conversationHistory = append(conversationHistory, common.LlmMessage{Role: openai.ChatMessageRoleUser, Content: req.Content}, common.LlmMessage{Role: openai.ChatMessageRoleAssistant, Content: llmAnswer}, common.LlmMessage{Role: openai.ChatMessageRoleTool, Content: toolResult})
 			} else if len(toolCalls) > 0 {
 				// 从MCP服务获取所有工具的描述
 				toolDescriptions := global.McpService.GetToolDescriptions()
@@ -470,7 +470,7 @@ func (d *ChatApi) runComplexGeneration(ctx context.Context, req common.ChatReque
 						)
 						mu.Lock()
 						toolResults = append(toolResults, common.LlmMessage{
-							Role:    "tool",
+							Role:    openai.ChatMessageRoleTool,
 							Content: finalContent,
 						})
 						mu.Unlock()
@@ -485,8 +485,8 @@ func (d *ChatApi) runComplexGeneration(ctx context.Context, req common.ChatReque
 				}
 
 				// 将用户问题、助手回复（工具调用指令）和所有工具执行结果一起添加到历史记录中
-				conversationHistory = append(conversationHistory, common.LlmMessage{Role: "user", Content: req.Content})
-				conversationHistory = append(conversationHistory, common.LlmMessage{Role: "assistant", Content: llmAnswer})
+				conversationHistory = append(conversationHistory, common.LlmMessage{Role: openai.ChatMessageRoleUser, Content: req.Content})
+				conversationHistory = append(conversationHistory, common.LlmMessage{Role: openai.ChatMessageRoleAssistant, Content: llmAnswer})
 				conversationHistory = append(conversationHistory, toolResults...)
 			}
 
@@ -501,14 +501,6 @@ func (d *ChatApi) runComplexGeneration(ctx context.Context, req common.ChatReque
 	}
 
 	return llmAnswer, nil
-}
-
-// updateHistoryWithHumanMessage 将人工客服的回复追加到Redis历史记录中
-func (d *ChatApi) updateHistoryWithHumanMessage(req common.ChatRequest) {
-	if req.Content == "" {
-		return
-	}
-	go service.Service.UserServiceGroup.HistoryService.Append(context.Background(), req.Conversation.ConversationID, common.LlmMessage{Role: "assistant", Content: req.Content})
 }
 
 // handleConversationResolved 处理会话解决事件，取消正在进行的AI任务

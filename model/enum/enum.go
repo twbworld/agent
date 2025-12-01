@@ -42,49 +42,6 @@ const (
 	KeywordTypeExact KeywordType = "EXACT"
 )
 
-type ChatwootWebhook string
-
-const (
-	// 来自联系人的新消息。
-	MessageTypeIncoming ChatwootWebhook = "incoming"
-	// 从应用程序发送的消息。
-	MessageTypeOutgoing ChatwootWebhook = "outgoing"
-	// 对话中的最终用户。
-	SenderTypeContact ChatwootWebhook = "contact"
-)
-
-type ConversationStatus string
-
-const (
-	//会话开放状态, 人工客服可恢复
-	ConversationStatusOpen ConversationStatus = "open"
-	//会话待处理
-	ConversationStatusPending ConversationStatus = "pending"
-	//会话已解决
-	ConversationStatusResolved ConversationStatus = "resolved"
-	//会话暂停
-	ConversationStatusSnoozed ConversationStatus = "snoozed"
-)
-
-type ChatwootEvent string
-
-const (
-	// 用户打开小部件,即点击浮窗(机器人+集成 都会Webhooks)
-	EventWebwidgetTriggered ChatwootEvent = "webwidget_triggered"
-	// 来自联系人的新消息。(机器人和集成 都会Webhooks)
-	EventMessageCreated ChatwootEvent = "message_created"
-	// 消息已更新。
-	EventMessageUpdated ChatwootEvent = "message_updated"
-	// 新对话创建。
-	EventConversationCreated ChatwootEvent = "conversation_created"
-	// 对话状态更改。
-	EventConversationStatusChanged ChatwootEvent = "conversation_status_changed"
-	// 对话已更新。
-	EventConversationUpdated ChatwootEvent = "conversation_updated"
-	// 对话已解决。
-	EventConversationResolved ChatwootEvent = "conversation_resolved"
-)
-
 // TriageIntent 定义了分诊台模型可能识别出的用户意图
 type TriageIntent string
 

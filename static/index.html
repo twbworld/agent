@@ -2,6 +2,8 @@
 <html>
 
 <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>商品详情页</title>
   <style>
     body {
@@ -57,12 +59,98 @@
 
 
   <script>
+    // ========== uni-app 通信部分 ==========
+    
+    // 发送消息到uni-app的通用方法
+    function sendMessage(type, data) {
+      const message = {
+        type: type,
+        data: data,
+        timestamp: Date.now()
+      };
+      
+      // H5环境使用postMessage
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage(JSON.stringify(message), '*');
+        console.log('已发送消息到uni-app:', type);
+      }
+      
+      // App环境使用uni.postMessage
+      if (typeof uni !== 'undefined' && uni.postMessage) {
+        uni.postMessage({ data: message });
+        console.log('已发送消息到uni-app:', type);
+      }
+    }
+
+    // 监听来自uni-app的消息
+    window.onUniAppMessage = function(message) {
+      console.log('收到uni-app消息:', message);
+      
+      // 根据消息类型处理不同的操作
+      switch (message.type) {
+        case 'init':
+          console.log('收到初始化消息:', message.data);
+          break;
+          
+        case 'user_info_response':
+          if (message.data.success) {
+            console.log('收到用户信息:', message.data.data);
+            // 使用接收到的用户信息更新Chatwoot
+            if (window.$chatwoot && message.data.data) {
+              const userInfo = message.data.data;
+              window.$chatwoot.setUser(userInfo.id || userInfo.userId, {
+                name: userInfo.nickname || userInfo.userName,
+                avatar_url: userInfo.avatar,
+                email: userInfo.email
+              });
+            }
+          }
+          break;
+          
+        // 可以添加更多消息类型的处理
+        default:
+          console.log('收到未处理的消息类型:', message.type);
+          break;
+      }
+    };
+
+    // 页面加载完成后发送ready消息给uni-app
+    window.addEventListener('load', function() {
+      setTimeout(function() {
+        // 通知uni-app页面已准备就绪
+        sendMessage('ready', {
+          url: window.location.href,
+          title: document.title,
+          goodsId: document.getElementById('goods_id').innerText,
+          orderId: document.getElementById('order_id').innerText
+        });
+      }, 500);
+    });
+
+    // 示例：发送商品信息给uni-app
+    function sendProductInfo() {
+      sendMessage('product_info', {
+        goods_id: document.getElementById('goods_id').innerText,
+        goods_title: document.getElementById('goods_title').innerText,
+        goods_image: document.getElementById('goods_image').src,
+        price: document.getElementById('price').innerText
+      });
+    }
+
+    // 请求用户信息
+    function requestUserInfo() {
+      sendMessage('user_info');
+    }
+
+    // ========== Chatwoot SDK 部分 ==========
+    
     (function (d, t) {
-      var BASE_URL = "http://chatwoot.cc.cc:3000";
+      var BASE_URL = "http://192.168.3.111:3000";
       var WEBSITE_TOKEN = '7Lwg9fZnczpy18q8ZqvPfW1V';
 
       var g = d.createElement(t), s = d.getElementsByTagName(t)[0];
       g.src = BASE_URL + "/packs/js/sdk.js";
+      // g.src = 'http://192.168.3.84:8081/exportsdk.js'
       g.async = true;
       s.parentNode.insertBefore(g, s);
 
@@ -93,11 +181,11 @@
             if (loginUserId) {
               userId = loginUserId;
               userName = localStorage.getItem('user_name') || `用户 ${userId}`;
-              avatarUrl = localStorage.getItem('avatar_url') || `${origin}/favicon.ico`;
+              avatarUrl = localStorage.getItem('avatar_url') || `${window.location.origin}/favicon.ico`;
             } else {
               userId = `visitor-${Date.now()}${Math.floor(100000 + Math.random() * 900000)}`;
               userName = `访客-${userId.slice(-6)}`;
-              avatarUrl = `${origin}/favicon.ico`;
+              avatarUrl = `${window.location.origin}/favicon.ico`;
               localStorage.setItem('user_id', userId);
               localStorage.setItem('user_name', userName);
               localStorage.setItem('avatar_url', avatarUrl);
@@ -121,6 +209,9 @@
 
             // 4. 设置商品自定义属性
             window.$chatwoot.setCustomAttributes(goodsInfo);
+            
+            // 通知uni-app Chatwoot已准备就绪
+            sendMessage('chatwoot_ready', goodsInfo);
           });
 
           // --- SDK 启动 (只负责配置) ---

@@ -164,6 +164,18 @@ type Attachment struct {
 	FileUrl  string `json:"file_url"`
 }
 
+// ConversationSummary 定义会话摘要信息
+type ConversationSummary struct {
+	ID     uint               `json:"id"`
+	Status ConversationStatus `json:"status"`
+	InboxID int               `json:"inbox_id"`
+}
+
+// ContactConversationsResponse 定义获取联系人会话列表的响应结构
+type ContactConversationsResponse struct {
+	Payload []ConversationSummary `json:"payload"`
+}
+
 type Service interface {
 	// 获取所有的预设回复
 	GetCannedResponses() ([]CannedResponse, error)
@@ -187,6 +199,8 @@ type Service interface {
 	CreateCardMessage(conversationID uint, content string, cardItems []CardItem) error
 	// 从Chatwoot API获取指定会话的历史消息
 	GetConversationMessages(accountID, conversationID uint) ([]Message, error)
+	// 获取指定联系人的所有会话
+	GetContactConversations(contactID uint) ([]ConversationSummary, error)
 }
 
 // TransferToHumanRequest 定义了转人工API的请求体
@@ -384,6 +398,16 @@ func (c *Client) CreateCardMessage(conversationID uint, content string, cardItem
 func (c *Client) GetConversationMessages(accountID, conversationID uint) ([]Message, error) {
 	path := fmt.Sprintf("/api/v1/accounts/%d/conversations/%d/messages", accountID, conversationID)
 	var response ConversationMessagesResponse
+	err := c.sendRequest("GET", path, agentToken, nil, &response)
+	if err != nil {
+		return nil, err
+	}
+	return response.Payload, nil
+}
+
+func (c *Client) GetContactConversations(contactID uint) ([]ConversationSummary, error) {
+	path := fmt.Sprintf("/api/v1/accounts/%d/contacts/%d/conversations", c.AccountID, contactID)
+	var response ContactConversationsResponse
 	err := c.sendRequest("GET", path, agentToken, nil, &response)
 	if err != nil {
 		return nil, err

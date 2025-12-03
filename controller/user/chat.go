@@ -29,9 +29,7 @@ import (
 
 type ChatApi struct{}
 
-var ErrVectorMatchFound = errors.New("vector match found")
-
-func (d *ChatApi) HandleChat(ctx *gin.Context) {
+func (c *ChatApi) HandleWebhook(ctx *gin.Context) {
 	bodyBytes, err := io.ReadAll(ctx.Request.Body)
 	if err != nil {
 		common.Fail(ctx, "参数无效")
@@ -48,6 +46,19 @@ func (d *ChatApi) HandleChat(ctx *gin.Context) {
 	}
 
 	switch chatwoot.ChatwootEvent(eventFinder.Event) {
+	case chatwoot.EventWebwidgetTriggered:
+		global.Log.Debugln("收到WebWidget触发事件:", string(bb))
+
+		var req common.WebwidgetTriggeredRequest
+		if err := json.Unmarshal(bodyBytes, &req); err != nil {
+			global.Log.Errorf("[HandleWebhook] 解析 WebWidgetPayload 失败: %v", err)
+			return
+		}
+		if req.Contact.ID != 0 {
+			go c.handleWebWidgetTriggered(req.Contact.ID, req.Contact.CustomAttributes)
+		}
+		common.Success(ctx, nil)
+
 	case chatwoot.EventMessageCreated:
 		global.Log.Debugln(string(bb))
 		var req common.ChatRequest
@@ -55,7 +66,7 @@ func (d *ChatApi) HandleChat(ctx *gin.Context) {
 			common.Fail(ctx, "参数无效")
 			return
 		}
-		d.handleMessageCreated(ctx, req)
+		c.handleMessageCreated(ctx, req)
 
 	case chatwoot.EventConversationResolved:
 		var req common.ConversationResolvedRequest
@@ -63,7 +74,7 @@ func (d *ChatApi) HandleChat(ctx *gin.Context) {
 			common.Fail(ctx, "参数无效")
 			return
 		}
-		go d.handleConversationResolved(req.ID)
+		go c.handleConversationResolved(req.ID)
 		common.Success(ctx, nil)
 
 	default:
@@ -71,14 +82,48 @@ func (d *ChatApi) HandleChat(ctx *gin.Context) {
 	}
 }
 
+// handleWebWidgetTriggered 复活旧会话(为了客户端能显示历史聊天记录)并发送卡片
+func (c *ChatApi) handleWebWidgetTriggered(contactID uint, attrs common.CustomAttributes) {
+	conversations, err := global.ChatwootService.GetContactConversations(contactID)
+	if err != nil {
+		global.Log.Errorf("获取联系人 %d 的会话列表失败: %v", contactID, err)
+		return
+	}
+
+	if len(conversations) == 0 {
+		return // 新用户，无历史会话
+	}
+
+	// 取最近的一个会话（Chatwoot API通常按时间倒序返回，第一个即为最近）
+	lastConv := conversations[0]
+
+	// 如果会话已解决，强制复活（改为 Open 状态）
+	if lastConv.Status == chatwoot.ConversationStatusResolved {
+		global.Log.Debugf("检测到用户 %d 重返，正在复活旧会话 %d", contactID, lastConv.ID)
+		if err := global.ChatwootService.SetConversationStatus(lastConv.ID, chatwoot.ConversationStatusOpen); err != nil {
+			global.Log.Errorf("复活会话 %d 失败: %v", lastConv.ID, err)
+			return
+		}
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	service.Service.UserServiceGroup.ActionService.CheckAndSendProductCard(ctx, lastConv.ID, attrs)
+}
+
+
+
 // handleMessageCreated 收到消息处理
-func (d *ChatApi) handleMessageCreated(ctx *gin.Context, req common.ChatRequest) {
-	// 异步尝试发送商品卡片
-	go d.trySendProductCardAsync(req)
+func (c *ChatApi) handleMessageCreated(ctx *gin.Context, req common.ChatRequest) {
+	go func() {
+		bgCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		service.Service.UserServiceGroup.ActionService.CheckAndSendProductCard(bgCtx, req.Conversation.ID, req.Conversation.Meta.Sender.CustomAttributes)
+	}()
 
 	// 处理"人工客服"消息: 将其计入Redis历史,并设置人工宽限期
 	if req.MessageType == chatwoot.MessageTypeOutgoing && req.Sender.Type == chatwoot.SenderUser {
-		service.Service.UserServiceGroup.ActionService.ActivateHumanModeGracePeriod(req.Conversation.ID)
+		service.Service.UserServiceGroup.ActionService.ActivateHumanModeGracePeriod(ctx.Request.Context(), req.Conversation.ID)
 
 		common.Success(ctx, nil)
 		if req.Content != "" {
@@ -93,8 +138,8 @@ func (d *ChatApi) handleMessageCreated(ctx *gin.Context, req common.ChatRequest)
 		return
 	}
 
-	// 收到用户消息时，如果当前处于人工模式宽限期内，刷新宽限期时间，防止机器人中途介入
-	service.Service.UserServiceGroup.ActionService.RefreshHumanModeGracePeriod(req.Conversation.ID)
+	// 收到用户消息时，如果当前处于人工模式宽限期内，刷新宽限期时间
+	service.Service.UserServiceGroup.ActionService.RefreshHumanModeGracePeriod(ctx.Request.Context(), req.Conversation.ID)
 
 	// 调用验证器验证请求
 	if err := service.Service.UserServiceGroup.Validator.ValidatorChatRequest(&req); err != nil {
@@ -130,68 +175,26 @@ func (d *ChatApi) handleMessageCreated(ctx *gin.Context, req common.ChatRequest)
 		defer cancel()
 
 		// 注册任务，以便在会话解决时可以取消
-		d.storeTask(reqCopy.Conversation.ID, cancel)
-		defer d.removeTask(reqCopy.Conversation.ID)
+		c.storeTask(reqCopy.Conversation.ID, cancel)
+		defer c.removeTask(reqCopy.Conversation.ID)
 
-		d.processMessageAsync(asyncCtx, reqCopy)
+		c.processMessageAsync(asyncCtx, reqCopy)
 	}()
 }
 
-// trySendProductCardAsync 异步检查并发送商品/订单卡片
-// 逻辑: 记录上次发送的ID，如果当前咨询的ID与上次不同，则发送卡片。
-func (d *ChatApi) trySendProductCardAsync(req common.ChatRequest) {
-	attrs := req.Conversation.Meta.Sender.CustomAttributes
-	ctx := context.Background()
+// handleConversationResolved 处理会话解决事件，取消正在进行的AI任务
+func (c *ChatApi) handleConversationResolved(conversationID uint) {
+	global.ActiveLLMTasks.Lock()
+	defer global.ActiveLLMTasks.Unlock()
 
-	// --- 商品卡片逻辑 ---
-	if attrs.GoodsID != "" {
-		key := fmt.Sprintf("%s%d", redis.KeyPrefixLastProductSent, req.Conversation.ID)
-
-		// 获取该会话上次发送的商品ID
-		lastSentGoodsID, err := global.RedisClient.Get(ctx, key).Result()
-		if err != nil && err != redis.ErrNil {
-			global.Log.Warnf("获取最后发送商品ID失败: %v", err)
-		}
-
-		// 如果Redis中没有记录(首次)，或者记录的ID与当前ID不一致，则发送
-		if lastSentGoodsID != attrs.GoodsID {
-			global.Log.Debugf("为会话 %d 发送商品 %s 的信息卡片 (上次: %s)", req.Conversation.ID, attrs.GoodsID, lastSentGoodsID)
-
-			// 发送卡片
-			service.Service.UserServiceGroup.ActionService.SendProductCard(req.Conversation.ID, attrs)
-
-			// 更新Redis记录，设置24小时过期
-			if err := global.RedisClient.Set(ctx, key, attrs.GoodsID, 24*time.Hour).Err(); err != nil {
-				global.Log.Warnf("更新会话 %d 最后发送商品ID失败: %v", req.Conversation.ID, err)
-			}
-		} else {
-			global.Log.Debugf("商品 %s 的信息卡片已在会话 %d 中发送过(且为最新)，本次跳过", attrs.GoodsID, req.Conversation.ID)
-		}
-	}
-
-	// --- 订单卡片逻辑 (预留) ---
-	if attrs.OrderID != "" {
-		key := fmt.Sprintf("%s%d", redis.KeyPrefixLastOrderSent, req.Conversation.ID)
-
-		lastSentOrderID, err := global.RedisClient.Get(ctx, key).Result()
-		if err != nil && err != redis.ErrNil {
-			global.Log.Warnf("获取最后发送订单ID失败: %v", err)
-		}
-
-		if lastSentOrderID != attrs.OrderID {
-			global.Log.Debugf("为会话 %d 发送订单 %s 的信息卡片 (上次: %s)", req.Conversation.ID, attrs.OrderID, lastSentOrderID)
-
-			// TODO: 实现 SendOrderCard 方法后在此调用
-			// service.Service.UserServiceGroup.ActionService.SendOrderCard(req.Conversation.ID, attrs)
-
-			if err := global.RedisClient.Set(ctx, key, attrs.OrderID, 24*time.Hour).Err(); err != nil {
-				global.Log.Warnf("更新会话 %d 最后发送订单ID失败: %v", req.Conversation.ID, err)
-			}
-		}
+	if cancel, exists := global.ActiveLLMTasks.Data[conversationID]; exists {
+		cancel() // 调用取消函数
+		delete(global.ActiveLLMTasks.Data, conversationID)
+		global.Log.Debugf("会话%d已解决，已终止正在进行的AI任务。", conversationID)
 	}
 }
 
-func (d *ChatApi) processMessageAsync(ctx context.Context, req common.ChatRequest) {
+func (c *ChatApi) processMessageAsync(ctx context.Context, req common.ChatRequest) {
 	defer func() {
 		if p := recover(); p != nil {
 			global.Log.Errorf("[processMessageAsync] panic: %v", p)
@@ -202,7 +205,7 @@ func (d *ChatApi) processMessageAsync(ctx context.Context, req common.ChatReques
 	var isGracePeriodOverride bool // 标记是否处于宽限期处理模式
 
 	// 1. 快速路径优先：同步执行关键词匹配
-	cannedAnswer, isAction, err := service.Service.UserServiceGroup.ActionService.CannedResponses(&req)
+	cannedAnswer, isAction, err := service.Service.UserServiceGroup.ActionService.MatchCannedResponse(&req)
 	if err != nil {
 		global.Log.Errorf("[processMessageAsync] 匹配关键字失败: %v", err)
 		_ = service.Service.UserServiceGroup.ActionService.TransferToHuman(req.Conversation.ID, enum.TransferToHuman2, string(enum.ReplyMsgLlmError))
@@ -320,7 +323,7 @@ func (d *ChatApi) processMessageAsync(ctx context.Context, req common.ChatReques
 	global.Log.Debugln("会话历史=========", fullHistory)
 
 	// 4. 分诊台 (Triage) & 智能路由
-	processed, err := d.runTriage(ctx, req, fullHistory, vectorResults)
+	processed, err := c.runTriage(ctx, req, fullHistory, vectorResults)
 	if err != nil {
 		global.Log.Errorf("[processMessageAsync] 分诊失败: %v, 会话ID: %d", err, req.Conversation.ID)
 		_ = service.Service.UserServiceGroup.ActionService.TransferToHuman(req.Conversation.ID, enum.TransferToHuman2, string(enum.ReplyMsgLlmError))
@@ -333,7 +336,7 @@ func (d *ChatApi) processMessageAsync(ctx context.Context, req common.ChatReques
 	// --- 分诊通过，进入深度处理路径 ---
 
 	// 5. 调用大型LLM服务 (含RAG和工具调用)
-	llmAnswer, err := d.runComplexGeneration(ctx, req, fullHistory, vectorResults)
+	llmAnswer, err := c.runComplexGeneration(ctx, req, fullHistory, vectorResults)
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
 			global.Log.Debugf("会话 %d 的AI任务被取消。", req.Conversation.ID)
@@ -387,7 +390,7 @@ func (d *ChatApi) processMessageAsync(ctx context.Context, req common.ChatReques
 }
 
 // runTriage 执行分诊与智能路由
-func (d *ChatApi) runTriage(ctx context.Context, req common.ChatRequest, fullHistory []common.LlmMessage, vectorResults []dao.SearchResult) (processed bool, err error) {
+func (c *ChatApi) runTriage(ctx context.Context, req common.ChatRequest, fullHistory []common.LlmMessage, vectorResults []dao.SearchResult) (processed bool, err error) {
 	// 准备分诊台所需的上下文信息
 	var triageHistory []common.LlmMessage
 	if len(fullHistory) > 0 {
@@ -451,7 +454,7 @@ func (d *ChatApi) runTriage(ctx context.Context, req common.ChatRequest, fullHis
 }
 
 // runComplexGeneration 执行复杂的RAG+LLM生成，并处理工具调用
-func (d *ChatApi) runComplexGeneration(ctx context.Context, req common.ChatRequest, fullHistory []common.LlmMessage, vectorResults []dao.SearchResult) (string, error) {
+func (c *ChatApi) runComplexGeneration(ctx context.Context, req common.ChatRequest, fullHistory []common.LlmMessage, vectorResults []dao.SearchResult) (string, error) {
 	// 准备给大型LLM的参考资料 (RAG)
 	var llmReferenceDocs []dao.SearchResult
 	if len(vectorResults) > 0 {
@@ -563,20 +566,8 @@ func (d *ChatApi) runComplexGeneration(ctx context.Context, req common.ChatReque
 	return llmAnswer, nil
 }
 
-// handleConversationResolved 处理会话解决事件，取消正在进行的AI任务
-func (d *ChatApi) handleConversationResolved(conversationID uint) {
-	global.ActiveLLMTasks.Lock()
-	defer global.ActiveLLMTasks.Unlock()
-
-	if cancel, exists := global.ActiveLLMTasks.Data[conversationID]; exists {
-		cancel() // 调用取消函数
-		delete(global.ActiveLLMTasks.Data, conversationID)
-		global.Log.Debugf("会话%d已解决，已终止正在进行的AI任务。", conversationID)
-	}
-}
-
 // storeTask 存储一个异步任务的取消函数
-func (d *ChatApi) storeTask(conversationID uint, cancel context.CancelFunc) {
+func (c *ChatApi) storeTask(conversationID uint, cancel context.CancelFunc) {
 	global.ActiveLLMTasks.Lock()
 	defer global.ActiveLLMTasks.Unlock()
 	// 如果该会话已有任务在运行，先取消旧的
@@ -588,7 +579,7 @@ func (d *ChatApi) storeTask(conversationID uint, cancel context.CancelFunc) {
 }
 
 // removeTask 移除一个已完成或已取消的异步任务
-func (d *ChatApi) removeTask(conversationID uint) {
+func (c *ChatApi) removeTask(conversationID uint) {
 	global.ActiveLLMTasks.Lock()
 	defer global.ActiveLLMTasks.Unlock()
 	delete(global.ActiveLLMTasks.Data, conversationID)

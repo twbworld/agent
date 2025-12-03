@@ -48,9 +48,9 @@ func Start(ginServer *gin.Engine) {
 
 	v1 := ginServer.Group("api/v1")
 	{
-		v1.POST("/chat", controller.Api.UserApiGroup.ChatApi.HandleChat)
+		v1.POST("/chat", controller.Api.UserApiGroup.ChatApi.HandleWebhook)
 		v1.POST("/mcp/reload", controller.Api.UserApiGroup.BaseApi.Reload)
-		v1.POST("/dashboard/details", controller.Api.UserApiGroup.DashboardApi.GetDashboardDetails)
+		v1.POST("/chatwoot/details", controller.Api.UserApiGroup.DashboardApi.GetDashboardDetails)
 
 		// 知识库管理页面的 API 路由
 		adminRoutes := v1.Group("/admin")
@@ -65,9 +65,12 @@ func Start(ginServer *gin.Engine) {
 			}
 			adminRoutes.POST("/upload/image", controller.Api.AdminApiGroup.UploadApi.UploadImage)
 		}
+	}
 
-		v1.GET("/chatwoot/widget/contact-details", func(ctx *gin.Context) {
-			// 此接口现在只负责提供静态的HTML框架，所有动态数据均由前端JS通过postMessage获取
+	chatwootGroup := ginServer.Group("/chatwoot")
+	{
+		//在chatwoot下"集成方式-仪表板应用"配置的, 用于在客服会话界面展示的页面
+		chatwootGroup.GET("/dashboard", func(ctx *gin.Context) {
 			ctx.HTML(http.StatusOK, "contact_details.html", nil)
 		})
 	}

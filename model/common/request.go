@@ -30,6 +30,14 @@ type ConversationCreatedRequest struct {
 	Messages []MessageFromCreation `json:"messages"`
 }
 
+// 对应 Chatwoot webhook 的事件 'webwidget_triggered' 消息体
+type WebwidgetTriggeredRequest struct {
+	Contact struct {
+		ID               uint             `json:"id"`
+		CustomAttributes CustomAttributes `json:"custom_attributes"`
+	} `json:"contact"`
+}
+
 // 对应 Chatwoot webhook 的事件 'conversation_resolved' 消息体
 type ConversationResolvedRequest struct {
 	Event
@@ -93,11 +101,13 @@ type CustomAttributes struct {
 	GoodsPrice string `json:"goods_price,omitempty"`
 	GoodsUrl   string `json:"goods_url,omitempty"`
 
-	OrderID    string `json:"order_id,omitempty"`
+	OrderID string `json:"order_id,omitempty"`
 }
 
 // 定义了仪表板详情请求的JSON结构
 type DashboardDetailsRequest struct {
-	GoodsID string `json:"goods_id"`
-	OrderID string `json:"order_id"`
+	ContactID string `json:"contact_id,omitempty"`
+	UserID    string `json:"user_id,omitempty"`
+	GoodsID   string `json:"goods_id,omitempty"`
+	OrderID   string `json:"order_id,omitempty"`
 }

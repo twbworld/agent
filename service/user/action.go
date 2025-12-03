@@ -16,8 +16,8 @@ import (
 )
 
 type ActionService interface {
-	// 发送商品信息卡片
-	SendProductCard(conversationID uint, attrs common.CustomAttributes)
+	// 检查并发送商品/订单卡片
+	CheckAndSendProductCard(ctx context.Context, conversationID uint, attrs common.CustomAttributes)
 	// 转接人工客服
 	TransferToHuman(ConversationID uint, remark enum.TransferToHuman, message ...string) error
 	// 将会话状态设置为机器人处理
@@ -27,11 +27,11 @@ type ActionService interface {
 	// 发送消息
 	SendMessage(conversationID uint, content string)
 	// 匹配预设回复或执行特殊动作（如转人工）
-	CannedResponses(chatRequest *common.ChatRequest) (string, bool, error)
+	MatchCannedResponse(chatRequest *common.ChatRequest) (string, bool, error)
 	// 设置人工模式宽限期
-	ActivateHumanModeGracePeriod(conversationID uint)
+	ActivateHumanModeGracePeriod(ctx context.Context, conversationID uint)
 	// 刷新人工模式宽限期
-	RefreshHumanModeGracePeriod(conversationID uint)
+	RefreshHumanModeGracePeriod(ctx context.Context, conversationID uint)
 }
 
 type actionService struct {
@@ -47,7 +47,7 @@ var noGracePeriodReasons = []enum.TransferToHuman{
 }
 
 func NewActionService() ActionService {
-	// 初始化转人工的关键词列表,避免在每次调用时都创建map
+	// 初始化转人工的关键词列表
 	transferSet := make(map[string]struct{})
 	keywordsList := global.Config.Ai.TransferKeywords
 	for _, kw := range keywordsList {
@@ -59,12 +59,12 @@ func NewActionService() ActionService {
 	}
 }
 
-func (d *actionService) TransferToHuman(ConversationID uint, remark enum.TransferToHuman, message ...string) error {
+func (a *actionService) TransferToHuman(ConversationID uint, remark enum.TransferToHuman, message ...string) error {
 	if global.ChatwootService == nil {
 		return fmt.Errorf("Chatwoot客户端未初始化")
 	}
 
-	// 同步设置宽限期标志 (如果需要)
+	// 同步设置宽限期标志
 	gracePeriod := time.Duration(global.Config.Ai.TransferGracePeriod) * time.Second
 	if gracePeriod > 0 && utils.InSlice(noGracePeriodReasons, remark) == -1 {
 		if global.RedisClient != nil {
@@ -77,7 +77,7 @@ func (d *actionService) TransferToHuman(ConversationID uint, remark enum.Transfe
 
 	g, _ := errgroup.WithContext(context.Background())
 
-	// 创建私信备注（内部使用）
+	// 创建私信备注
 	if remark != "" {
 		g.Go(func() error {
 			if err := global.ChatwootService.CreatePrivateNote(ConversationID, string(remark)); err != nil {
@@ -93,17 +93,14 @@ func (d *actionService) TransferToHuman(ConversationID uint, remark enum.Transfe
 		}
 		return nil
 	})
-	// 根据转接原因决定发送给用户的消息
+
 	userMessage := ""
 	if utils.InSlice(noGracePeriodReasons, remark) != -1 {
-		// 显式转人工，或高优先级转人工
 		userMessage = string(enum.ReplyMsgTransferSuccess)
 	} else {
-		// 隐式转人工，且有宽限期
 		userMessage = string(enum.ReplyMsgAiRetrying)
 	}
 
-	// 如果有额外的消息参数，则覆盖默认消息
 	if len(message) > 0 && message[0] != "" {
 		userMessage = message[0]
 	}
@@ -117,21 +114,17 @@ func (d *actionService) TransferToHuman(ConversationID uint, remark enum.Transfe
 		})
 	}
 
-	if err := g.Wait(); err != nil {
-		return err
-	}
-
-	return nil
+	return g.Wait()
 }
 
-func (d *actionService) SetConversationPending(conversationID uint) error {
+func (a *actionService) SetConversationPending(conversationID uint) error {
 	if global.ChatwootService == nil {
 		return fmt.Errorf("Chatwoot客户端未初始化")
 	}
 	return global.ChatwootService.SetConversationStatus(conversationID, chatwoot.ConversationStatusPending)
 }
 
-func (d *actionService) ToggleTyping(conversationID uint, status bool) {
+func (a *actionService) ToggleTyping(conversationID uint, status bool) {
 	if global.ChatwootService == nil {
 		return
 	}
@@ -144,7 +137,7 @@ func (d *actionService) ToggleTyping(conversationID uint, status bool) {
 	}
 }
 
-func (d *actionService) SendMessage(conversationID uint, content string) {
+func (a *actionService) SendMessage(conversationID uint, content string) {
 	if global.ChatwootService == nil {
 		return
 	}
@@ -156,15 +149,14 @@ func (d *actionService) SendMessage(conversationID uint, content string) {
 // answer: 如果是普通回复，则为回复内容
 // isAction: 如果匹配到特殊动作（如转人工），则为true
 // err: 如果在匹配过程中发生错误
-func (d *actionService) CannedResponses(chatRequest *common.ChatRequest) (string, bool, error) {
+func (a *actionService) MatchCannedResponse(chatRequest *common.ChatRequest) (string, bool, error) {
 	content := strings.ToLower(strings.TrimSpace(chatRequest.Content))
-
 	if content == "" {
 		return "", false, nil
 	}
 
 	// 判断是否是"转人工"等关键字
-	if _, isTransfer := d.transferKeywords[content]; isTransfer {
+	if _, isTransfer := a.transferKeywords[content]; isTransfer {
 		return "", true, nil
 	}
 
@@ -176,17 +168,15 @@ func (d *actionService) CannedResponses(chatRequest *common.ChatRequest) (string
 	if ok {
 		return answer, false, nil
 	}
-
 	return "", false, nil
 }
 
-func (d *actionService) SendProductCard(conversationID uint, attrs common.CustomAttributes) {
+func (a *actionService) sendProductCard(conversationID uint, attrs common.CustomAttributes) {
 	if global.ChatwootService == nil {
 		global.Log.Warnf("[action] Chatwoot客户端未初始化，无法为会话 %d 发送商品卡片", conversationID)
 		return
 	}
 
-	// 构建卡片项
 	cardItem := chatwoot.CardItem{
 		MediaURL:    attrs.GoodsImage,
 		Title:       attrs.GoodsTitle,
@@ -204,47 +194,77 @@ func (d *actionService) SendProductCard(conversationID uint, attrs common.Custom
 	//(当前消息不加入缓存)
 	if err := global.ChatwootService.CreateCardMessage(conversationID, content, []chatwoot.CardItem{cardItem}); err != nil {
 		global.Log.Errorf("[action]向会话 %d 发送商品卡片失败: %v", conversationID, err)
-		return
 	}
 }
 
-func (d *actionService) ActivateHumanModeGracePeriod(conversationID uint) {
-	if global.Config.Ai.HumanModeGracePeriod <= 0 {
-		return
-	}
-	go func(convID uint) {
-		defer func() {
-			if r := recover(); r != nil {
-				global.Log.Errorf("panic in ActivateHumanModeGracePeriod for conv %d: %v", convID, r)
-			}
-		}()
-		key := fmt.Sprintf("%s%d", redis.KeyPrefixHumanModeActive, convID)
-		ttl := time.Duration(global.Config.Ai.HumanModeGracePeriod) * time.Second
-		err := global.RedisClient.Set(context.Background(), key, "1", ttl).Err()
-		if err != nil {
-			global.Log.Warnf("为会话 %d 设置人工模式宽限期失败: %v", convID, err)
+// CheckAndSendProductCard 逻辑: 记录上次发送的ID，如果当前咨询的ID与上次不同，则发送卡片。
+func (a *actionService) CheckAndSendProductCard(ctx context.Context, conversationID uint, attrs common.CustomAttributes) {
+	// --- 商品卡片逻辑 ---
+	if attrs.GoodsID != "" {
+		key := fmt.Sprintf("%s%d", redis.KeyPrefixLastProductSent, conversationID)
+
+		// 获取该会话上次发送的商品ID
+		lastSentGoodsID, err := global.RedisClient.Get(ctx, key).Result()
+		if err != nil && err != redis.ErrNil {
+			global.Log.Warnf("获取最后发送商品ID失败: %v", err)
 		}
-	}(conversationID)
+
+		// 如果Redis中没有记录(首次)，或者记录的ID与当前ID不一致，则发送
+		if lastSentGoodsID != attrs.GoodsID {
+			global.Log.Debugf("为会话 %d 发送商品 %s 的信息卡片 (上次: %s)", conversationID, attrs.GoodsID, lastSentGoodsID)
+
+			// 发送卡片
+			a.sendProductCard(conversationID, attrs)
+
+			// 更新Redis记录，设置24小时过期
+			if err := global.RedisClient.Set(ctx, key, attrs.GoodsID, 24*time.Hour).Err(); err != nil {
+				global.Log.Warnf("更新会话 %d 最后发送商品ID失败: %v", conversationID, err)
+			}
+		}
+	}
+
+	// --- 订单卡片逻辑 (预留) ---
+	if attrs.OrderID != "" {
+		key := fmt.Sprintf("%s%d", redis.KeyPrefixLastOrderSent, conversationID)
+
+		lastSentOrderID, err := global.RedisClient.Get(ctx, key).Result()
+		if err != nil && err != redis.ErrNil {
+			global.Log.Warnf("获取最后发送订单ID失败: %v", err)
+		}
+
+		if lastSentOrderID != attrs.OrderID {
+			global.Log.Debugf("为会话 %d 发送订单 %s 的信息卡片 (上次: %s)", conversationID, attrs.OrderID, lastSentOrderID)
+			// a.sendOrderCard(conversationID, attrs) // 预留
+			if err := global.RedisClient.Set(ctx, key, attrs.OrderID, 24*time.Hour).Err(); err != nil {
+				global.Log.Warnf("更新会话 %d 最后发送订单ID失败: %v", conversationID, err)
+			}
+		}
+	}
 }
 
-func (d *actionService) RefreshHumanModeGracePeriod(conversationID uint) {
+func (a *actionService) ActivateHumanModeGracePeriod(ctx context.Context, conversationID uint) {
 	if global.Config.Ai.HumanModeGracePeriod <= 0 {
 		return
 	}
-	go func(convID uint) {
-		defer func() {
-			if r := recover(); r != nil {
-				global.Log.Errorf("panic in RefreshHumanModeGracePeriod for conv %d: %v", convID, r)
-			}
-		}()
-		key := fmt.Sprintf("%s%d", redis.KeyPrefixHumanModeActive, convID)
-		ttl := time.Duration(global.Config.Ai.HumanModeGracePeriod) * time.Second
-		// 使用 Expire 刷新过期时间，仅当 key 存在时生效
-		updated, err := global.RedisClient.Expire(context.Background(), key, ttl).Result()
-		if err != nil {
-			global.Log.Warnf("刷新会话 %d 人工模式宽限期失败: %v", convID, err)
-		} else if updated {
-			global.Log.Debugf("收到用户消息，已刷新会话 %d 的人工模式宽限期", convID)
-		}
-	}(conversationID)
+	key := fmt.Sprintf("%s%d", redis.KeyPrefixHumanModeActive, conversationID)
+	ttl := time.Duration(global.Config.Ai.HumanModeGracePeriod) * time.Second
+	err := global.RedisClient.Set(ctx, key, "1", ttl).Err()
+	if err != nil {
+		global.Log.Warnf("为会话 %d 设置人工模式宽限期失败: %v", conversationID, err)
+	}
+}
+
+func (a *actionService) RefreshHumanModeGracePeriod(ctx context.Context, conversationID uint) {
+	if global.Config.Ai.HumanModeGracePeriod <= 0 {
+		return
+	}
+	key := fmt.Sprintf("%s%d", redis.KeyPrefixHumanModeActive, conversationID)
+	ttl := time.Duration(global.Config.Ai.HumanModeGracePeriod) * time.Second
+	// 使用 Expire 刷新过期时间，仅当 key 存在时生效
+	updated, err := global.RedisClient.Expire(ctx, key, ttl).Result()
+	if err != nil {
+		global.Log.Warnf("刷新会话 %d 人工模式宽限期失败: %v", conversationID, err)
+	} else if updated {
+		global.Log.Debugf("收到用户消息，已刷新会话 %d 的人工模式宽限期", conversationID)
+	}
 }

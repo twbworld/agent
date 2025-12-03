@@ -50,7 +50,7 @@
 
     <button
       @click="refreshData"
-      :disabled="isFetching || (!context.goodsId && !context.orderId)"
+      :disabled="isFetching || (!context.contactId && !context.goodsId && !context.orderId)"
       class="group relative p-2.5 rounded-full border border-gray-200 bg-white text-gray-600 shadow-sm hover:shadow-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-gray-800 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-700 transition-all duration-300">
       <svg x-show="!isFetching" class="w-5 h-5 transition-transform duration-300 group-hover:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
       <svg x-show="isFetching" class="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
@@ -70,22 +70,22 @@
        x-transition:enter-end="opacity-100 translate-y-0"
        class="space-y-6 w-[95%] lg:w-[80%] mx-auto">
 
-    <div class="bg-white border border-gray-200 rounded-xl shadow-md hover:shadow-lg transition-shadow duration-300 overflow-hidden dark:bg-gray-800 dark:border-gray-700">
+    <div x-show="userData" class="bg-white border border-gray-200 rounded-xl shadow-md hover:shadow-lg transition-shadow duration-300 overflow-hidden dark:bg-gray-800 dark:border-gray-700">
       <div class="px-6 py-4 border-b border-gray-100 bg-gray-50/80 font-semibold text-gray-700 dark:bg-gray-700/40 dark:text-gray-200 dark:border-gray-700 flex items-center">
         <span class="w-1 h-5 bg-blue-500 rounded-full mr-3"></span>用户信息
       </div>
       <div class="p-6">
         <dl class="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4 text-sm">
-          <div class="flex"><dt class="w-24 font-medium text-gray-500 dark:text-gray-400">客户ID</dt><dd class="flex-1 text-gray-900 dark:text-gray-100">-</dd></div>
-          <div class="flex"><dt class="w-24 font-medium text-gray-500 dark:text-gray-400">姓名</dt><dd class="flex-1 text-gray-900 dark:text-gray-100 font-medium">-</dd></div>
-          <div class="flex"><dt class="w-24 font-medium text-gray-500 dark:text-gray-400">电话</dt><dd class="flex-1 text-gray-900 dark:text-gray-100 font-mono tracking-wide">-</dd></div>
-          <div class="flex"><dt class="w-24 font-medium text-gray-500 dark:text-gray-400">邮箱</dt><dd class="flex-1 text-gray-900 dark:text-gray-100">-</dd></div>
-          <div class="flex"><dt class="w-24 font-medium text-gray-500 dark:text-gray-400">会员等级</dt><dd class="flex-1 text-gray-900 dark:text-gray-100">-</dd></div>
+          <div class="flex"><dt class="w-24 font-medium text-gray-500 dark:text-gray-400">客户ID</dt><dd class="flex-1 text-gray-900 dark:text-gray-100" x-text="userData.id || '-'"></dd></div>
+          <div class="flex"><dt class="w-24 font-medium text-gray-500 dark:text-gray-400">姓名</dt><dd class="flex-1 text-gray-900 dark:text-gray-100 font-medium" x-text="userData.name || '-'"></dd></div>
+          <div class="flex"><dt class="w-24 font-medium text-gray-500 dark:text-gray-400">电话</dt><dd class="flex-1 text-gray-900 dark:text-gray-100 font-mono tracking-wide" x-text="userData.phone || '-'"></dd></div>
+          <div class="flex"><dt class="w-24 font-medium text-gray-500 dark:text-gray-400">邮箱</dt><dd class="flex-1 text-gray-900 dark:text-gray-100" x-text="userData.email || '-'"></dd></div>
+          <div class="flex"><dt class="w-24 font-medium text-gray-500 dark:text-gray-400">会员等级</dt><dd class="flex-1 text-gray-900 dark:text-gray-100" x-text="userData.level || '-'"></dd></div>
         </dl>
       </div>
     </div>
 
-    <div x-show="context.goodsId" class="bg-white border border-gray-200 rounded-xl shadow-md hover:shadow-lg transition-shadow duration-300 overflow-hidden dark:bg-gray-800 dark:border-gray-700">
+    <div x-show="productData" class="bg-white border border-gray-200 rounded-xl shadow-md hover:shadow-lg transition-shadow duration-300 overflow-hidden dark:bg-gray-800 dark:border-gray-700">
       <div class="px-6 py-4 border-b border-gray-100 bg-gray-50/80 font-semibold text-gray-700 dark:bg-gray-700/40 dark:text-gray-200 dark:border-gray-700 flex items-center">
         <span class="w-1 h-5 bg-purple-500 rounded-full mr-3"></span>当前咨询商品
       </div>
@@ -133,7 +133,7 @@
       </div>
     </div>
 
-    <div x-show="context.orderId" class="bg-white border border-gray-200 rounded-xl shadow-md hover:shadow-lg transition-shadow duration-300 overflow-hidden dark:bg-gray-800 dark:border-gray-700">
+    <div x-show="orderData" class="bg-white border border-gray-200 rounded-xl shadow-md hover:shadow-lg transition-shadow duration-300 overflow-hidden dark:bg-gray-800 dark:border-gray-700">
       <div class="px-6 py-4 border-b border-gray-100 bg-gray-50/80 font-semibold text-gray-700 dark:bg-gray-700/40 dark:text-gray-200 dark:border-gray-700 flex items-center">
         <span class="w-1 h-5 bg-emerald-500 rounded-full mr-3"></span>最近订单
       </div>
@@ -181,9 +181,12 @@
           timeoutId: null
         },
         context: {
+          contactId: null,
+          userId: null,
           goodsId: null,
           orderId: null
         },
+        userData: null,
         productData: null,
         orderData: null,
 
@@ -200,22 +203,24 @@
               parsedData = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
             } catch (e) { return; }
 
-            if (parsedData.event !== 'appContext' || !parsedData.data) return;
+            if (parsedData.event !== 'appContext' || !parsedData.data || !parsedData.data.contact) return;
 
-            const customAttributes = parsedData.data.contact?.custom_attributes;
-            if (!customAttributes) return;
+            const contact = parsedData.data.contact;
+            const customAttributes = contact.custom_attributes || {};
 
             this.hasFetched = true;
+            this.context.contactId = contact.id;
+            this.context.userId = contact.identifier;
             this.context.goodsId = customAttributes.goods_id;
             this.context.orderId = customAttributes.order_id;
 
             this.isLoading = false;
 
-            if (this.context.goodsId || this.context.orderId) {
+            if (this.context.contactId || this.context.userId || this.context.goodsId || this.context.orderId) {
               // 自动加载不触发 Toast
               this.fetchDetails(false);
             } else {
-              this.showToast('未在自定义属性中找到商品ID或订单ID', 'error');
+              this.showToast('未在上下文中找到任何关联信息', 'error');
             }
           });
         },
@@ -226,8 +231,8 @@
 
         refreshData() {
           if (this.isFetching) return;
-          if (!this.context.goodsId && !this.context.orderId) {
-            this.showToast('暂无关联的商品或订单信息', 'error');
+          if (!this.context.contactId && !this.context.userId && !this.context.goodsId && !this.context.orderId) {
+            this.showToast('暂无关联的用户、商品或订单信息', 'error');
             return;
           }
           // 手动刷新，传入 true 以触发 Toast
@@ -250,11 +255,13 @@
           this.isFetching = true;
 
           const requestBody = {};
+          if (this.context.contactId) requestBody.contact_id = String(this.context.contactId);
+          if (this.context.userId) requestBody.user_id = this.context.userId;
           if (this.context.goodsId) requestBody.goods_id = this.context.goodsId;
           if (this.context.orderId) requestBody.order_id = this.context.orderId;
 
           try {
-            const response = await fetch(`/api/v1/dashboard/details`, {
+            const response = await fetch(`/api/v1/chatwoot/details`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(requestBody),
@@ -285,14 +292,9 @@
         },
 
         populateDetails(data) {
-          this.productData = null;
-          this.orderData = null;
-
-          if (data.title && data.picUrl !== undefined) {
-            this.productData = data;
-          } else if (data.id && data.created_at) {
-            this.orderData = data;
-          }
+          this.userData = data.user || null;
+          this.productData = data.product || null;
+          this.orderData = data.order || null;
         }
       }
     }

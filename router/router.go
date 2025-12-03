@@ -69,6 +69,7 @@ func Start(ginServer *gin.Engine) {
 
 	chatwootGroup := ginServer.Group("/chatwoot")
 	{
+		//在chatwoot下"集成方式-仪表板应用"配置的, 用于在客服会话界面展示的页面
 		chatwootGroup.GET("/dashboard", func(ctx *gin.Context) {
 			ctx.HTML(http.StatusOK, "contact_details.html", nil)
 		})

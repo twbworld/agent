@@ -106,6 +106,8 @@ type CustomAttributes struct {
 
 // 定义了仪表板详情请求的JSON结构
 type DashboardDetailsRequest struct {
-	GoodsID string `json:"goods_id"`
-	OrderID string `json:"order_id"`
+	ContactID string `json:"contact_id,omitempty"`
+	UserID    string `json:"user_id,omitempty"`
+	GoodsID   string `json:"goods_id,omitempty"`
+	OrderID   string `json:"order_id,omitempty"`
 }

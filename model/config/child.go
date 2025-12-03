@@ -11,7 +11,7 @@ type Database struct {
 	MysqlHost     string `mapstructure:"mysql_host" json:"mysql_host" yaml:"mysql_host"`
 	MysqlPort     string `mapstructure:"mysql_port" json:"mysql_port" yaml:"mysql_port"`
 	MysqlDbname   string `mapstructure:"mysql_dbname" json:"mysql_dbname" yaml:"mysql_dbname"`
-MysqlUsername string `mapstructure:"mysql_username" json:"mysql_username" yaml:"mysql_username"`
+	MysqlUsername string `mapstructure:"mysql_username" json:"mysql_username" yaml:"mysql_username"`
 	MysqlPassword string `mapstructure:"mysql_password" json:"mysql_password" yaml:"mysql_password"`
 }
 
@@ -65,6 +65,7 @@ type Ai struct {
 	VectorSearchMinSimilarity float32  `mapstructure:"vector_search_min_similarity" json:"vector_search_min_similarity" yaml:"vector_search_min_similarity"`
 	TriageContextQuestions    uint     `mapstructure:"triage_context_questions" json:"triage_context_questions" yaml:"triage_context_questions"`
 	TransferGracePeriod       int64    `mapstructure:"transfer_grace_period" json:"transfer_grace_period" yaml:"transfer_grace_period"`
+	HumanModeGracePeriod      int64    `mapstructure:"human_mode_grace_period" json:"human_mode_grace_period" yaml:"human_mode_grace_period"`
 	AsyncJobTimeout           int64    `mapstructure:"async_job_timeout" json:"async_job_timeout" yaml:"async_job_timeout"`
 	MaxLlmHistoryMessages     uint     `mapstructure:"max_llm_history_messages" json:"max_llm_history_messages" yaml:"max_llm_history_messages"`
 	KeywordSyncInterval       uint     `mapstructure:"keyword_sync_interval" json:"keyword_sync_interval" yaml:"keyword_sync_interval"`

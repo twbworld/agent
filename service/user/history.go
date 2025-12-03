@@ -7,10 +7,11 @@ import (
 	"time"
 
 	"gitee.com/taoJie_1/mall-agent/global"
+	"gitee.com/taoJie_1/mall-agent/internal/chatwoot"
 	"gitee.com/taoJie_1/mall-agent/internal/redis"
 	"gitee.com/taoJie_1/mall-agent/model/common"
-	"gitee.com/taoJie_1/mall-agent/model/enum"
 	"gitee.com/taoJie_1/mall-agent/utils"
+	"github.com/sashabaranov/go-openai"
 )
 
 // HistoryService 定义了会话历史缓存服务的接口
@@ -147,15 +148,15 @@ func (s *historyService) fetchAndCache(ctx context.Context, accountID, conversat
 		}
 
 		// 过滤掉当前用户消息，因为它会作为LLM的content参数传入，避免重复
-		if msg.MessageType == 0 && msg.Sender.Type == string(enum.SenderTypeContact) && msg.Content == currentMessage {
+		if msg.MessageType == chatwoot.MessageDirectionIncoming && msg.Sender.Type == chatwoot.SenderContact && msg.Content == currentMessage {
 			continue
 		}
 
 		var role string
-		if msg.MessageType == 0 && msg.Sender.Type == string(enum.SenderTypeContact) {
-			role = "user"
-		} else if msg.MessageType == 1 {
-			role = "assistant" // 假设所有outgoing消息都是AI或客服的回复
+		if msg.MessageType == chatwoot.MessageDirectionIncoming && msg.Sender.Type == chatwoot.SenderContact {
+			role = openai.ChatMessageRoleUser
+		} else if msg.MessageType == chatwoot.MessageDirectionOutgoing {
+			role = openai.ChatMessageRoleAssistant // 假设所有outgoing消息都是AI或客服的回复
 		} else {
 			continue // 忽略其他类型的消息
 		}

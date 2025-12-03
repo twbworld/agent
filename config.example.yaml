@@ -104,15 +104,19 @@ ai:
   vector_similarity_threshold: 0.9
   # 向量搜索结果的最低相似度阈值(0-1), 低于此阈值则不作为LLM的参考
   vector_search_min_similarity: 0.7
-  # 为分诊台提供向量搜索结果作为上下文时，取最相关的前N个问题
+  # 为分诊台提供向量搜索结果作为上下文时，取最相关的前N个问题(预设回复)
   triage_context_questions: 2
+  # 转人工宽限期(秒);当系统被自动转给人工时后, 在宽限期内又收到新消息, 那么继续由AI处理,如果成功处理,那么将撤销"转人工"操作.
+  transfer_grace_period: 5
+  # 人工模式宽限期(秒); 当一个会话被人工客服处理后，在该宽限期内，AI不会主动介入。宽限期过后，AI会重新接管会话。
+  human_mode_grace_period: 900
   # AI处理(包括精确匹配和向量检索和LLM处理)的超时时间(秒)
   async_job_timeout: 60
   # 传递给大型LLM的最大历史消息数量 (0表示不限制)
   max_llm_history_messages: 20
-  # (秒) 知识库定时同步的最小间隔，防止任务被过于频繁地触发。
+  # 知识库定时同步的最小间隔(秒);避免任务短时间内重复执行。
   keyword_sync_interval: 300
-  # (秒) 通过UI操作知识库后，触发自动重载的防抖延迟时间。
+  # 修改知识库后，触发自动重载的防抖延迟时间(秒); 避免任务短时间内重复执行。
   keyword_reload_debounce: 600
   # 用于触发转人工的关键词列表
   transfer_keywords:

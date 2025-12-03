@@ -8,8 +8,79 @@ import (
 	"net/http"
 	"time"
 
-	"gitee.com/taoJie_1/mall-agent/model/enum"
 	"github.com/sirupsen/logrus"
+)
+
+type ChatwootWebhook string
+
+const (
+	// 来自联系人的新消息。
+	MessageTypeIncoming ChatwootWebhook = "incoming"
+	// 从应用程序发送的消息。
+	MessageTypeOutgoing ChatwootWebhook = "outgoing"
+	// 对话中的最终用户。
+	SenderTypeContact ChatwootWebhook = "contact"
+)
+
+type SenderType string
+
+const (
+	// SenderContact 代表消息发送者是联系人/终端用户
+	SenderContact SenderType = "contact"
+	// SenderUser 代表消息发送者是人工客服
+	SenderUser SenderType = "user"
+	// SenderAgentBot 代表消息发送者是机器人
+	SenderAgentBot SenderType = "agent_bot"
+)
+
+type ConversationStatus string
+
+const (
+	//会话开放状态, 人工客服可恢复
+	ConversationStatusOpen ConversationStatus = "open"
+	//会话待处理
+	ConversationStatusPending ConversationStatus = "pending"
+	//会话已解决
+	ConversationStatusResolved ConversationStatus = "resolved"
+	//会话暂停
+	ConversationStatusSnoozed ConversationStatus = "snoozed"
+)
+
+type ChatwootEvent string
+
+const (
+	// 用户打开小部件,即点击浮窗(机器人+集成 都会Webhooks)
+	EventWebwidgetTriggered ChatwootEvent = "webwidget_triggered"
+	// 来自联系人的新消息。(机器人和集成 都会Webhooks)
+	EventMessageCreated ChatwootEvent = "message_created"
+	// 消息已更新。
+	EventMessageUpdated ChatwootEvent = "message_updated"
+	// 新对话创建。
+	EventConversationCreated ChatwootEvent = "conversation_created"
+	// 对话状态更改。
+	EventConversationStatusChanged ChatwootEvent = "conversation_status_changed"
+	// 对话已更新。
+	EventConversationUpdated ChatwootEvent = "conversation_updated"
+	// 对话已解决。
+	EventConversationResolved ChatwootEvent = "conversation_resolved"
+)
+
+type MessageDirection int
+
+const (
+	// MessageDirectionIncoming 表示接收的消息
+	MessageDirectionIncoming MessageDirection = 0
+	// MessageDirectionOutgoing 表示发送的消息
+	MessageDirectionOutgoing MessageDirection = 1
+)
+
+type ContentType string
+
+const (
+	// ContentTypeText 表示文本类型消息
+	ContentTypeText ContentType = "text"
+	// ContentTypeCards 表示卡片类型消息
+	ContentTypeCards ContentType = "cards"
 )
 
 type AccountDetails struct {
@@ -33,11 +104,11 @@ type ConversationMessagesResponse struct {
 
 // CreateMessageRequest 定义了创建消息API的请求体
 type CreateMessageRequest struct {
-	Content          string      `json:"content,omitempty"` // Make content optional
-	MessageType      string      `json:"message_type"`
-	Private          bool        `json:"private"`
-	ContentType      string      `json:"content_type"`
-	ContentAttributes interface{} `json:"content_attributes,omitempty"` // Add ContentAttributes
+	Content           string          `json:"content,omitempty"`
+	MessageType       ChatwootWebhook `json:"message_type"`
+	Private           bool            `json:"private"`
+	ContentType       ContentType     `json:"content_type"`
+	ContentAttributes interface{}     `json:"content_attributes,omitempty"`
 }
 
 // CardAction 定义了卡片中的动作按钮
@@ -62,9 +133,9 @@ type CardContentAttributes struct {
 
 // 定义了创建私信备注的请求体
 type CreatePrivateNoteRequest struct {
-	Content     string `json:"content"`
-	MessageType string `json:"message_type"`
-	Private     bool   `json:"private"`
+	Content     string          `json:"content"`
+	MessageType ChatwootWebhook `json:"message_type"`
+	Private     bool            `json:"private"`
 }
 
 // ToggleTypingRequest 定义了切换输入状态API的请求体
@@ -74,13 +145,13 @@ type ToggleTypingRequest struct {
 
 // Message 结构体定义了Chatwoot API返回的单条消息结构
 type Message struct {
-	ID          uint   `json:"id"`
-	Content     string `json:"content"`
-	MessageType int    `json:"message_type"` // 0: incoming, 1: outgoing
-	CreatedAt   int64  `json:"created_at"`
+	ID          uint             `json:"id"`
+	Content     string           `json:"content"`
+	MessageType MessageDirection `json:"message_type"`
+	CreatedAt   int64            `json:"created_at"`
 	Sender      struct {
-		ID   uint   `json:"id"`
-		Type string `json:"type"` // "contact", "agent"
+		ID   uint       `json:"id"`
+		Type SenderType `json:"type"`
 	} `json:"sender"`
 	Private     bool         `json:"private"`     // 是否是私信备注
 	Attachments []Attachment `json:"attachments"` // 附件列表
@@ -107,7 +178,7 @@ type Service interface {
 	// 在指定的对话中创建一条私信备注
 	CreatePrivateNote(conversationID uint, content string) error
 	// 将会话状态切换为指定状态
-	SetConversationStatus(conversationID uint, status enum.ConversationStatus) error
+	SetConversationStatus(conversationID uint, status ConversationStatus) error
 	// 切换指定会话的 "输入中..." 状态
 	ToggleTypingStatus(conversationID uint, status string) error
 	// 在指定对话中创建一条新消息 (通常是回复)
@@ -120,7 +191,7 @@ type Service interface {
 
 // TransferToHumanRequest 定义了转人工API的请求体
 type TransferToHumanRequest struct {
-	Status enum.ConversationStatus `json:"status"` // "open" 表示转为人工处理
+	Status ConversationStatus `json:"status"` // "open" 表示转为人工处理
 	// 还可以增加 AssigneeID 或 TeamID 来指定客服或团队
 	// TeamID int `json:"team_id,omitempty"`
 }
@@ -258,13 +329,13 @@ func (c *Client) CreatePrivateNote(conversationID uint, content string) error {
 	path := fmt.Sprintf("/api/v1/accounts/%d/conversations/%d/messages", c.AccountID, conversationID)
 	notePayload := CreatePrivateNoteRequest{
 		Content:     content,
-		MessageType: string(enum.MessageTypeOutgoing),
+		MessageType: MessageTypeOutgoing,
 		Private:     true,
 	}
 	return c.sendRequest("POST", path, botToken, notePayload, nil)
 }
 
-func (c *Client) SetConversationStatus(conversationID uint, status enum.ConversationStatus) error {
+func (c *Client) SetConversationStatus(conversationID uint, status ConversationStatus) error {
 	path := fmt.Sprintf("/api/v1/accounts/%d/conversations/%d/toggle_status", c.AccountID, conversationID)
 	payload := TransferToHumanRequest{
 		Status: status,
@@ -287,9 +358,9 @@ func (c *Client) CreateMessage(conversationID uint, content string) error {
 	path := fmt.Sprintf("/api/v1/accounts/%d/conversations/%d/messages", c.AccountID, conversationID)
 	payload := CreateMessageRequest{
 		Content:     content,
-		MessageType: string(enum.MessageTypeOutgoing), // 代表是机器人或客服发出的消息
+		MessageType: MessageTypeOutgoing, // 代表是机器人或客服发出的消息
 		Private:     false,
-		ContentType: "text",
+		ContentType: ContentTypeText,
 	}
 	return c.sendRequest("POST", path, botToken, payload, nil)
 }
@@ -300,9 +371,9 @@ func (c *Client) CreateCardMessage(conversationID uint, content string, cardItem
 	path := fmt.Sprintf("/api/v1/accounts/%d/conversations/%d/messages", c.AccountID, conversationID)
 	payload := CreateMessageRequest{
 		Content:     content,
-		MessageType: string(enum.MessageTypeOutgoing),
+		MessageType: MessageTypeOutgoing,
 		Private:     false,
-		ContentType: "cards",
+		ContentType: ContentTypeCards,
 		ContentAttributes: CardContentAttributes{
 			Items: cardItems,
 		},

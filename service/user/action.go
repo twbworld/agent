@@ -28,6 +28,10 @@ type ActionService interface {
 	SendMessage(conversationID uint, content string)
 	// 匹配预设回复或执行特殊动作（如转人工）
 	CannedResponses(chatRequest *common.ChatRequest) (string, bool, error)
+	// 设置人工模式宽限期
+	ActivateHumanModeGracePeriod(conversationID uint)
+	// 刷新人工模式宽限期
+	RefreshHumanModeGracePeriod(conversationID uint)
 }
 
 type actionService struct {
@@ -202,4 +206,45 @@ func (d *actionService) SendProductCard(conversationID uint, attrs common.Custom
 		global.Log.Errorf("[action]向会话 %d 发送商品卡片失败: %v", conversationID, err)
 		return
 	}
+}
+
+func (d *actionService) ActivateHumanModeGracePeriod(conversationID uint) {
+	if global.Config.Ai.HumanModeGracePeriod <= 0 {
+		return
+	}
+	go func(convID uint) {
+		defer func() {
+			if r := recover(); r != nil {
+				global.Log.Errorf("panic in ActivateHumanModeGracePeriod for conv %d: %v", convID, r)
+			}
+		}()
+		key := fmt.Sprintf("%s%d", redis.KeyPrefixHumanModeActive, convID)
+		ttl := time.Duration(global.Config.Ai.HumanModeGracePeriod) * time.Second
+		err := global.RedisClient.Set(context.Background(), key, "1", ttl).Err()
+		if err != nil {
+			global.Log.Warnf("为会话 %d 设置人工模式宽限期失败: %v", convID, err)
+		}
+	}(conversationID)
+}
+
+func (d *actionService) RefreshHumanModeGracePeriod(conversationID uint) {
+	if global.Config.Ai.HumanModeGracePeriod <= 0 {
+		return
+	}
+	go func(convID uint) {
+		defer func() {
+			if r := recover(); r != nil {
+				global.Log.Errorf("panic in RefreshHumanModeGracePeriod for conv %d: %v", convID, r)
+			}
+		}()
+		key := fmt.Sprintf("%s%d", redis.KeyPrefixHumanModeActive, convID)
+		ttl := time.Duration(global.Config.Ai.HumanModeGracePeriod) * time.Second
+		// 使用 Expire 刷新过期时间，仅当 key 存在时生效
+		updated, err := global.RedisClient.Expire(context.Background(), key, ttl).Result()
+		if err != nil {
+			global.Log.Warnf("刷新会话 %d 人工模式宽限期失败: %v", convID, err)
+		} else if updated {
+			global.Log.Debugf("收到用户消息，已刷新会话 %d 的人工模式宽限期", convID)
+		}
+	}(conversationID)
 }

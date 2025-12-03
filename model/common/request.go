@@ -58,9 +58,9 @@ type Attachment struct {
 
 // Conversation 代表会话信息
 type Conversation struct {
-	ConversationID uint                        `json:"id"`
-	Status         chatwoot.ConversationStatus `json:"status"`
-	Meta           Meta                        `json:"meta"`
+	ID     uint                        `json:"id"`
+	Status chatwoot.ConversationStatus `json:"status"`
+	Meta   Meta                        `json:"meta"`
 }
 
 // Meta 存放会话的元数据
@@ -92,6 +92,8 @@ type CustomAttributes struct {
 	GoodsImage string `json:"goods_image,omitempty"`
 	GoodsPrice string `json:"goods_price,omitempty"`
 	GoodsUrl   string `json:"goods_url,omitempty"`
+
+	OrderID    string `json:"order_id,omitempty"`
 }
 
 // 定义了仪表板详情请求的JSON结构

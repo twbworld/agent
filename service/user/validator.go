@@ -13,7 +13,7 @@ type Validator interface {
 type validator struct{}
 
 func (v *validator) ValidatorChatRequest(data *common.ChatRequest) error {
-	if data.Account.ID == 0 || data.Conversation.ConversationID == 0 {
+	if data.Account.ID == 0 || data.Conversation.ID == 0 {
 		return errors.New("参数错误[gftsd]")
 	}
 	// 消息内容和附件不能同时为空

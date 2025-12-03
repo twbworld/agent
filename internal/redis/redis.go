@@ -17,6 +17,10 @@ const (
 	KeyPrefixConversationHistory = "conversation:history:"                 // Redis中存储聊天记录的Key前缀
 	KeyPrefixHistoryLock         = "agent:lock:history:"                   // 获取历史记录的锁,防止缓存击穿
 	KeyPrefixTransferGracePeriod = "agent:transfer_grace_period:"          // AI自动转人工后的宽限期Key前缀
+	KeyPrefixHumanModeActive     = "agent:human_mode_active:"              // 人工客服活跃宽限期Key前缀
+	KeyPrefixProductCardSent     = "agent:product_card_sent:"              // 标记商品卡片是否已发送的Key前缀
+	KeyPrefixLastProductSent     = "agent:last_product_sent:"              // 记录会话最后发送的商品ID
+	KeyPrefixLastOrderSent       = "agent:last_order_sent:"                //记录会话最后发送的订单ID
 )
 
 var ErrNil = redis.Nil
@@ -31,6 +35,7 @@ type Service interface {
 	HSet(ctx context.Context, key string, values ...interface{}) *redis.IntCmd
 	HDel(ctx context.Context, key string, fields ...string) *redis.IntCmd
 	SetNX(ctx context.Context, key string, value interface{}, expiration time.Duration) *redis.BoolCmd
+	Expire(ctx context.Context, key string, expiration time.Duration) *redis.BoolCmd
 	Ping(ctx context.Context) *redis.StatusCmd
 	// 从Redis获取指定会话的聊天记录
 	GetConversationHistory(ctx context.Context, conversationID uint) ([]common.LlmMessage, error)
@@ -94,6 +99,10 @@ func (c *client) HDel(ctx context.Context, key string, fields ...string) *redis.
 
 func (c *client) SetNX(ctx context.Context, key string, value interface{}, expiration time.Duration) *redis.BoolCmd {
 	return c.rdb.SetNX(ctx, key, value, expiration)
+}
+
+func (c *client) Expire(ctx context.Context, key string, expiration time.Duration) *redis.BoolCmd {
+	return c.rdb.Expire(ctx, key, expiration)
 }
 
 func (c *client) Ping(ctx context.Context) *redis.StatusCmd {

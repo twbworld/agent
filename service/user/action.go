@@ -197,8 +197,38 @@ func (a *actionService) sendProductCard(conversationID uint, attrs common.Custom
 	}
 }
 
-// CheckAndSendProductCard 逻辑: 记录上次发送的ID，如果当前咨询的ID与上次不同，则发送卡片。
+// CheckAndSendProductCard 逻辑: 引入分布式锁防止并发下的重复发送
 func (a *actionService) CheckAndSendProductCard(ctx context.Context, conversationID uint, attrs common.CustomAttributes) {
+	// 快速检查：如果没有相关ID，直接返回，避免不必要的锁竞争
+	if attrs.GoodsID == "" && attrs.OrderID == "" {
+		return
+	}
+
+	if global.RedisClient == nil {
+		return
+	}
+
+	// 1. 获取分布式锁
+	// 目的：如果 WebWidgetTriggered 和 MessageCreated 同时触发，只有一个能获得锁执行检查
+	lockKey := fmt.Sprintf("%s%d", redis.KeyPrefixProductCardLock, conversationID)
+	// 尝试获取锁，设置5秒过期，防止死锁
+	acquired, err := global.RedisClient.SetNX(ctx, lockKey, 1, 5*time.Second).Result()
+
+	if err != nil {
+		global.Log.Errorf("[CheckAndSendProductCard] Redis锁错误: %v", err)
+		return
+	}
+
+	if !acquired {
+		// 未获取到锁，说明已有协程在处理该会话的卡片发送逻辑，直接退出，避免重复
+		global.Log.Debugf("会话 %d 正在发送卡片中，本次并发请求跳过", conversationID)
+		return
+	}
+	// 确保逻辑结束后释放锁
+	defer global.RedisClient.Del(ctx, lockKey)
+
+	// 2. 执行原有的检查与发送逻辑（内部包含Redis去重判断）
+
 	// --- 商品卡片逻辑 ---
 	if attrs.GoodsID != "" {
 		key := fmt.Sprintf("%s%d", redis.KeyPrefixLastProductSent, conversationID)
@@ -209,7 +239,7 @@ func (a *actionService) CheckAndSendProductCard(ctx context.Context, conversatio
 			global.Log.Warnf("获取最后发送商品ID失败: %v", err)
 		}
 
-		// 如果Redis中没有记录(首次)，或者记录的ID与当前ID不一致，则发送
+		// 再次检查Redis记录(Double Check)，防止在获取锁之前已有其他请求完成了发送
 		if lastSentGoodsID != attrs.GoodsID {
 			global.Log.Debugf("为会话 %d 发送商品 %s 的信息卡片 (上次: %s)", conversationID, attrs.GoodsID, lastSentGoodsID)
 

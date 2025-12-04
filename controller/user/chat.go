@@ -111,16 +111,8 @@ func (c *ChatApi) handleWebWidgetTriggered(contactID uint, attrs common.CustomAt
 	service.Service.UserServiceGroup.ActionService.CheckAndSendProductCard(ctx, lastConv.ID, attrs)
 }
 
-
-
 // handleMessageCreated 收到消息处理
 func (c *ChatApi) handleMessageCreated(ctx *gin.Context, req common.ChatRequest) {
-	go func() {
-		bgCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		service.Service.UserServiceGroup.ActionService.CheckAndSendProductCard(bgCtx, req.Conversation.ID, req.Conversation.Meta.Sender.CustomAttributes)
-	}()
-
 	// 处理"人工客服"消息: 将其计入Redis历史,并设置人工宽限期
 	if req.MessageType == chatwoot.MessageTypeOutgoing && req.Sender.Type == chatwoot.SenderUser {
 		service.Service.UserServiceGroup.ActionService.ActivateHumanModeGracePeriod(ctx.Request.Context(), req.Conversation.ID)
@@ -137,6 +129,12 @@ func (c *ChatApi) handleMessageCreated(ctx *gin.Context, req common.ChatRequest)
 		common.Success(ctx, nil)
 		return
 	}
+
+	go func() {
+		bgCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		service.Service.UserServiceGroup.ActionService.CheckAndSendProductCard(bgCtx, req.Conversation.ID, req.Conversation.Meta.Sender.CustomAttributes)
+	}()
 
 	// 收到用户消息时，如果当前处于人工模式宽限期内，刷新宽限期时间
 	service.Service.UserServiceGroup.ActionService.RefreshHumanModeGracePeriod(ctx.Request.Context(), req.Conversation.ID)

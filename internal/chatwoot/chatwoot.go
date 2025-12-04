@@ -166,14 +166,25 @@ type Attachment struct {
 
 // ConversationSummary 定义会话摘要信息
 type ConversationSummary struct {
-	ID     uint               `json:"id"`
-	Status ConversationStatus `json:"status"`
-	InboxID int               `json:"inbox_id"`
+	ID      uint               `json:"id"`
+	Status  ConversationStatus `json:"status"`
+	InboxID int                `json:"inbox_id"`
 }
 
 // ContactConversationsResponse 定义获取联系人会话列表的响应结构
 type ContactConversationsResponse struct {
 	Payload []ConversationSummary `json:"payload"`
+}
+
+// CreateConversationRequest 定义创建会话的请求体
+type CreateConversationRequest struct {
+	SourceID string `json:"source_id"`
+}
+
+// CreateConversationResponse 定义创建会话的响应
+type CreateConversationResponse struct {
+	ID        uint `json:"id"`
+	AccountID uint `json:"account_id"`
 }
 
 type Service interface {
@@ -189,6 +200,8 @@ type Service interface {
 	GetAccountDetails() (*AccountDetails, error)
 	// 在指定的对话中创建一条私信备注
 	CreatePrivateNote(conversationID uint, content string) error
+	// 主动创建一个新会话
+	CreateConversation(sourceID string) (uint, error)
 	// 将会话状态切换为指定状态
 	SetConversationStatus(conversationID uint, status ConversationStatus) error
 	// 切换指定会话的 "输入中..." 状态
@@ -347,6 +360,20 @@ func (c *Client) CreatePrivateNote(conversationID uint, content string) error {
 		Private:     true,
 	}
 	return c.sendRequest("POST", path, botToken, notePayload, nil)
+}
+
+func (c *Client) CreateConversation(sourceID string) (uint, error) {
+	path := fmt.Sprintf("/api/v1/accounts/%d/conversations", c.AccountID)
+	payload := CreateConversationRequest{
+		SourceID: sourceID,
+	}
+
+	var response CreateConversationResponse
+	err := c.sendRequest("POST", path, agentToken, payload, &response)
+	if err != nil {
+		return 0, err
+	}
+	return response.ID, nil
 }
 
 func (c *Client) SetConversationStatus(conversationID uint, status ConversationStatus) error {

@@ -55,7 +55,7 @@ func (c *ChatApi) HandleWebhook(ctx *gin.Context) {
 			return
 		}
 		if req.Contact.ID != 0 {
-			go c.handleWebWidgetTriggered(req.Contact.ID, req.Contact.CustomAttributes)
+			go c.handleWebWidgetTriggered(req.Contact.ID, req.SourceID, req.Contact.CustomAttributes)
 		}
 		common.Success(ctx, nil)
 
@@ -82,33 +82,50 @@ func (c *ChatApi) HandleWebhook(ctx *gin.Context) {
 	}
 }
 
-// handleWebWidgetTriggered 复活旧会话(为了客户端能显示历史聊天记录)并发送卡片
-func (c *ChatApi) handleWebWidgetTriggered(contactID uint, attrs common.CustomAttributes) {
+// handleWebWidgetTriggered 复活旧会话或创建新会话，并发送卡片
+func (c *ChatApi) handleWebWidgetTriggered(contactID uint, sourceID string, attrs common.CustomAttributes) {
 	conversations, err := global.ChatwootService.GetContactConversations(contactID)
 	if err != nil {
 		global.Log.Errorf("获取联系人 %d 的会话列表失败: %v", contactID, err)
 		return
 	}
 
+	var targetConversationID uint
+
 	if len(conversations) == 0 {
-		return // 新用户，无历史会话
-	}
-
-	// 取最近的一个会话（Chatwoot API通常按时间倒序返回，第一个即为最近）
-	lastConv := conversations[0]
-
-	// 如果会话已解决，强制复活（改为 Open 状态）
-	if lastConv.Status == chatwoot.ConversationStatusResolved {
-		global.Log.Debugf("检测到用户 %d 重返，正在复活旧会话 %d", contactID, lastConv.ID)
-		if err := global.ChatwootService.SetConversationStatus(lastConv.ID, chatwoot.ConversationStatusOpen); err != nil {
-			global.Log.Errorf("复活会话 %d 失败: %v", lastConv.ID, err)
+		//新用户，无历史会话 -> 主动创建会话
+		if sourceID == "" {
+			global.Log.Warnf("联系人 %d 无历史会话且 Webhook 缺少 source_id，无法主动创建会话", contactID)
 			return
+		}
+		global.Log.Debugf("联系人 %d 为新用户，正在主动创建会话...", contactID)
+		newID, err := global.ChatwootService.CreateConversation(sourceID)
+		if err != nil {
+			global.Log.Errorf("为联系人 %d 创建新会话失败: %v", contactID, err)
+			return
+		}
+		targetConversationID = newID
+        global.Log.Debugf("成功为联系人 %d 创建新会话: %d", contactID, targetConversationID)
+
+	} else {
+		// 老用户 -> 取最近的一个会话
+		lastConv := conversations[0]
+		targetConversationID = lastConv.ID
+
+		// 如果会话已解决，强制复活（改为 Open 状态）
+		if lastConv.Status == chatwoot.ConversationStatusResolved {
+			global.Log.Debugf("检测到用户 %d 重返，正在复活旧会话 %d", contactID, targetConversationID)
+			if err := global.ChatwootService.SetConversationStatus(targetConversationID, chatwoot.ConversationStatusOpen); err != nil {
+				global.Log.Errorf("复活会话 %d 失败: %v", targetConversationID, err)
+				return
+			}
 		}
 	}
 
+	// 发送卡片 (利用之前加了锁的 ActionService)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	service.Service.UserServiceGroup.ActionService.CheckAndSendProductCard(ctx, lastConv.ID, attrs)
+	service.Service.UserServiceGroup.ActionService.CheckAndSendProductCard(ctx, targetConversationID, attrs)
 }
 
 // handleMessageCreated 收到消息处理
@@ -131,6 +148,7 @@ func (c *ChatApi) handleMessageCreated(ctx *gin.Context, req common.ChatRequest)
 	}
 
 	go func() {
+		//理论上发送卡片的操作由webwidget_triggered事件处理，但为了避免不可预见的遗漏，这里再做一次
 		bgCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		service.Service.UserServiceGroup.ActionService.CheckAndSendProductCard(bgCtx, req.Conversation.ID, req.Conversation.Meta.Sender.CustomAttributes)

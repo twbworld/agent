@@ -32,7 +32,10 @@ type ConversationCreatedRequest struct {
 
 // 对应 Chatwoot webhook 的事件 'webwidget_triggered' 消息体
 type WebwidgetTriggeredRequest struct {
-	Contact struct {
+	Event    string `json:"event"`
+	ID       uint   `json:"id"`
+	SourceID string `json:"source_id"`
+	Contact  struct {
 		ID               uint             `json:"id"`
 		CustomAttributes CustomAttributes `json:"custom_attributes"`
 	} `json:"contact"`

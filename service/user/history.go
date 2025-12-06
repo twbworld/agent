@@ -131,19 +131,26 @@ func (s *historyService) Set(ctx context.Context, conversationID uint, history [
 	return err
 }
 
-// fetchAndCache 是一个私有辅助方法，用于从Chatwoot获取数据、格式化并存入Redis
+// fetchAndCache 从Chatwoot获取数据、并存入Redis
 func (s *historyService) fetchAndCache(ctx context.Context, accountID, conversationID uint, currentMessage string) ([]common.LlmMessage, error) {
-	// 从Chatwoot API获取完整的历史记录
 	chatwootMessages, err := global.ChatwootService.GetConversationMessages(accountID, conversationID)
 	if err != nil {
 		return nil, fmt.Errorf("从Chatwoot API获取会话 %d 消息失败: %w", conversationID, err)
 	}
 
-	// 格式化历史记录为LLM需要的格式
+	// 第一次遍历: 构建消息ID到内容的映射，便于快速查找被引用的消息
+	messageContentMap := make(map[uint]string, len(chatwootMessages))
+	for _, msg := range chatwootMessages {
+		if msg.Content != "" {
+			messageContentMap[msg.ID] = msg.Content
+		}
+	}
+
+	// 第二次遍历: 格式化历史记录为LLM需要的格式，并处理引用关系
 	var formattedHistory []common.LlmMessage
 	for _, msg := range chatwootMessages {
-		// 过滤掉私信备注、没有内容的附件消息
-		if msg.Private || msg.Content == "" {
+		// 过滤掉私信备注、没有内容的附件消息、卡片消息
+		if msg.Private || msg.Content == "" || msg.ContentType == chatwoot.ContentTypeCards {
 			continue
 		}
 
@@ -160,7 +167,16 @@ func (s *historyService) fetchAndCache(ctx context.Context, accountID, conversat
 		} else {
 			continue // 忽略其他类型的消息
 		}
-		formattedHistory = append(formattedHistory, common.LlmMessage{Role: role, Content: msg.Content})
+
+		finalContent := msg.Content
+		// 检查并处理回复引用
+		if msg.ContentAttributes.InReplyTo != nil {
+			if repliedToContent, ok := messageContentMap[*msg.ContentAttributes.InReplyTo]; ok {
+				finalContent = fmt.Sprintf(`[回复:%s] %s`, repliedToContent, msg.Content)
+			}
+		}
+
+		formattedHistory = append(formattedHistory, common.LlmMessage{Role: role, Content: finalContent})
 	}
 
 	// 将格式化后的历史记录存入Redis

@@ -145,11 +145,15 @@ type ToggleTypingRequest struct {
 
 // Message 结构体定义了Chatwoot API返回的单条消息结构
 type Message struct {
-	ID          uint             `json:"id"`
-	Content     string           `json:"content"`
-	MessageType MessageDirection `json:"message_type"`
-	CreatedAt   int64            `json:"created_at"`
-	Sender      struct {
+	ID                uint             `json:"id"`
+	Content           string           `json:"content"`
+	ContentType       ContentType      `json:"content_type"`
+	MessageType       MessageDirection `json:"message_type"`
+	CreatedAt         int64            `json:"created_at"`
+	ContentAttributes struct {
+		InReplyTo *uint `json:"in_reply_to,omitempty"` //消息内容属性，用于处理“回复”等功能
+	} `json:"content_attributes"`
+	Sender struct {
 		ID   uint       `json:"id"`
 		Type SenderType `json:"type"`
 	} `json:"sender"`
@@ -210,7 +214,7 @@ type Service interface {
 	CreateMessage(conversationID uint, content string) error
 	// 在指定对话中创建一条卡片消息
 	CreateCardMessage(conversationID uint, content string, cardItems []CardItem) error
-	// 从Chatwoot API获取指定会话的历史消息
+	// 从Chatwoot API获取指定会话的历史消息(支持分页,单页20条)
 	GetConversationMessages(accountID, conversationID uint) ([]Message, error)
 	// 获取指定联系人的所有会话
 	GetContactConversations(contactID uint) ([]ConversationSummary, error)

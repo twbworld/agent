@@ -410,7 +410,6 @@ func (c *ChatApi) runTriage(ctx context.Context, req common.ChatRequest, fullHis
 	// 准备分诊台所需的上下文信息
 	var triageHistory []common.LlmMessage
 	if len(fullHistory) > 0 {
-		// 取最后4条消息 (相当于2轮完整对话) 作为分诊上下文
 		const triageHistoryLimit = 4
 		startIndex := len(fullHistory) - triageHistoryLimit
 		if startIndex < 0 {
@@ -433,7 +432,7 @@ func (c *ChatApi) runTriage(ctx context.Context, req common.ChatRequest, fullHis
 	triageCtx, triageCancel := context.WithTimeout(ctx, 10*time.Second) // 为分诊步骤设置一个较短的超时
 	defer triageCancel()
 
-	triageResult, err := service.Service.UserServiceGroup.LlmService.Triage(triageCtx, req.Content, triageHistory, retrievedQuestions)
+	triageResult, err := service.Service.UserServiceGroup.LlmService.Triage(triageCtx, req.Content, triageHistory, retrievedQuestions, req.Conversation.Meta.Sender)
 	if err != nil {
 		return false, err
 	}
@@ -485,7 +484,7 @@ func (c *ChatApi) runComplexGeneration(ctx context.Context, req common.ChatReque
 	global.Log.Debugln("=================开始进入大型LLM")
 
 	conversationHistory := fullHistory
-	llmAnswer, err := service.Service.UserServiceGroup.LlmService.GenerateResponseOrToolCall(ctx, &req, llmReferenceDocs, conversationHistory)
+	llmAnswer, err := service.Service.UserServiceGroup.LlmService.GenerateResponseOrToolCall(ctx, &req, llmReferenceDocs, conversationHistory, req.Conversation.Meta.Sender)
 	if err != nil {
 		return "", err // 将错误传递给上层处理
 	}

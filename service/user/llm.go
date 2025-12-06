@@ -14,9 +14,9 @@ import (
 
 type LlmService interface {
 	// 分诊, 使用小型LLM对用户输入进行分诊，返回分类结果
-	Triage(ctx context.Context, content string, history []common.LlmMessage, retrievedQuestions []string) (*common.TriageResult, error)
+	Triage(ctx context.Context, content string, history []common.LlmMessage, retrievedQuestions []string, sender common.Sender) (*common.TriageResult, error)
 	// GenerateResponseOrToolCall 负责业务层面的决策，例如决定使用哪个模型、哪个Prompt，并生成初步回复或工具调用指令
-	GenerateResponseOrToolCall(ctx context.Context, param *common.ChatRequest, referenceDocs []dao.SearchResult, history []common.LlmMessage) (string, error)
+	GenerateResponseOrToolCall(ctx context.Context, param *common.ChatRequest, referenceDocs []dao.SearchResult, history []common.LlmMessage, sender common.Sender) (string, error)
 	// SynthesizeToolResult 在工具调用后，综合所有信息（包括工具结果）生成最终的自然语言回复, 不需要知识库(向量)数据了
 	SynthesizeToolResult(ctx context.Context, history []common.LlmMessage) (string, error)
 }
@@ -28,7 +28,7 @@ func NewLlmService() *llmService {
 	return &llmService{}
 }
 
-func (s *llmService) Triage(ctx context.Context, content string, history []common.LlmMessage, retrievedQuestions []string) (*common.TriageResult, error) {
+func (s *llmService) Triage(ctx context.Context, content string, history []common.LlmMessage, retrievedQuestions []string, sender common.Sender) (*common.TriageResult, error) {
 	if global.LlmService == nil {
 		return nil, fmt.Errorf("LLM客户端未初始化")
 	}
@@ -43,6 +43,15 @@ func (s *llmService) Triage(ctx context.Context, content string, history []commo
 			fmt.Fprintf(&prompt, "- %s: %s\n", msg.Role, msg.Content)
 		}
 		prompt.WriteString("\n")
+	}
+
+	contextPrompt, err := s.buildContextPrompt(sender)
+	if err != nil {
+		global.Log.Warnf("[Triage] 构建上下文提示词失败: %v", err)
+		// 不中断流程，继续执行
+	}
+	if contextPrompt != "" {
+		prompt.WriteString(contextPrompt)
 	}
 
 	fmt.Fprintf(&prompt, "用户最新问题:\n\"%s\"\n\n", content)
@@ -78,7 +87,7 @@ func (s *llmService) Triage(ctx context.Context, content string, history []commo
 	return &triageResult, nil
 }
 
-func (s *llmService) GenerateResponseOrToolCall(ctx context.Context, param *common.ChatRequest, referenceDocs []dao.SearchResult, history []common.LlmMessage) (string, error) {
+func (s *llmService) GenerateResponseOrToolCall(ctx context.Context, param *common.ChatRequest, referenceDocs []dao.SearchResult, history []common.LlmMessage, sender common.Sender) (string, error) {
 	if global.LlmService == nil {
 		return "", fmt.Errorf("LLM客户端未初始化")
 	}
@@ -130,6 +139,15 @@ func (s *llmService) GenerateResponseOrToolCall(ctx context.Context, param *comm
 	}
 
 	// 3. 构建最终发送给LLM的 content
+	// 将 sender 信息作为上下文注入
+	contextPrompt, err := s.buildContextPrompt(sender)
+	if err != nil {
+		global.Log.Warnf("[GenerateResponseOrToolCall] 构建上下文提示词失败: %v", err)
+	}
+	if contextPrompt != "" {
+		finalContent.WriteString(contextPrompt)
+	}
+
 	if hasDocs {
 		finalContent.WriteString("--- 参考资料 ---\n")
 		for _, doc := range referenceDocs {
@@ -164,10 +182,69 @@ func (s *llmService) SynthesizeToolResult(ctx context.Context, history []common.
 	// 无需再次提供复杂的RAG或工具调用指令。
 	return global.LlmService.ChatCompletionWithHistory(
 		ctx,
-		enum.ModelLarge,
+		enum.ModelMedium,
 		enum.SystemPromptSynthesizeToolResult, // 使用专用的提示词进行结果合成
 		"", // content为空，因为所有上下文都在history中
 		history,
 		0.6,
 	)
+}
+
+// buildContextPrompt 从 sender 对象构建上下文提示字符串
+func (s *llmService) buildContextPrompt(sender common.Sender) (string, error) {
+	attrMap, err := customAttributesToMap(sender.CustomAttributes)
+	if err != nil {
+		return "", fmt.Errorf("转换CustomAttributes为map失败: %w", err)
+	}
+
+	// 将 identifier 添加到 map 中以便统一处理
+	if sender.Identifier != nil && *sender.Identifier != "" {
+		attrMap["user_id"] = *sender.Identifier
+	}
+
+	if len(attrMap) == 0 {
+		return "", nil
+	}
+
+	var attrBuilder strings.Builder
+	hasContent := false
+	for key, value := range attrMap {
+		// 忽略空值
+		if value == nil {
+			continue
+		}
+		if vStr, ok := value.(string); ok && vStr != "" {
+			attrBuilder.WriteString(fmt.Sprintf("- %s: %s\n", key, vStr))
+			hasContent = true
+		} else if _, ok := value.(string); !ok { // 处理非字符串类型
+			attrBuilder.WriteString(fmt.Sprintf("- %s: %v\n", key, value))
+			hasContent = true
+		}
+	}
+
+	if !hasContent {
+		return "", nil
+	}
+
+	var prompt strings.Builder
+	prompt.WriteString("上下文信息:\n")
+	prompt.WriteString(attrBuilder.String())
+	prompt.WriteString("\n")
+
+	return prompt.String(), nil
+}
+
+// customAttributesToMap 使用JSON序列化和反序列化将CustomAttributes结构体安全地转换为map
+func customAttributesToMap(attrs common.CustomAttributes) (map[string]interface{}, error) {
+	var attrMap map[string]interface{}
+	// 通过JSON序列化和反序列化来转换
+	bytes, err := json.Marshal(attrs)
+	if err != nil {
+		return nil, err
+	}
+	err = json.Unmarshal(bytes, &attrMap)
+	if err != nil {
+		return nil, err
+	}
+	return attrMap, nil
 }

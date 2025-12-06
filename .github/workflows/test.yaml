@@ -1,0 +1,32 @@
+# .github/workflows/test.yaml
+name: Go Test
+
+on:
+  workflow_dispatch: # 允许通过 GitHub UI 手动触发
+  workflow_call:     # 允许其他工作流调用此工作流
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      TZ: Asia/Shanghai # 设置时区，以确保时间相关测试结果一致性
+    steps:
+      - name: Checkout repository # 检出仓库代码
+        uses: actions/checkout@v4
+
+      - name: Add config.yaml # 复制示例配置文件供测试使用
+        run: cp config.example.yaml config.yaml
+
+      - name: Set up Go # 设置 Go 环境
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod' # 根据 go.mod 文件自动检测 Go 版本
+
+      - name: Go Version # 打印 Go 版本信息
+        run: go version
+
+      - name: Run Tests # 运行所有 Go 测试
+        run: go test -v ./...
+
+      - name: Build Project # 构建 Go 项目
+        run: go build -v ./...

@@ -1,0 +1,39 @@
+
+name: CI
+
+on:
+  workflow_dispatch:
+  workflow_call:
+  push:
+    branches:
+      - '*'
+    paths-ignore:
+      - '.*'
+      - 'LICENSE'
+      - 'Dockerfile'
+      - 'README.md'
+  pull_request:
+    branches:
+      - '*'
+    paths-ignore:
+      - '.*'
+      - 'LICENSE'
+      - 'README.md'
+
+jobs:
+  test:
+    name: Run Go Tests and Build
+    uses: ./.github/workflows/test.yaml
+
+  dependency-review:
+    name: Check Dependencies for Vulnerabilities
+    if: github.base_ref != '' || github.head_ref != ''
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Dependency Review
+        uses: actions/dependency-review-action@v3

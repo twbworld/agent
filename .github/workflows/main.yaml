@@ -1,0 +1,101 @@
+# .github/workflows/main.yaml
+name: Release and Push Image to ACR
+
+on:
+  workflow_dispatch: # 允许通过 GitHub UI 手动触发
+  push:
+    tags:
+      - "v*.*" # 推送到 'v' 开头的任何版本标签时触发，例如 v1.0, v1.0.1
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }} # 确保同一标签只有一个工作流运行
+  cancel-in-progress: true # 取消正在进行的旧工作流
+
+jobs:
+  test:
+    name: Run Go Tests and Build # 调用可复用的测试工作流
+    uses: ./.github/workflows/test.yaml
+
+  metadata:
+    name: Extract Docker Metadata # 提取 Docker 镜像的元数据（标签、Labels）
+    runs-on: ubuntu-latest
+    needs: test # 确保测试通过后才提取元数据
+    outputs:
+      image-tags: ${{ steps.extract-metadata.outputs.tags }}
+      image-labels: ${{ steps.extract-metadata.outputs.labels }}
+      registry-url: ${{ steps.set-acr-vars.outputs.registry-url }}
+      image-name: ${{ steps.set-acr-vars.outputs.image-name }}
+    steps:
+      - name: Checkout repository # 检出仓库代码
+        uses: actions/checkout@v4
+
+      - name: Set ACR Registry and Image Name Variables # 设置阿里云 ACR 的相关变量
+        id: set-acr-vars
+        run: |
+          # 从 GitHub Actions 变量中获取 ACR 注册表地址
+          REGISTRY_URL="${{ vars.ACR_REGISTRY }}"
+
+          # 获取 ACR 镜像名称：如果 vars.ACR_IMAGE_NAME 已设置，则使用它；
+          # 否则，默认使用 GitHub 仓库所有者名称和仓库名称组合作为镜像名称。
+          ACR_IMAGE_NAME_VAR="${{ vars.ACR_IMAGE_NAME }}"
+          IMAGE_NAME_FINAL=""
+          if [ -z "$ACR_IMAGE_NAME_VAR" ]; then
+            IMAGE_NAME_FINAL="${{ github.repository_owner }}/${{ github.event.repository.name }}"
+          else
+            IMAGE_NAME_FINAL="$ACR_IMAGE_NAME_VAR"
+          fi
+
+          echo "registry-url=$REGISTRY_URL" >> $GITHUB_OUTPUT
+          echo "image-name=$IMAGE_NAME_FINAL" >> $GITHUB_OUTPUT
+          echo "ACR Registry URL: $REGISTRY_URL"
+          echo "ACR Image Name: $IMAGE_NAME_FINAL"
+
+      - name: Extract Docker metadata # 使用 docker/metadata-action 提取 Docker 标签和 Labels
+        id: extract-metadata
+        # 仅当 registry-url 和 image-name 成功设置后才执行
+        if: steps.set-acr-vars.outputs.registry-url && steps.set-acr-vars.outputs.image-name
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ steps.set-acr-vars.outputs.registry-url }}/${{ steps.set-acr-vars.outputs.image-name }}
+          tags: | # 定义镜像标签策略
+            type=semver,pattern={{version}}       # 例如：v1.2.3 -> 1.2.3
+            type=semver,pattern={{major}}.{{minor}} # 例如：v1.2.3 -> 1.2
+            type=semver,pattern={{major}}         # 例如：v1.2.3 -> 1
+            type=sha,format=short                 # 短提交 SHA 作为标签
+          labels: | # 定义镜像 Labels
+            org.opencontainers.image.source=${{ github.event.repository.html_url }}
+            org.opencontainers.image.created=${{ steps.extract-metadata.outputs.created }}
+            org.opencontainers.image.revision=${{ github.sha }}
+
+  build-and-push-image:
+    name: Build and Push Docker Image to ACR # 构建 Docker 镜像并推送到 ACR
+    needs: [test, metadata] # 依赖于测试通过和元数据提取完成
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write # 推送包到注册表所需的权限
+
+    steps:
+      - name: Checkout repository # 检出仓库代码
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx # 设置 Docker Buildx，用于更高效地构建镜像
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log into Aliyun Container Registry # 登录阿里云 ACR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ needs.metadata.outputs.registry-url }}
+          username: ${{ secrets.ACR_USERNAME }} # 使用 GitHub Secrets 存储的用户名
+          password: ${{ secrets.ACR_PASSWORD }} # 使用 GitHub Secrets 存储的密码
+
+      - name: Build and Push Docker image # 构建并推送 Docker 镜像
+        uses: docker/build-push-action@v5
+        with:
+          context: . # 构建上下文为仓库根目录
+          file: Dockerfile # Dockerfile 位于仓库根目录
+          push: true
+          tags: ${{ needs.metadata.outputs.image-tags }} # 使用元数据提取的标签
+          labels: ${{ needs.metadata.outputs.image-labels }} # 使用元数据提取的 Labels
+          cache-from: type=gha # 使用 GitHub Actions 缓存加速构建
+          cache-to: type=gha,mode=max # 将构建缓存写入 GitHub Actions 缓存

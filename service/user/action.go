@@ -246,9 +246,12 @@ func (a *actionService) CheckAndSendProductCard(ctx context.Context, conversatio
 			// 发送卡片
 			a.sendProductCard(conversationID, attrs)
 
-			// 更新Redis记录，设置24小时过期
-			if err := global.RedisClient.Set(ctx, key, attrs.GoodsID, 24*time.Hour).Err(); err != nil {
-				global.Log.Warnf("更新会话 %d 最后发送商品ID失败: %v", conversationID, err)
+			// 更新Redis记录，设置过期时间
+			ttl := time.Duration(global.Config.Ai.ItemCardTTL) * time.Second
+			if ttl > 0 {
+				if err := global.RedisClient.Set(ctx, key, attrs.GoodsID, ttl).Err(); err != nil {
+					global.Log.Warnf("更新会话 %d 最后发送商品ID失败: %v", conversationID, err)
+				}
 			}
 		}
 	}
@@ -265,8 +268,11 @@ func (a *actionService) CheckAndSendProductCard(ctx context.Context, conversatio
 		if lastSentOrderID != attrs.OrderID {
 			global.Log.Debugf("为会话 %d 发送订单 %s 的信息卡片 (上次: %s)", conversationID, attrs.OrderID, lastSentOrderID)
 			// a.sendOrderCard(conversationID, attrs) // 预留
-			if err := global.RedisClient.Set(ctx, key, attrs.OrderID, 24*time.Hour).Err(); err != nil {
-				global.Log.Warnf("更新会话 %d 最后发送订单ID失败: %v", conversationID, err)
+			ttl := time.Duration(global.Config.Ai.ItemCardTTL) * time.Second
+			if ttl > 0 {
+				if err := global.RedisClient.Set(ctx, key, attrs.OrderID, ttl).Err(); err != nil {
+					global.Log.Warnf("更新会话 %d 最后发送订单ID失败: %v", conversationID, err)
+				}
 			}
 		}
 	}

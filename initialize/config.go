@@ -185,14 +185,20 @@ func handleConfig(c *config.Config) {
 	if c.Ai.TriageContextQuestions == 0 {
 		c.Ai.TriageContextQuestions = 2
 	}
-	if c.Ai.AsyncJobTimeout == 0 {
-		c.Ai.AsyncJobTimeout = 30
+	if c.Ai.TriageHistoryLimit == 0 {
+		c.Ai.TriageHistoryLimit = 4
 	}
 	if c.Ai.TransferGracePeriod == 0 {
 		c.Ai.TransferGracePeriod = 5
 	}
 	if c.Ai.HumanModeGracePeriod == 0 {
 		c.Ai.HumanModeGracePeriod = 900
+	}
+	if c.Ai.ItemCardTTL == 0 {
+		c.Ai.ItemCardTTL = 21600
+	}
+	if c.Ai.AsyncJobTimeout == 0 {
+		c.Ai.AsyncJobTimeout = 60
 	}
 	if c.Ai.MaxLlmHistoryMessages == 0 {
 		c.Ai.MaxLlmHistoryMessages = 20

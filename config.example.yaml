@@ -106,10 +106,14 @@ ai:
   vector_search_min_similarity: 0.75
   # 为分诊台提供向量搜索结果作为上下文时，取最相关的前N个问题(预设回复)
   triage_context_questions: 2
+  # 分诊台获取的最大历史消息数量
+  triage_history_limit: 4
   # 转人工宽限期(秒);当系统被自动转给人工时后, 在宽限期内又收到新消息, 那么继续由AI处理,如果成功处理,那么将撤销"转人工"操作.
   transfer_grace_period: 5
   # 人工模式宽限期(秒); 当一个会话被人工客服处理后，在该宽限期内，AI不会主动介入。宽限期过后，AI会重新接管会话。
   human_mode_grace_period: 900
+  # 发送的商品/订单等上下文卡片的去重有效期(秒), 0表示不启用
+  item_card_ttl: 21600
   # AI处理(包括精确匹配和向量检索和LLM处理)的超时时间(秒)
   async_job_timeout: 60
   # 传递给大型LLM的最大历史消息数量 (0表示不限制, chatwoot的api默认返回20条)

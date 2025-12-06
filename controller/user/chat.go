@@ -105,7 +105,7 @@ func (c *ChatApi) handleWebWidgetTriggered(contactID uint, sourceID string, attr
 			return
 		}
 		targetConversationID = newID
-        global.Log.Debugf("成功为联系人 %d 创建新会话: %d", contactID, targetConversationID)
+		global.Log.Debugf("成功为联系人 %d 创建新会话: %d", contactID, targetConversationID)
 
 	} else {
 		// 老用户 -> 取最近的一个会话
@@ -410,7 +410,7 @@ func (c *ChatApi) runTriage(ctx context.Context, req common.ChatRequest, fullHis
 	// 准备分诊台所需的上下文信息
 	var triageHistory []common.LlmMessage
 	if len(fullHistory) > 0 {
-		const triageHistoryLimit = 4
+		triageHistoryLimit := int(global.Config.Ai.TriageHistoryLimit)
 		startIndex := len(fullHistory) - triageHistoryLimit
 		if startIndex < 0 {
 			startIndex = 0

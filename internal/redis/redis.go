@@ -18,7 +18,6 @@ const (
 	KeyPrefixHistoryLock         = "agent:lock:history:"                   // 获取历史记录的锁,防止缓存击穿
 	KeyPrefixTransferGracePeriod = "agent:transfer_grace_period:"          // AI自动转人工后的宽限期Key前缀
 	KeyPrefixHumanModeActive     = "agent:human_mode_active:"              // 人工客服活跃宽限期Key前缀
-	KeyPrefixProductCardSent     = "agent:product_card_sent:"              // 标记商品卡片是否已发送的Key前缀
 	KeyPrefixLastProductSent     = "agent:last_product_sent:"              // 记录会话最后发送的商品ID
 	KeyPrefixLastOrderSent       = "agent:last_order_sent:"                // 记录会话最后发送的订单ID
 	KeyPrefixProductCardLock     = "agent:lock:product_card_sent:"         // 发送卡片的分布式锁

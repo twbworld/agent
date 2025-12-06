@@ -150,6 +150,8 @@ type Message struct {
 	ContentType       ContentType      `json:"content_type"`
 	MessageType       MessageDirection `json:"message_type"`
 	CreatedAt         int64            `json:"created_at"`
+	Private           bool             `json:"private"`     // 是否是私信备注
+	Attachments       []Attachment     `json:"attachments"` // 附件列表
 	ContentAttributes struct {
 		InReplyTo *uint `json:"in_reply_to,omitempty"` //消息内容属性，用于处理“回复”等功能
 	} `json:"content_attributes"`
@@ -157,8 +159,6 @@ type Message struct {
 		ID   uint       `json:"id"`
 		Type SenderType `json:"type"`
 	} `json:"sender"`
-	Private     bool         `json:"private"`     // 是否是私信备注
-	Attachments []Attachment `json:"attachments"` // 附件列表
 }
 
 // Attachment 结构体定义了消息附件的信息

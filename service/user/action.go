@@ -64,6 +64,9 @@ func (a *actionService) TransferToHuman(ConversationID uint, remark enum.Transfe
 		return fmt.Errorf("Chatwoot客户端未初始化")
 	}
 
+	// 提前激活“人工模式宽限期”，确保在转为人工后，后续消息不会被AI立即接管
+	a.ActivateHumanModeGracePeriod(context.Background(), ConversationID)
+
 	// 同步设置宽限期标志
 	gracePeriod := time.Duration(global.Config.Ai.TransferGracePeriod) * time.Second
 	if gracePeriod > 0 && utils.InSlice(noGracePeriodReasons, remark) == -1 {

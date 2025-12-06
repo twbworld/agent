@@ -177,7 +177,7 @@ func handleConfig(c *config.Config) {
 		c.Ai.HybridPrefix = "ai+@"
 	}
 	if len(c.Ai.TransferKeywords) == 0 {
-		c.Ai.TransferKeywords = []string{"人工客服", "转人工"}
+		c.Ai.TransferKeywords = []string{"人工", "转人工", "人工客服"}
 	}
 	if c.Ai.VectorSimilarityThreshold == 0 {
 		c.Ai.VectorSimilarityThreshold = 0.9

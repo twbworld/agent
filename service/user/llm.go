@@ -158,9 +158,12 @@ func (s *llmService) GenerateResponseOrToolCall(ctx context.Context, param *comm
 			}
 			fmt.Fprintf(&finalContent, "[问题]: %s\n[回答]: %s\n---\n", q, doc.Answer)
 		}
-		finalContent.WriteString("\n--- 用户问题 ---\n")
 	}
 
+	if finalContent.Len() > 0 {
+		finalContent.WriteString("\n")
+	}
+	finalContent.WriteString("--- 用户问题 ---\n")
 	finalContent.WriteString(param.Content)
 
 	return global.LlmService.ChatCompletionWithHistory(

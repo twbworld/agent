@@ -65,7 +65,7 @@ llm:
     # 超时时间(秒)
     timeout: 30
     # LLM的大小, small|medium|large
-    size: "small"
+    size: small
     # LLM的温度,不设置则由LLM服务决定, qwen3默认0.6
     temperature: 0.6
 # 配置向量化模型;中途更换模型可能因dim不同而报错
@@ -87,7 +87,7 @@ vector_db:
   # 认证Token
   auth: ""
   # 集合名称
-  collection_name: "chatwoot_keywords"
+  collection_name: chatwoot_keywords
 # AI客服相关配置
 ai:
   # 提示词长度限制
@@ -108,7 +108,7 @@ ai:
   triage_context_questions: 2
   # 分诊台获取的最大历史消息数量
   triage_history_limit: 4
-  # 转人工宽限期(秒);当系统被自动转给人工时后, 在宽限期内又收到新消息, 那么继续由AI处理,如果成功处理,那么将撤销"转人工"操作.
+  # 转人工宽限期(秒);当系统被自动转给人工(如系统错误)后, 在宽限期内又收到新消息, 那么继续由AI处理,如果成功处理,那么将撤销"转人工"操作.
   transfer_grace_period: 5
   # 人工模式宽限期(秒); 当一个会话被人工客服处理后，在该宽限期内，AI不会主动介入。宽限期过后，AI会重新接管会话。
   human_mode_grace_period: 900
@@ -124,8 +124,9 @@ ai:
   keyword_reload_debounce: 600
   # 用于触发转人工的关键词列表
   transfer_keywords:
-    - "人工客服"
-    - "转人工"
+    - 人工
+    - 人工客服
+    - 转人工
 # MCP服务配置
 mcp_servers:
   # MCP服务命名

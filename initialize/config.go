@@ -188,6 +188,9 @@ func handleConfig(c *config.Config) {
 	if c.Ai.TriageHistoryLimit == 0 {
 		c.Ai.TriageHistoryLimit = 4
 	}
+	if c.Ai.TriageTimeout == 0 {
+		c.Ai.TriageTimeout = 10
+	}
 	if c.Ai.TransferGracePeriod == 0 {
 		c.Ai.TransferGracePeriod = 5
 	}

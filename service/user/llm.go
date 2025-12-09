@@ -3,6 +3,7 @@ package user
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -49,9 +50,10 @@ func (s *llmService) Triage(ctx context.Context, content string, history []commo
 	if err != nil {
 		global.Log.Warnf("[Triage] 构建上下文提示词失败: %v", err)
 		// 不中断流程，继续执行
-	}
-	if contextPrompt != "" {
+	}else if contextPrompt != "" {
+		prompt.WriteString("上下文信息:\n")
 		prompt.WriteString(contextPrompt)
+		prompt.WriteString("\n")
 	}
 
 	fmt.Fprintf(&prompt, "用户最新问题:\n\"%s\"\n\n", content)
@@ -68,6 +70,9 @@ func (s *llmService) Triage(ctx context.Context, content string, history []commo
 	// 使用小模型和专用的Triage Prompt
 	triageResultJSON, err := global.LlmService.GetCompletion(ctx, enum.ModelSmall, enum.SystemPromptTriage, prompt.String(), 0.2)
 	if err != nil {
+		if errors.Is(err, context.Canceled) {
+			return nil, err
+		}
 		return nil, fmt.Errorf("分诊台LLM调用失败: %w", err)
 	}
 
@@ -143,9 +148,11 @@ func (s *llmService) GenerateResponseOrToolCall(ctx context.Context, param *comm
 	contextPrompt, err := s.buildContextPrompt(sender)
 	if err != nil {
 		global.Log.Warnf("[GenerateResponseOrToolCall] 构建上下文提示词失败: %v", err)
-	}
-	if contextPrompt != "" {
+		// 不中断流程，继续执行
+	}else if contextPrompt != "" {
+		finalContent.WriteString("上下文信息:\n")
 		finalContent.WriteString(contextPrompt)
+		finalContent.WriteString("\n")
 	}
 
 	if hasDocs {
@@ -181,12 +188,10 @@ func (s *llmService) SynthesizeToolResult(ctx context.Context, history []common.
 		return "", fmt.Errorf("LLM客户端未初始化")
 	}
 
-	// 在这个阶段，我们使用一个干净、简单的系统提示，因为LLM的任务只是根据现有对话（包括工具结果）进行总结。
-	// 无需再次提供复杂的RAG或工具调用指令。
 	return global.LlmService.ChatCompletionWithHistory(
 		ctx,
 		enum.ModelMedium,
-		enum.SystemPromptSynthesizeToolResult, // 使用专用的提示词进行结果合成
+		enum.SystemPromptSynthesizeToolResult,
 		"", // content为空，因为所有上下文都在history中
 		history,
 		0.6,

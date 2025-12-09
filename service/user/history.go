@@ -2,6 +2,7 @@ package user
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"time"
@@ -42,9 +43,12 @@ func (s *historyService) GetOrFetch(ctx context.Context, accountID, conversation
 
 	// 1. 尝试从Redis获取聊天记录
 	history, err := global.RedisClient.GetConversationHistory(ctx, conversationID)
-	if err != nil && err != redis.ErrNil { // Redis error other than miss
+	if err != nil && err != redis.ErrNil {
+		if errors.Is(err, context.Canceled) {
+			return nil, err
+		}
 		global.Log.Warnf("从Redis获取会话 %d 历史记录失败: %v, 将尝试从Chatwoot获取", conversationID, err)
-	} else if history != nil { // Cache hit
+	} else if history != nil {
 		global.Log.Debugf("会话 %d 历史记录从Redis缓存命中", conversationID)
 		return history, nil
 	}
@@ -65,6 +69,9 @@ func (s *historyService) GetOrFetch(ctx context.Context, accountID, conversation
 
 	locked, err := global.RedisClient.SetNX(ctx, lockKey, agentID, lockExpiry).Result()
 	if err != nil {
+		if errors.Is(err, context.Canceled) {
+			return nil, err
+		}
 		global.Log.Errorf("尝试获取会话 %d 历史记录锁失败: %v", conversationID, err)
 		// 即使获取锁失败，也尝试从源获取，作为降级策略
 		return s.fetchAndCache(ctx, accountID, conversationID, currentMessage)
@@ -81,6 +88,9 @@ func (s *historyService) GetOrFetch(ctx context.Context, accountID, conversation
 		}()
 		// 在获取锁后，再次检查缓存，防止在获取锁的过程中，已有其他请求完成了缓存填充（双重检查锁定）
 		history, err := global.RedisClient.GetConversationHistory(ctx, conversationID)
+		if errors.Is(err, context.Canceled) {
+			return nil, err
+		}
 		if err == nil && history != nil {
 			global.Log.Debugf("获取锁后发现会话 %d 缓存已存在", conversationID)
 			return history, nil
@@ -133,7 +143,11 @@ func (s *historyService) Set(ctx context.Context, conversationID uint, history [
 
 // fetchAndCache 从Chatwoot获取数据、并存入Redis
 func (s *historyService) fetchAndCache(ctx context.Context, accountID, conversationID uint, currentMessage string) ([]common.LlmMessage, error) {
-	chatwootMessages, err := global.ChatwootService.GetConversationMessages(accountID, conversationID)
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
+	chatwootMessages, err := global.ChatwootService.GetConversationMessages(ctx, accountID, conversationID)
 	if err != nil {
 		return nil, fmt.Errorf("从Chatwoot API获取会话 %d 消息失败: %w", conversationID, err)
 	}

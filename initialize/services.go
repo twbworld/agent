@@ -153,7 +153,9 @@ func (i *Initializer) initChatwoot() error {
 		global.Log,
 	)
 
-	if _, err := client.GetAccountDetails(); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if _, err := client.GetAccountDetails(ctx); err != nil {
 		return fmt.Errorf("无法连接到Chatwoot服务 (url: %s, token: AgentApiToken): %w", global.Config.Chatwoot.Url, err)
 	}
 

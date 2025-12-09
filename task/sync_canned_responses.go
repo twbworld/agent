@@ -66,7 +66,7 @@ func (m *Manager) KeywordReloader() error {
 	}
 
 	// 2. 从Chatwoot拉取全量数据
-	allResponses, err := global.ChatwootService.GetCannedResponses()
+	allResponses, err := global.ChatwootService.GetCannedResponses(ctx)
 	if err != nil {
 		return fmt.Errorf("从Chatwoot获取预设回复失败: %w", err)
 	}
@@ -131,7 +131,7 @@ func (m *Manager) KeywordReloader() error {
 	if processErr == nil && syncErr == nil {
 		if global.RedisClient != nil && newLatestSyncTime.After(lastSyncTime) {
 			global.RedisClient.Set(ctx, redis.KeyLastSyncCannedResponses, newLatestSyncTime.Format(time.RFC3339Nano), 0)
-			global.Log.Debugln("同步时间戳已更新为: %s", newLatestSyncTime.Format(time.RFC3339Nano))
+			global.Log.Debugf("同步时间戳已更新为: %s", newLatestSyncTime.Format(time.RFC3339Nano))
 		}
 	} else {
 		global.Log.Warn("由于同步过程中发生错误，本次将不更新同步时间戳，以便下次重试")
@@ -225,7 +225,8 @@ func (m *Manager) generateVectorDocs(ctx context.Context, rules []chatwoot.Canne
 				return nil
 			}
 
-			standardQuestion, err := global.LlmService.GenerateStandardQuestion(ctx, enum.SystemPromptGenQuestionFromKeyword, seedQuestion)
+			// 根据输入文本（关键词或内容），使用小模型生成一个标准的、自然的问句
+			standardQuestion, err := global.LlmService.GetCompletion(ctx, enum.ModelSmall, enum.SystemPromptGenQuestionFromKeyword, seedQuestion, 0.2)
 			if err != nil {
 				global.Log.Warnf("为ID %d 的内容生成标准问题失败: %v", r.Id, err)
 				return nil

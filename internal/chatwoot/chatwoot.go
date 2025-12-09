@@ -2,6 +2,7 @@ package chatwoot
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -193,31 +194,31 @@ type CreateConversationResponse struct {
 
 type Service interface {
 	// 获取所有的预设回复
-	GetCannedResponses() ([]CannedResponse, error)
+	GetCannedResponses(ctx context.Context) ([]CannedResponse, error)
 	// 创建一个新的预设回复
-	CreateCannedResponse(shortCode, content string) (*CannedResponse, error)
+	CreateCannedResponse(ctx context.Context, shortCode, content string) (*CannedResponse, error)
 	// 更新一个已存在的预设回复
-	UpdateCannedResponse(id int, shortCode, content string) (*CannedResponse, error)
+	UpdateCannedResponse(ctx context.Context, id int, shortCode, content string) (*CannedResponse, error)
 	// 删除一个预设回复
-	DeleteCannedResponse(id int) error
+	DeleteCannedResponse(ctx context.Context, id int) error
 	//获取用户信息
-	GetAccountDetails() (*AccountDetails, error)
+	GetAccountDetails(ctx context.Context) (*AccountDetails, error)
 	// 在指定的对话中创建一条私信备注
-	CreatePrivateNote(conversationID uint, content string) error
+	CreatePrivateNote(ctx context.Context, conversationID uint, content string) error
 	// 主动创建一个新会话
-	CreateConversation(sourceID string) (uint, error)
+	CreateConversation(ctx context.Context, sourceID string) (uint, error)
 	// 将会话状态切换为指定状态
-	SetConversationStatus(conversationID uint, status ConversationStatus) error
+	SetConversationStatus(ctx context.Context, conversationID uint, status ConversationStatus) error
 	// 切换指定会话的 "输入中..." 状态
-	ToggleTypingStatus(conversationID uint, status string) error
+	ToggleTypingStatus(ctx context.Context, conversationID uint, status string) error
 	// 在指定对话中创建一条新消息 (通常是回复)
-	CreateMessage(conversationID uint, content string) error
+	CreateMessage(ctx context.Context, conversationID uint, content string) error
 	// 在指定对话中创建一条卡片消息
-	CreateCardMessage(conversationID uint, content string, cardItems []CardItem) error
+	CreateCardMessage(ctx context.Context, conversationID uint, content string, cardItems []CardItem) error
 	// 从Chatwoot API获取指定会话的历史消息(支持分页,单页20条)
-	GetConversationMessages(accountID, conversationID uint) ([]Message, error)
+	GetConversationMessages(ctx context.Context, accountID, conversationID uint) ([]Message, error)
 	// 获取指定联系人的所有会话
-	GetContactConversations(contactID uint) ([]ConversationSummary, error)
+	GetContactConversations(ctx context.Context, contactID uint) ([]ConversationSummary, error)
 }
 
 // TransferToHumanRequest 定义了转人工API的请求体
@@ -259,7 +260,10 @@ const (
 )
 
 // sendRequest 是一个通用的请求发送函数，用于处理所有与Chatwoot API的交互
-func (c *Client) sendRequest(method, path string, token tokenType, requestBody, responsePayload interface{}) error {
+func (c *Client) sendRequest(ctx context.Context, method, path string, token tokenType, requestBody, responsePayload interface{}) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	url := fmt.Sprintf("%s%s", c.BaseURL, path)
 
 	var bodyReader io.Reader
@@ -271,7 +275,7 @@ func (c *Client) sendRequest(method, path string, token tokenType, requestBody, 
 		bodyReader = bytes.NewBuffer(jsonData)
 	}
 
-	req, err := http.NewRequest(method, url, bodyReader)
+	req, err := http.NewRequestWithContext(ctx, method, url, bodyReader)
 	if err != nil {
 		return fmt.Errorf("创建请求失败: %w", err)
 	}
@@ -303,92 +307,92 @@ func (c *Client) sendRequest(method, path string, token tokenType, requestBody, 
 	return nil
 }
 
-func (c *Client) GetAccountDetails() (*AccountDetails, error) {
+func (c *Client) GetAccountDetails(ctx context.Context) (*AccountDetails, error) {
 	path := fmt.Sprintf("/api/v1/accounts/%d", c.AccountID)
 	var accountDetails AccountDetails
-	err := c.sendRequest("GET", path, agentToken, nil, &accountDetails)
+	err := c.sendRequest(ctx, "GET", path, agentToken, nil, &accountDetails)
 	if err != nil {
 		return nil, err
 	}
 	return &accountDetails, nil
 }
 
-func (c *Client) GetCannedResponses() ([]CannedResponse, error) {
+func (c *Client) GetCannedResponses(ctx context.Context) ([]CannedResponse, error) {
 	path := fmt.Sprintf("/api/v1/accounts/%d/canned_responses", c.AccountID)
 	var responses []CannedResponse
-	err := c.sendRequest("GET", path, agentToken, nil, &responses)
+	err := c.sendRequest(ctx, "GET", path, agentToken, nil, &responses)
 	if err != nil {
 		return nil, err
 	}
 	return responses, nil
 }
 
-func (c *Client) CreateCannedResponse(shortCode, content string) (*CannedResponse, error) {
+func (c *Client) CreateCannedResponse(ctx context.Context, shortCode, content string) (*CannedResponse, error) {
 	path := fmt.Sprintf("/api/v1/accounts/%d/canned_responses", c.AccountID)
 	payload := map[string]string{
 		"short_code": shortCode,
 		"content":    content,
 	}
 	var response CannedResponse
-	err := c.sendRequest("POST", path, agentToken, payload, &response)
+	err := c.sendRequest(ctx, "POST", path, agentToken, payload, &response)
 	if err != nil {
 		return nil, err
 	}
 	return &response, nil
 }
 
-func (c *Client) UpdateCannedResponse(id int, shortCode, content string) (*CannedResponse, error) {
+func (c *Client) UpdateCannedResponse(ctx context.Context, id int, shortCode, content string) (*CannedResponse, error) {
 	path := fmt.Sprintf("/api/v1/accounts/%d/canned_responses/%d", c.AccountID, id)
 	payload := map[string]string{
 		"short_code": shortCode,
 		"content":    content,
 	}
 	var response CannedResponse
-	err := c.sendRequest("PATCH", path, agentToken, payload, &response)
+	err := c.sendRequest(ctx, "PATCH", path, agentToken, payload, &response)
 	if err != nil {
 		return nil, err
 	}
 	return &response, nil
 }
 
-func (c *Client) DeleteCannedResponse(id int) error {
+func (c *Client) DeleteCannedResponse(ctx context.Context, id int) error {
 	path := fmt.Sprintf("/api/v1/accounts/%d/canned_responses/%d", c.AccountID, id)
-	return c.sendRequest("DELETE", path, agentToken, nil, nil)
+	return c.sendRequest(ctx, "DELETE", path, agentToken, nil, nil)
 }
 
-func (c *Client) CreatePrivateNote(conversationID uint, content string) error {
+func (c *Client) CreatePrivateNote(ctx context.Context, conversationID uint, content string) error {
 	path := fmt.Sprintf("/api/v1/accounts/%d/conversations/%d/messages", c.AccountID, conversationID)
 	notePayload := CreatePrivateNoteRequest{
 		Content:     content,
 		MessageType: MessageTypeOutgoing,
 		Private:     true,
 	}
-	return c.sendRequest("POST", path, botToken, notePayload, nil)
+	return c.sendRequest(ctx, "POST", path, botToken, notePayload, nil)
 }
 
-func (c *Client) CreateConversation(sourceID string) (uint, error) {
+func (c *Client) CreateConversation(ctx context.Context, sourceID string) (uint, error) {
 	path := fmt.Sprintf("/api/v1/accounts/%d/conversations", c.AccountID)
 	payload := CreateConversationRequest{
 		SourceID: sourceID,
 	}
 
 	var response CreateConversationResponse
-	err := c.sendRequest("POST", path, agentToken, payload, &response)
+	err := c.sendRequest(ctx, "POST", path, agentToken, payload, &response)
 	if err != nil {
 		return 0, err
 	}
 	return response.ID, nil
 }
 
-func (c *Client) SetConversationStatus(conversationID uint, status ConversationStatus) error {
+func (c *Client) SetConversationStatus(ctx context.Context, conversationID uint, status ConversationStatus) error {
 	path := fmt.Sprintf("/api/v1/accounts/%d/conversations/%d/toggle_status", c.AccountID, conversationID)
 	payload := TransferToHumanRequest{
 		Status: status,
 	}
-	return c.sendRequest("POST", path, botToken, payload, nil)
+	return c.sendRequest(ctx, "POST", path, agentToken, payload, nil)
 }
 
-func (c *Client) ToggleTypingStatus(conversationID uint, status string) error {
+func (c *Client) ToggleTypingStatus(ctx context.Context, conversationID uint, status string) error {
 	if status != "on" && status != "off" {
 		return fmt.Errorf("无效的输入状态: %s", status)
 	}
@@ -396,10 +400,10 @@ func (c *Client) ToggleTypingStatus(conversationID uint, status string) error {
 	payload := ToggleTypingRequest{
 		TypingStatus: status,
 	}
-	return c.sendRequest("POST", path, agentToken, payload, nil)
+	return c.sendRequest(ctx, "POST", path, agentToken, payload, nil)
 }
 
-func (c *Client) CreateMessage(conversationID uint, content string) error {
+func (c *Client) CreateMessage(ctx context.Context, conversationID uint, content string) error {
 	path := fmt.Sprintf("/api/v1/accounts/%d/conversations/%d/messages", c.AccountID, conversationID)
 	payload := CreateMessageRequest{
 		Content:     content,
@@ -407,12 +411,12 @@ func (c *Client) CreateMessage(conversationID uint, content string) error {
 		Private:     false,
 		ContentType: ContentTypeText,
 	}
-	return c.sendRequest("POST", path, botToken, payload, nil)
+	return c.sendRequest(ctx, "POST", path, botToken, payload, nil)
 }
 
 // content 给客服看的文本
 // cardItems 给客户看的卡片
-func (c *Client) CreateCardMessage(conversationID uint, content string, cardItems []CardItem) error {
+func (c *Client) CreateCardMessage(ctx context.Context, conversationID uint, content string, cardItems []CardItem) error {
 	path := fmt.Sprintf("/api/v1/accounts/%d/conversations/%d/messages", c.AccountID, conversationID)
 	payload := CreateMessageRequest{
 		Content:     content,
@@ -423,23 +427,23 @@ func (c *Client) CreateCardMessage(conversationID uint, content string, cardItem
 			Items: cardItems,
 		},
 	}
-	return c.sendRequest("POST", path, botToken, payload, nil)
+	return c.sendRequest(ctx, "POST", path, botToken, payload, nil)
 }
 
-func (c *Client) GetConversationMessages(accountID, conversationID uint) ([]Message, error) {
+func (c *Client) GetConversationMessages(ctx context.Context, accountID, conversationID uint) ([]Message, error) {
 	path := fmt.Sprintf("/api/v1/accounts/%d/conversations/%d/messages", accountID, conversationID)
 	var response ConversationMessagesResponse
-	err := c.sendRequest("GET", path, agentToken, nil, &response)
+	err := c.sendRequest(ctx, "GET", path, agentToken, nil, &response)
 	if err != nil {
 		return nil, err
 	}
 	return response.Payload, nil
 }
 
-func (c *Client) GetContactConversations(contactID uint) ([]ConversationSummary, error) {
+func (c *Client) GetContactConversations(ctx context.Context, contactID uint) ([]ConversationSummary, error) {
 	path := fmt.Sprintf("/api/v1/accounts/%d/contacts/%d/conversations", c.AccountID, contactID)
 	var response ContactConversationsResponse
-	err := c.sendRequest("GET", path, agentToken, nil, &response)
+	err := c.sendRequest(ctx, "GET", path, agentToken, nil, &response)
 	if err != nil {
 		return nil, err
 	}

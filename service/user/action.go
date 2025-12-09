@@ -19,13 +19,13 @@ type ActionService interface {
 	// 检查并发送商品/订单卡片
 	CheckAndSendProductCard(ctx context.Context, conversationID uint, attrs common.CustomAttributes)
 	// 转接人工客服
-	TransferToHuman(ConversationID uint, remark enum.TransferToHuman, message ...string) error
+	TransferToHuman(ctx context.Context, ConversationID uint, remark enum.TransferToHuman, message ...string) error
 	// 将会话状态设置为机器人处理
-	SetConversationPending(conversationID uint) error
+	SetConversationPending(ctx context.Context, conversationID uint) error
 	// 切换输入状态
-	ToggleTyping(conversationID uint, status bool)
+	ToggleTyping(ctx context.Context, conversationID uint, status bool)
 	// 发送消息
-	SendMessage(conversationID uint, content string)
+	SendMessage(ctx context.Context, conversationID uint, content string)
 	// 匹配预设回复或执行特殊动作（如转人工）
 	MatchCannedResponse(chatRequest *common.ChatRequest) (string, bool, error)
 	// 设置人工模式宽限期
@@ -59,7 +59,7 @@ func NewActionService() ActionService {
 	}
 }
 
-func (a *actionService) TransferToHuman(ConversationID uint, remark enum.TransferToHuman, message ...string) error {
+func (a *actionService) TransferToHuman(ctx context.Context, ConversationID uint, remark enum.TransferToHuman, message ...string) error {
 	if global.ChatwootService == nil {
 		return fmt.Errorf("Chatwoot客户端未初始化")
 	}
@@ -78,19 +78,19 @@ func (a *actionService) TransferToHuman(ConversationID uint, remark enum.Transfe
 		}
 	}
 
-	g, _ := errgroup.WithContext(context.Background())
+	g, gCtx := errgroup.WithContext(ctx)
 
 	// 创建私信备注
 	if remark != "" {
 		g.Go(func() error {
-			if err := global.ChatwootService.CreatePrivateNote(ConversationID, string(remark)); err != nil {
+			if err := global.ChatwootService.CreatePrivateNote(gCtx, ConversationID, string(remark)); err != nil {
 				global.Log.Warnf("[action]为会话 %d 创建转人工备注失败: %v", ConversationID, err)
 			}
 			return nil
 		})
 	}
 	g.Go(func() error {
-		if err := global.ChatwootService.SetConversationStatus(ConversationID, chatwoot.ConversationStatusOpen); err != nil {
+		if err := global.ChatwootService.SetConversationStatus(gCtx, ConversationID, chatwoot.ConversationStatusOpen); err != nil {
 			global.Log.Errorf("[action]转接会话 %d 至人工客服失败: %v", ConversationID, err)
 			return err
 		}
@@ -110,7 +110,7 @@ func (a *actionService) TransferToHuman(ConversationID uint, remark enum.Transfe
 
 	if userMessage != "" {
 		g.Go(func() error {
-			if err := global.ChatwootService.CreateMessage(ConversationID, userMessage); err != nil {
+			if err := global.ChatwootService.CreateMessage(gCtx, ConversationID, userMessage); err != nil {
 				global.Log.Warnf("[action]为会话 %d 发送转人工提示失败: %v", ConversationID, err)
 			}
 			return nil
@@ -120,14 +120,14 @@ func (a *actionService) TransferToHuman(ConversationID uint, remark enum.Transfe
 	return g.Wait()
 }
 
-func (a *actionService) SetConversationPending(conversationID uint) error {
+func (a *actionService) SetConversationPending(ctx context.Context, conversationID uint) error {
 	if global.ChatwootService == nil {
 		return fmt.Errorf("Chatwoot客户端未初始化")
 	}
-	return global.ChatwootService.SetConversationStatus(conversationID, chatwoot.ConversationStatusPending)
+	return global.ChatwootService.SetConversationStatus(ctx, conversationID, chatwoot.ConversationStatusPending)
 }
 
-func (a *actionService) ToggleTyping(conversationID uint, status bool) {
+func (a *actionService) ToggleTyping(ctx context.Context, conversationID uint, status bool) {
 	if global.ChatwootService == nil {
 		return
 	}
@@ -135,16 +135,16 @@ func (a *actionService) ToggleTyping(conversationID uint, status bool) {
 	if status {
 		statusStr = "on"
 	}
-	if err := global.ChatwootService.ToggleTypingStatus(conversationID, statusStr); err != nil {
+	if err := global.ChatwootService.ToggleTypingStatus(ctx, conversationID, statusStr); err != nil {
 		global.Log.Warnf("[action]为会话 %d 切换typing状态失败: %v", conversationID, err)
 	}
 }
 
-func (a *actionService) SendMessage(conversationID uint, content string) {
+func (a *actionService) SendMessage(ctx context.Context, conversationID uint, content string) {
 	if global.ChatwootService == nil {
 		return
 	}
-	if err := global.ChatwootService.CreateMessage(conversationID, content); err != nil {
+	if err := global.ChatwootService.CreateMessage(ctx, conversationID, content); err != nil {
 		global.Log.Errorf("[action]向会话 %d 发送消息失败: %v", conversationID, err)
 	}
 }
@@ -174,7 +174,7 @@ func (a *actionService) MatchCannedResponse(chatRequest *common.ChatRequest) (st
 	return "", false, nil
 }
 
-func (a *actionService) sendProductCard(conversationID uint, attrs common.CustomAttributes) {
+func (a *actionService) sendProductCard(ctx context.Context, conversationID uint, attrs common.CustomAttributes) {
 	if global.ChatwootService == nil {
 		global.Log.Warnf("[action] Chatwoot客户端未初始化，无法为会话 %d 发送商品卡片", conversationID)
 		return
@@ -195,7 +195,7 @@ func (a *actionService) sendProductCard(conversationID uint, attrs common.Custom
 	content := fmt.Sprintf("商品名称：**%s**\n价格：%s\ngoods_id：%s\n[![%s](%s)](%s)", attrs.GoodsTitle, attrs.GoodsPrice, attrs.GoodsID, attrs.GoodsTitle, attrs.GoodsImage, attrs.GoodsUrl)
 
 	//(当前消息不加入缓存)
-	if err := global.ChatwootService.CreateCardMessage(conversationID, content, []chatwoot.CardItem{cardItem}); err != nil {
+	if err := global.ChatwootService.CreateCardMessage(ctx, conversationID, content, []chatwoot.CardItem{cardItem}); err != nil {
 		global.Log.Errorf("[action]向会话 %d 发送商品卡片失败: %v", conversationID, err)
 	}
 }
@@ -247,7 +247,7 @@ func (a *actionService) CheckAndSendProductCard(ctx context.Context, conversatio
 			global.Log.Debugf("为会话 %d 发送商品 %s 的信息卡片 (上次: %s)", conversationID, attrs.GoodsID, lastSentGoodsID)
 
 			// 发送卡片
-			a.sendProductCard(conversationID, attrs)
+			a.sendProductCard(ctx, conversationID, attrs)
 
 			// 更新Redis记录，设置过期时间
 			ttl := time.Duration(global.Config.Ai.ItemCardTTL) * time.Second

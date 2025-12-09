@@ -3,6 +3,7 @@ package dao
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -116,6 +117,9 @@ func (d *VectorDb) Search(ctx context.Context, query string, topK int) ([]Search
 	defer cancel()
 	queryEmbeddings, err := global.EmbeddingService.CreateEmbeddings(embedCtx, []string{query})
 	if err != nil {
+		if errors.Is(err, context.Canceled) {
+			return nil, err
+		}
 		return nil, fmt.Errorf("为查询文本创建向量失败: %w", err)
 	}
 	if len(queryEmbeddings) == 0 {
@@ -126,6 +130,9 @@ func (d *VectorDb) Search(ctx context.Context, query string, topK int) ([]Search
 	// 2. 获取集合
 	col, err := global.VectorDb.GetOrCreateCollection(ctx, d.CollectionName)
 	if err != nil {
+		if errors.Is(err, context.Canceled) {
+			return nil, err
+		}
 		return nil, fmt.Errorf("获取向量集合 '%s' 失败: %w", d.CollectionName, err)
 	}
 
@@ -141,6 +148,9 @@ func (d *VectorDb) Search(ctx context.Context, query string, topK int) ([]Search
 		chroma.WithIncludeQuery(chroma.IncludeMetadatas, chroma.IncludeDistances),
 	)
 	if err != nil {
+		if errors.Is(err, context.Canceled) {
+			return nil, err
+		}
 		return nil, fmt.Errorf("在向量数据库中查询失败: %w", err)
 	}
 

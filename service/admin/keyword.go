@@ -48,7 +48,7 @@ func (s *keywordService) ListItems(ctx context.Context) ([]*dto.KnowledgeItem, e
 		return nil, errors.New("chatwoot 服务未初始化")
 	}
 
-	responses, err := global.ChatwootService.GetCannedResponses()
+	responses, err := global.ChatwootService.GetCannedResponses(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("从 Chatwoot 获取预设回复失败: %w", err)
 	}
@@ -139,14 +139,14 @@ func (s *keywordService) UpsertItem(ctx context.Context, req *dto.UpsertKnowledg
 	// 2. 并发地在 Chatwoot 中创建所有新条目，并收集创建成功的结果
 	var createdResponses []chatwoot.CannedResponse
 	var mu sync.Mutex
-	g, _ := errgroup.WithContext(ctx)
+	g, gCtx := errgroup.WithContext(ctx)
 	g.SetLimit(10)
 
 	for _, q := range req.Questions {
 		q := q
 		g.Go(func() error {
 			shortCode := s.buildShortCode(q.Type, q.Question)
-			newResp, err := global.ChatwootService.CreateCannedResponse(shortCode, req.Answer)
+			newResp, err := global.ChatwootService.CreateCannedResponse(gCtx, shortCode, req.Answer)
 			if err != nil {
 				return fmt.Errorf("为问题 '%s' 创建预设回复失败: %w", q.Question, err)
 			}
@@ -210,8 +210,7 @@ func (s *keywordService) GenerateQuestions(ctx context.Context, req *dto.Generat
 	}
 
 	// 要求 LLM 返回换行分隔的列表，便于解析。
-	const instruction = "请生成3个相关的、不同表述方式的用户问题。每个问题占一行，不要带序号或任何多余符号。"
-	fullPrompt := fmt.Sprintf("%s\n\n%s", req.Context, instruction)
+	fullPrompt := fmt.Sprintf("%s\n\n%s", req.Context, enum.SystemPromptGenQuestionInstruction)
 
 	rawResult, err := global.LlmService.GetCompletion(ctx, enum.ModelSmall, prompt, fullPrompt, 0.5)
 	if err != nil {
@@ -241,7 +240,7 @@ func (s *keywordService) findAndDeleteByGroupID(ctx context.Context, groupID str
 	if global.ChatwootService == nil {
 		return nil, errors.New("chatwoot 服务未初始化")
 	}
-	allResponses, err := global.ChatwootService.GetCannedResponses()
+	allResponses, err := global.ChatwootService.GetCannedResponses(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("删除时获取全量预设回复失败: %w", err)
 	}
@@ -257,12 +256,12 @@ func (s *keywordService) findAndDeleteByGroupID(ctx context.Context, groupID str
 		return nil, nil
 	}
 
-	g, _ := errgroup.WithContext(ctx)
+	g, gCtx := errgroup.WithContext(ctx)
 	g.SetLimit(10)
 	for _, r := range responsesToDelete {
 		resp := r
 		g.Go(func() error {
-			return global.ChatwootService.DeleteCannedResponse(resp.Id)
+			return global.ChatwootService.DeleteCannedResponse(gCtx, resp.Id)
 		})
 	}
 

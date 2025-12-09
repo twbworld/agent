@@ -59,6 +59,12 @@ func TestTriagePromptConsistency(t *testing.T) {
 			t.Errorf("SystemPromptTriage应包含紧急度常量: %s", expectedSubstring)
 		}
 	}
+
+	// 3. 检查是否包含新增的 answer_id 字段定义
+	// 这是一个关键字段，用于语义直出，Prompt 的 JSON 示例中必须包含它
+	if !strings.Contains(prompt, `"answer_id"`) {
+		t.Errorf("SystemPromptTriage应包含 'answer_id' 字段定义")
+	}
 }
 
 // TestSystemPromptToolUserConsistency 单元测试，用于确保工具调用(ToolUser)的系统提示词中
@@ -72,7 +78,7 @@ func TestSystemPromptToolUserConsistency(t *testing.T) {
 		"</tool_code>",
 		`"name"`,
 		`"arguments"`,
-		`"default.查询物流"`,
+		`"mall.query_order"`,
 		"{tools}",
 	}
 

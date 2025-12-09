@@ -60,7 +60,7 @@
 
   <script>
     // ========== uni-app 通信部分 ==========
-    
+
     // 发送消息到uni-app的通用方法
     function sendMessage(type, data) {
       const message = {
@@ -68,13 +68,13 @@
         data: data,
         timestamp: Date.now()
       };
-      
+
       // H5环境使用postMessage
       if (window.parent && window.parent !== window) {
         window.parent.postMessage(JSON.stringify(message), '*');
         console.log('已发送消息到uni-app:', type);
       }
-      
+
       // App环境使用uni.postMessage
       if (typeof uni !== 'undefined' && uni.postMessage) {
         uni.postMessage({ data: message });
@@ -85,13 +85,13 @@
     // 监听来自uni-app的消息
     window.onUniAppMessage = function(message) {
       console.log('收到uni-app消息:', message);
-      
+
       // 根据消息类型处理不同的操作
       switch (message.type) {
         case 'init':
           console.log('收到初始化消息:', message.data);
           break;
-          
+
         case 'user_info_response':
           if (message.data.success) {
             console.log('收到用户信息:', message.data.data);
@@ -106,7 +106,7 @@
             }
           }
           break;
-          
+
         // 可以添加更多消息类型的处理
         default:
           console.log('收到未处理的消息类型:', message.type);
@@ -143,7 +143,7 @@
     }
 
     // ========== Chatwoot SDK 部分 ==========
-    
+
     (function (d, t) {
       var BASE_URL = "http://192.168.3.111:3000";
       var WEBSITE_TOKEN = '7Lwg9fZnczpy18q8ZqvPfW1V';
@@ -151,6 +151,8 @@
       var g = d.createElement(t), s = d.getElementsByTagName(t)[0];
       g.src = BASE_URL + "/packs/js/sdk.js";
       // g.src = 'http://192.168.3.84:8081/exportsdk.js'
+      // g.src = BASE_URL + "/vite-dev/entrypoints/sdk.js";
+      g.type = 'module';
       g.async = true;
       s.parentNode.insertBefore(g, s);
 
@@ -162,7 +164,8 @@
             goods_title: document.getElementById('goods_title').innerText,
             goods_image: document.getElementById('goods_image').src,
             goods_price: document.getElementById('price').innerText,
-            goods_url: window.location.href
+            goods_url: window.location.href,
+            _client_ts: Date.now() //避免缓存
           };
 
           // --- 关键修改：监听 chatwoot:ready 事件 ---
@@ -173,10 +176,9 @@
             let userName;
             let avatarUrl;
 
-            // let loginUserId = localStorage.getItem('user_id');
-            let loginUserId = "22334";
-            // 只有 ID 为 22334 时，这个 hash 才是有效的, userHash需要请求后端获取, 这只为了测试而硬编码
-            let userHash = "f5fabd53697045e98ab77f8c07fc76b175fe6b50f136d621889191c15cb8ead7";
+            // loginUserId与identifierHash必须匹配, identifierHash需要请求后端获取
+            let loginUserId = localStorage.getItem('user_id');
+            let identifierHash = localStorage.getItem('chatwoot_ID_Hash');
 
             if (loginUserId) {
               userId = loginUserId;
@@ -200,8 +202,8 @@
             // ⚠️ 极其重要：
             // identifier_hash 必须传且必须正确。
             // 如果是随机生成的访客ID，通常不要传错误的 hash，否则会被拒绝连接。
-            if (userHash) {
-              userConfig.identifier_hash = userHash;
+            if (identifierHash) {
+              userConfig.identifier_hash = identifierHash;
             }
 
             // 3. 设置用户唯一标识 (找回历史记录的核心)
@@ -209,7 +211,7 @@
 
             // 4. 设置商品自定义属性
             window.$chatwoot.setCustomAttributes(goodsInfo);
-            
+
             // 通知uni-app Chatwoot已准备就绪
             sendMessage('chatwoot_ready', goodsInfo);
           });

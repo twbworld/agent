@@ -9,7 +9,6 @@ import (
 	"io"
 	"reflect"
 	"strings"
-	"sync"
 	"time"
 	"unicode/utf8"
 
@@ -381,6 +380,7 @@ func (c *ChatApi) processMessageAsync(ctx context.Context, req common.ChatReques
 	}
 
 	global.Log.Debugln("会话历史=========", fullHistory)
+	global.Log.Debugln("RAG数量=========", len(vectorResults))
 
 	// 4. 分诊台 (Triage) & 智能路由
 	processed, err := c.runTriage(ctx, req, fullHistory, vectorResults)
@@ -565,82 +565,19 @@ func (c *ChatApi) runComplexGeneration(ctx context.Context, req common.ChatReque
 
 	// 检查是否需要调用工具
 	if strings.Contains(llmAnswer, "<tool_code>") {
-		global.Log.Debugln("=================需调用Mcp")
 		global.Log.Debugf("[runComplexGeneration] LLM请求调用工具, 会话ID: %d", req.Conversation.ID)
 
-		if global.McpService != nil {
-			// 将 toolCodeBlock 的声明和使用都放在这个if块内，避免McpService为nil时出现“声明但未使用”的警告
-			toolCodeBlock := strings.TrimSpace(strings.Split(strings.Split(llmAnswer, "<tool_code>")[1], "</tool_code>")[0])
+		toolResults, execErr := service.Service.UserServiceGroup.LlmService.ExecuteToolCalls(ctx, llmAnswer)
+		if execErr != nil {
+			global.Log.Errorf("[runComplexGeneration] 工具执行过程出错: %v", execErr)
+			// 出错不打断流程，让LLM根据错误信息（已包含在toolResults中）尝试恢复或告知用户
+		}
 
-			var toolCalls common.ToolCalls
-			if e := json.Unmarshal([]byte(toolCodeBlock), &toolCalls); e != nil {
-				global.Log.Errorf("[runComplexGeneration] 解析工具调用JSON数组失败: %v", e)
-				toolResult := fmt.Sprintf("工具调用格式错误: %v", e)
-				conversationHistory = append(conversationHistory, common.LlmMessage{Role: openai.ChatMessageRoleUser, Content: req.Content}, common.LlmMessage{Role: openai.ChatMessageRoleAssistant, Content: llmAnswer}, common.LlmMessage{Role: openai.ChatMessageRoleTool, Content: toolResult})
-			} else if len(toolCalls) > 0 {
-				// 从MCP服务获取所有工具的描述
-				toolDescriptions := global.McpService.GetToolDescriptions()
-
-				// 并发执行所有工具调用
-				var toolResults []common.LlmMessage
-				var mu sync.Mutex
-				g, gCtx := errgroup.WithContext(ctx)
-				g.SetLimit(5) // 限制并发数为5，防止过多请求冲击MCP服务
-
-				for _, toolCall := range toolCalls {
-					toolCall := toolCall // 避免闭包陷阱
-					g.Go(func() error {
-						var toolResultContent string
-						parts := strings.SplitN(toolCall.Name, ".", 2)
-						if len(parts) != 2 {
-							toolResultContent = fmt.Sprintf("工具名称格式错误，必须为 '客户端名称.工具名称'，实际为: '%s'", toolCall.Name)
-							global.Log.Errorf("[runComplexGeneration] %s", toolResultContent)
-						} else {
-							clientName, toolName := parts[0], parts[1]
-							result, e := global.McpService.ExecuteTool(gCtx, clientName, toolName, toolCall.Arguments)
-							if e != nil {
-								toolResultContent = fmt.Sprintf("工具 '%s' 调用失败: %v", toolCall.Name, e)
-								global.Log.Errorf("[runComplexGeneration] %s", toolResultContent)
-							} else {
-								toolResultContent = result
-								global.Log.Debugf("=================成功获取Mcp数据 for '%s': %s", toolCall.Name, toolResultContent)
-							}
-						}
-
-						// 获取工具描述
-						toolDescription := "未知工具"
-						if desc, ok := toolDescriptions[toolCall.Name]; ok {
-							toolDescription = desc
-						}
-
-						// 为每个工具结果创建一个结构化的消息，并安全地追加到结果切片中
-						finalContent := fmt.Sprintf(
-							"[工具名称]: %s\n[工具作用]: %s\n[返回结果]:\n%s",
-							toolCall.Name,
-							toolDescription,
-							toolResultContent,
-						)
-						mu.Lock()
-						toolResults = append(toolResults, common.LlmMessage{
-							Role:    openai.ChatMessageRoleTool,
-							Content: finalContent,
-						})
-						mu.Unlock()
-						return nil
-					})
-				}
-
-				// 等待所有工具调用完成
-				if e := g.Wait(); e != nil {
-					// errgroup 本身返回的错误通常是第一个非nil的错误，这里只记录日志
-					global.Log.Errorf("[runComplexGeneration] 执行MCP工具组时发生错误: %v", e)
-				}
-
-				// 将用户问题、助手回复（工具调用指令）和所有工具执行结果一起添加到历史记录中
-				conversationHistory = append(conversationHistory, common.LlmMessage{Role: openai.ChatMessageRoleUser, Content: req.Content})
-				conversationHistory = append(conversationHistory, common.LlmMessage{Role: openai.ChatMessageRoleAssistant, Content: llmAnswer})
-				conversationHistory = append(conversationHistory, toolResults...)
-			}
+		if len(toolResults) > 0 {
+			// 将用户问题、助手回复（工具调用指令）和所有工具执行结果一起添加到历史记录中
+			conversationHistory = append(conversationHistory, common.LlmMessage{Role: openai.ChatMessageRoleUser, Content: req.Content})
+			conversationHistory = append(conversationHistory, common.LlmMessage{Role: openai.ChatMessageRoleAssistant, Content: llmAnswer})
+			conversationHistory = append(conversationHistory, toolResults...)
 
 			global.Log.Debugln("=================再次调用大型LLM分析数据")
 

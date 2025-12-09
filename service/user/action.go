@@ -78,25 +78,7 @@ func (a *actionService) TransferToHuman(ctx context.Context, ConversationID uint
 		}
 	}
 
-	g, gCtx := errgroup.WithContext(ctx)
-
-	// 创建私信备注
-	if remark != "" {
-		g.Go(func() error {
-			if err := global.ChatwootService.CreatePrivateNote(gCtx, ConversationID, string(remark)); err != nil {
-				global.Log.Warnf("[action]为会话 %d 创建转人工备注失败: %v", ConversationID, err)
-			}
-			return nil
-		})
-	}
-	g.Go(func() error {
-		if err := global.ChatwootService.SetConversationStatus(gCtx, ConversationID, chatwoot.ConversationStatusOpen); err != nil {
-			global.Log.Errorf("[action]转接会话 %d 至人工客服失败: %v", ConversationID, err)
-			return err
-		}
-		return nil
-	})
-
+	// 确定提示消息内容
 	userMessage := ""
 	if utils.InSlice(noGracePeriodReasons, remark) != -1 {
 		userMessage = string(enum.ReplyMsgTransferSuccess)
@@ -108,6 +90,16 @@ func (a *actionService) TransferToHuman(ctx context.Context, ConversationID uint
 		userMessage = message[0]
 	}
 
+	// 第一阶段：并发执行“发送消息”和“创建备注”
+	g, gCtx := errgroup.WithContext(ctx)
+	if remark != "" {
+		g.Go(func() error {
+			if err := global.ChatwootService.CreatePrivateNote(gCtx, ConversationID, string(remark)); err != nil {
+				global.Log.Warnf("[action]为会话 %d 创建转人工备注失败: %v", ConversationID, err)
+			}
+			return nil
+		})
+	}
 	if userMessage != "" {
 		g.Go(func() error {
 			if err := global.ChatwootService.CreateMessage(gCtx, ConversationID, userMessage); err != nil {
@@ -116,8 +108,15 @@ func (a *actionService) TransferToHuman(ctx context.Context, ConversationID uint
 			return nil
 		})
 	}
+	_ = g.Wait()
 
-	return g.Wait()
+	// 第二阶段：执行状态变更
+	if err := global.ChatwootService.SetConversationStatus(ctx, ConversationID, chatwoot.ConversationStatusOpen); err != nil {
+		global.Log.Errorf("[action]转接会话 %d 至人工客服失败: %v", ConversationID, err)
+		return err
+	}
+
+	return nil
 }
 
 func (a *actionService) SetConversationPending(ctx context.Context, conversationID uint) error {

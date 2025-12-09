@@ -51,9 +51,26 @@ func (c *client) getLlmConfig(size enum.LlmSize) *config.Llm {
 
 // filterContent 从LLM的原始响应中剥离思考过程标签
 func (c *client) filterContent(rawAnswer string) string {
-	if parts := strings.SplitN(rawAnswer, "</think>", 2); len(parts) > 1 {
+	// 简单情况: 标签在末尾或分割 (原逻辑保留)
+	startTag := "<think>"
+	if parts := strings.SplitN(rawAnswer, startTag, 2); len(parts) > 1 {
 		return strings.TrimSpace(parts[1])
 	}
+
+	endTag := "</think>"
+
+	sIdx := strings.Index(rawAnswer, startTag)
+	eIdx := strings.Index(rawAnswer, endTag)
+
+	// 如果包含完整的闭合标签
+	if sIdx != -1 && eIdx != -1 && eIdx > sIdx {
+		// 删除 <think>... content ...</think>
+		// 保留 sIdx 之前的内容 和 eIdx + len(endTag) 之后的内容
+		before := rawAnswer[:sIdx]
+		after := rawAnswer[eIdx+len(endTag):]
+		return strings.TrimSpace(before + after)
+	}
+
 	return strings.TrimSpace(rawAnswer)
 }
 

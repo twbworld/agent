@@ -20,6 +20,7 @@ import (
 // 业务逻辑禁止修改
 var (
 	Version          string
+	ConfigLock       sync.RWMutex
 	Config           *config.Config = new(config.Config) //指针类型, 给与其内存空间
 	Log              *logrus.Logger
 	Tz               *time.Location
@@ -31,7 +32,7 @@ var (
 	VectorDb         vector.Service
 	McpService       mcp.Service
 	OssService       oss.Service
-	ActiveLLMTasks   *ActiveTasksMap = &ActiveTasksMap{Data: make(map[uint]context.CancelFunc)}
+	ActiveLLMTasks   *ActiveTasksMap = &ActiveTasksMap{Data: make(map[uint]TaskInfo)}
 )
 
 type CannedResponsesMap struct {
@@ -39,8 +40,14 @@ type CannedResponsesMap struct {
 	Data map[string]string
 }
 
-// ActiveTasksMap 用于存储正在进行的异步任务的取消函数
+// TaskInfo 封装异步任务的控制信息
+type TaskInfo struct {
+	Cancel    context.CancelFunc
+	MessageID uint
+}
+
+// ActiveTasksMap 用于存储正在进行的异步任务
 type ActiveTasksMap struct {
 	sync.RWMutex
-	Data map[uint]context.CancelFunc
+	Data map[uint]TaskInfo
 }

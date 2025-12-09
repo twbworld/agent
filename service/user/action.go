@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"gitee.com/taoJie_1/mall-agent/global"
@@ -32,9 +33,12 @@ type ActionService interface {
 	ActivateHumanModeGracePeriod(ctx context.Context, conversationID uint)
 	// 刷新人工模式宽限期
 	RefreshHumanModeGracePeriod(ctx context.Context, conversationID uint)
+	// 热更新转人工关键词
+	UpdateTransferKeywords(keywords []string)
 }
 
 type actionService struct {
+	mu               sync.RWMutex
 	transferKeywords map[string]struct{}
 }
 
@@ -47,16 +51,20 @@ var noGracePeriodReasons = []enum.TransferToHuman{
 }
 
 func NewActionService() ActionService {
-	// 初始化转人工的关键词列表
-	transferSet := make(map[string]struct{})
-	keywordsList := global.Config.Ai.TransferKeywords
-	for _, kw := range keywordsList {
-		transferSet[strings.ToLower(kw)] = struct{}{}
-	}
+	a := &actionService{}
+	a.UpdateTransferKeywords(global.Config.Ai.TransferKeywords)
+	return a
+}
 
-	return &actionService{
-		transferKeywords: transferSet,
+func (a *actionService) UpdateTransferKeywords(keywords []string) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	newSet := make(map[string]struct{}, len(keywords))
+	for _, kw := range keywords {
+		newSet[strings.ToLower(kw)] = struct{}{}
 	}
+	a.transferKeywords = newSet
 }
 
 func (a *actionService) TransferToHuman(ctx context.Context, ConversationID uint, remark enum.TransferToHuman, message ...string) error {
@@ -157,8 +165,12 @@ func (a *actionService) MatchCannedResponse(chatRequest *common.ChatRequest) (st
 		return "", false, nil
 	}
 
-	// 判断是否是"转人工"等关键字
-	if _, isTransfer := a.transferKeywords[content]; isTransfer {
+	// 判断是否是"转人工"等关键字 (加锁读取)
+	a.mu.RLock()
+	_, isTransfer := a.transferKeywords[content]
+	a.mu.RUnlock()
+
+	if isTransfer {
 		return "", true, nil
 	}
 

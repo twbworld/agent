@@ -8,7 +8,6 @@ import (
 	"gitee.com/taoJie_1/mall-agent/global"
 	"gitee.com/taoJie_1/mall-agent/model/config"
 	"gitee.com/taoJie_1/mall-agent/service"
-	"gitee.com/taoJie_1/mall-agent/service/user"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -105,28 +104,14 @@ func (i *Initializer) HandleConfigChange(oldConfig, newConfig *config.Config) {
 		})
 	}
 
-	// 数据库服务重载 (高风险操作，请谨慎使用)
-	if !reflect.DeepEqual(oldConfig.Database, newConfig.Database) {
-		// eg.Go(func() error {
-		// 	global.Log.Warn("检测到数据库配置变更，将执行高风险的热重载操作...")
-		// 	if err := i.dbClose(); err != nil {
-		// 		// 此处错误可能是非致命的（例如旧连接已失效），记录警告即可
-		// 		global.Log.Warnf("关闭旧数据库连接失败: %v", err)
-		// 	}
-		// 	if err := i.dbStart(); err != nil {
-		// 		global.Log.Errorf("热重载数据库失败: %v", err)
-		// 		// 数据库重载失败是严重问题，应中断并返回错误
-		// 		return err
-		// 	}
-		// 	return nil
-		// })
-	}
-
 	// AI相关业务逻辑配置重载
 	if !reflect.DeepEqual(oldConfig.Ai, newConfig.Ai) {
 		eg.Go(func() error {
-			// ActionService依赖于Ai.TransferKeywords，需要重新初始化
-			service.Service.UserServiceGroup = user.NewServiceGroup(i.taskManager)
+			// 安全地更新 ActionService 的关键词配置，而不是重建整个 ServiceGroup
+			if service.Service.UserServiceGroup.ActionService != nil {
+				service.Service.UserServiceGroup.ActionService.UpdateTransferKeywords(newConfig.Ai.TransferKeywords)
+				global.Log.Info("热重载AI业务配置(转人工关键词)完成")
+			}
 			return nil
 		})
 	}

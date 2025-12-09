@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"reflect"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -188,32 +187,31 @@ func (c *ChatApi) handleMessageCreated(ctx *gin.Context, req common.ChatRequest)
 	go func() {
 		timeout := time.Duration(global.Config.Ai.AsyncJobTimeout) * time.Second
 		asyncCtx, cancel := context.WithTimeout(context.Background(), timeout)
-		defer cancel()
+		// 注意: 不要在这里 defer cancel()，因为我们需要将 cancel 传递给全局 map 管理
+		// 但是，为了防止内存泄漏（如果 storeTask 失败或任务被立即覆盖），我们必须确保最终会调用 cancel
+		// 这里的逻辑改为：在 cleanupTask 中调用 cancel，或者在被替换时调用 oldCancel
 
 		// 注册任务，以便在会话解决时可以取消
-		c.storeTask(reqCopy.Conversation.ID, cancel)
+		// 存储任务并获取"我是唯一拥有者"的凭证 (MessageID)
+		c.storeTask(reqCopy.Conversation.ID, reqCopy.ID, cancel)
 
 		// 统一处理任务结束时的清理工作
 		defer func() {
-			// 使用反射来安全地比较函数指针
-			myCancelPtr := reflect.ValueOf(cancel).Pointer()
+			// 在任务结束时（无论是正常结束、panic还是超时），尝试清理
+			// 只有当当前任务仍然是 map 中的 active 任务时（通过 ID 匹配），才执行清理操作（如关闭 typing）
+			// 如果 map 中已经存储了新的任务（ID不匹配），则说明当前任务是被中断或过期的，不应触碰全局状态
+			isOwner := c.cleanupTask(reqCopy.Conversation.ID, reqCopy.ID)
 
-			global.ActiveLLMTasks.Lock()
-			defer global.ActiveLLMTasks.Unlock()
-
-			currentCancel, exists := global.ActiveLLMTasks.Data[reqCopy.Conversation.ID]
-
-			// 检查当前goroutine是否仍然是此会话的“所有者”
-			// 如果是，则它负责清理（关闭打字状态、从map中删除自己）
-			// 如果不是（已被新任务取代），则它应该静默退出，不执行任何操作
-			if exists && reflect.ValueOf(currentCancel).Pointer() == myCancelPtr {
+			if isOwner {
+				// 只有拥有者才有资格关闭 Typing 状态
 				go service.Service.UserServiceGroup.ActionService.ToggleTyping(context.Background(), reqCopy.Conversation.ID, false)
-				delete(global.ActiveLLMTasks.Data, reqCopy.Conversation.ID)
-				global.Log.Debugf("会话 %d 的AI任务正常结束，已清理。", reqCopy.Conversation.ID)
+				global.Log.Debugf("会话 %d 的AI任务(MsgID: %d)正常结束，清理完成。", reqCopy.Conversation.ID, reqCopy.ID)
 			} else {
-				// 任务已被新任务取代，静默退出
-				global.Log.Debugf("会话 %d 的旧AI任务被新任务取代，静默退出，不关闭打字状态。", reqCopy.Conversation.ID)
+				global.Log.Debugf("会话 %d 的AI任务(MsgID: %d)已被新任务取代或过期，静默退出，不关闭Typing。", reqCopy.Conversation.ID, reqCopy.ID)
 			}
+
+			// 确保上下文被取消，释放资源
+			cancel()
 		}()
 
 		c.processMessageAsync(asyncCtx, reqCopy)
@@ -225,10 +223,10 @@ func (c *ChatApi) handleConversationResolved(conversationID uint) {
 	global.ActiveLLMTasks.Lock()
 	defer global.ActiveLLMTasks.Unlock()
 
-	if cancel, exists := global.ActiveLLMTasks.Data[conversationID]; exists {
-		cancel() // 调用取消函数
+	if taskInfo, exists := global.ActiveLLMTasks.Data[conversationID]; exists {
+		taskInfo.Cancel() // 调用取消函数
 		delete(global.ActiveLLMTasks.Data, conversationID)
-		global.Log.Debugf("会话%d已解决，已终止正在进行的AI任务。", conversationID)
+		global.Log.Debugf("会话%d已解决，已终止正在进行的AI任务(MsgID: %d)。", conversationID, taskInfo.MessageID)
 	}
 }
 
@@ -237,7 +235,7 @@ func (c *ChatApi) processMessageAsync(ctx context.Context, req common.ChatReques
 		if p := recover(); p != nil {
 			// 优先检查Context是否已取消，确保被取代的任务能够静默退出
 			if ctx.Err() == context.Canceled {
-				global.Log.Debugf("会话 %d 任务因被取代而取消，忽略 Panic 复原: %v", req.Conversation.ID, p)
+				global.Log.Debugf("会话 %d 任务(MsgID: %d)因被取代而取消，忽略 Panic 复原: %v", req.Conversation.ID, req.ID, p)
 				return
 			}
 			global.Log.Errorf("[processMessageAsync] panic: %v", p)
@@ -589,14 +587,31 @@ func (c *ChatApi) runComplexGeneration(ctx context.Context, req common.ChatReque
 	return llmAnswer, err
 }
 
-// storeTask 存储一个异步任务的取消函数
-func (c *ChatApi) storeTask(conversationID uint, cancel context.CancelFunc) {
+// storeTask 存储一个异步任务的取消函数，并取消旧任务
+func (c *ChatApi) storeTask(conversationID, messageID uint, cancel context.CancelFunc) {
 	global.ActiveLLMTasks.Lock()
 	defer global.ActiveLLMTasks.Unlock()
 	// 如果该会话已有任务在运行，先取消旧的
-	if oldCancel, exists := global.ActiveLLMTasks.Data[conversationID]; exists {
-		oldCancel()
-		global.Log.Debugf("会话 %d 的旧AI任务已被新任务取代并取消。", conversationID)
+	if oldTask, exists := global.ActiveLLMTasks.Data[conversationID]; exists {
+		oldTask.Cancel()
+		global.Log.Debugf("会话 %d 的旧AI任务(MsgID: %d)已被新任务(MsgID: %d)取代并取消。", conversationID, oldTask.MessageID, messageID)
 	}
-	global.ActiveLLMTasks.Data[conversationID] = cancel
+	global.ActiveLLMTasks.Data[conversationID] = global.TaskInfo{
+		Cancel:    cancel,
+		MessageID: messageID,
+	}
+}
+
+// cleanupTask 尝试清理任务。只有当 map 中存储的任务仍然是传入的 messageID 时，才执行删除并返回 true。
+func (c *ChatApi) cleanupTask(conversationID, messageID uint) bool {
+	global.ActiveLLMTasks.Lock()
+	defer global.ActiveLLMTasks.Unlock()
+
+	if task, exists := global.ActiveLLMTasks.Data[conversationID]; exists {
+		if task.MessageID == messageID {
+			delete(global.ActiveLLMTasks.Data, conversationID)
+			return true
+		}
+	}
+	return false
 }

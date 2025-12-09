@@ -53,11 +53,13 @@ func New(taskManager *task.Manager) *Initializer {
 		debounceTimer *time.Timer
 		debounceMutex sync.Mutex
 	)
-	const debounceDuration = 200 * time.Millisecond
+	const debounceDuration = 500 * time.Millisecond // 增加防抖时间，确保文件写入完成
 
 	v.WatchConfig()
 	v.OnConfigChange(func(e fsnotify.Event) {
 		debounceMutex.Lock()
+		defer debounceMutex.Unlock()
+
 		// 如果已有计时器，则重置它
 		if debounceTimer != nil {
 			debounceTimer.Stop()
@@ -66,21 +68,29 @@ func New(taskManager *task.Manager) *Initializer {
 		debounceTimer = time.AfterFunc(debounceDuration, func() {
 			fmt.Println("配置文件变化[djiads] (Debounced): ", e.Name)
 
-			// 为比较，先深度拷贝一份旧的配置
+			// 读锁
+			global.ConfigLock.RLock()
 			oldConfig := global.Config.DeepCopy()
+			global.ConfigLock.RUnlock()
 
-			if err := v.Unmarshal(global.Config); err != nil {
+			// 反序列化到临时对象，避免直接污染全局变量
+			tmpConfig := &config.Config{}
+			if err := v.Unmarshal(tmpConfig); err != nil {
 				fmt.Println("热加载配置文件反序列化失败:", err)
-				// 如果反序列化失败，则恢复旧配置，防止程序状态不一致
-				global.Config = oldConfig
 				return
 			}
-			handleConfig(global.Config)
+
+			handleConfig(tmpConfig)
+
+			// 安全替换全局配置 (写锁)
+			global.ConfigLock.Lock()
+			// 替换指针的内容;注意: 这里不能直接 global.Config = tmpConfig，因为其他地方可能持有了旧指针
+			*global.Config = *tmpConfig
+			global.ConfigLock.Unlock()
 
 			// 调用新的处理函数来处理配置变更
 			i.HandleConfigChange(oldConfig, global.Config)
 		})
-		debounceMutex.Unlock()
 	})
 
 	if err := v.Unmarshal(global.Config); err != nil {

@@ -274,23 +274,21 @@ func (c *ChatApi) processMessageAsync(ctx context.Context, req common.ChatReques
 		return
 	}
 
-	// 如果会话状态为 "open"，则检查是否需要由AI接管
-	if req.Conversation.Status == chatwoot.ConversationStatusOpen {
-		// 检查1：短时的“转人工宽限期”，用于AI在自动转人工后立即纠正
-		transferGracePeriodKey := fmt.Sprintf("%s%d", redis.KeyPrefixTransferGracePeriod, req.Conversation.ID)
-		err := global.RedisClient.Get(ctx, transferGracePeriodKey).Err()
+	// --- 统筹判断：转人工宽限期与人工模式 ---
+	// 无论当前会话状态如何，优先检查是否存在"转人工宽限期"标志。
+	transferGracePeriodKey := fmt.Sprintf("%s%d", redis.KeyPrefixTransferGracePeriod, req.Conversation.ID)
+	err = global.RedisClient.Get(ctx, transferGracePeriodKey).Err()
+
+	if err == nil {
+		// 标志存在，AI可以覆盖转人工决定 (Override)，无论 Chatwoot 认为当前是 Pending 还是 Open
+		global.Log.Debugf("会话 %d 处于转人工宽限期，AI将继续处理新消息", req.Conversation.ID)
+		isGracePeriodOverride = true
+	} else {
+		// 宽限期标志不存在，执行常规状态检查
 		if errors.Is(err, context.Canceled) {
 			return
 		}
-
-		if err == nil { // 标志存在，AI可以覆盖转人工决定
-			global.Log.Debugf("会话 %d 处于转人工宽限期，AI将继续处理新消息", req.Conversation.ID)
-			isGracePeriodOverride = true
-		} else if err != redis.ErrNil { // Redis查询出错
-			global.Log.Errorf("检查会话 %d 的转人工宽限期标志失败: %v", req.Conversation.ID, err)
-			return // 为安全起见，交由人工处理
-		} else {
-			// 标志不存在，继续检查长时的“人工模式宽限期”
+		if req.Conversation.Status == chatwoot.ConversationStatusOpen {
 			humanModeKey := fmt.Sprintf("%s%d", redis.KeyPrefixHumanModeActive, req.Conversation.ID)
 			err := global.RedisClient.Get(ctx, humanModeKey).Err()
 			if errors.Is(err, context.Canceled) {
@@ -371,10 +369,14 @@ func (c *ChatApi) processMessageAsync(ctx context.Context, req common.ChatReques
 		vectorResults = nil
 	}
 
-	if global.Config.Ai.MaxLlmHistoryMessages > 0 && len(fullHistory) > int(global.Config.Ai.MaxLlmHistoryMessages) {
-		startIndex := len(fullHistory) - int(global.Config.Ai.MaxLlmHistoryMessages)
-		fullHistory = fullHistory[startIndex:]
-		global.Log.Debugf("会话 %d 历史记录已限制为最近 %d 条消息", req.Conversation.ID, global.Config.Ai.MaxLlmHistoryMessages)
+	// 按轮数修剪，同时限制单轮最大Assistant消息数，防止Token溢出或上下文被Bot刷屏
+	if global.Config.Ai.ChatMaxHistoryRounds > 0 {
+		// 从配置中获取单轮最大助手消息数，并提供默认值保护
+		maxAssistant := int(global.Config.Ai.MaxAssistantPerRound)
+		if maxAssistant <= 0 {
+			maxAssistant = 5
+		}
+		fullHistory = c.trimHistory(fullHistory, int(global.Config.Ai.ChatMaxHistoryRounds), maxAssistant)
 	}
 
 	global.Log.Debugln("会话历史=========", fullHistory)
@@ -456,17 +458,42 @@ func (c *ChatApi) processMessageAsync(ctx context.Context, req common.ChatReques
 	go service.Service.UserServiceGroup.HistoryService.Append(context.Background(), req.Conversation.ID, common.LlmMessage{Role: openai.ChatMessageRoleUser, Content: req.Content}, common.LlmMessage{Role: openai.ChatMessageRoleAssistant, Content: llmAnswer})
 }
 
+// storeTask 存储一个异步任务的取消函数，并取消旧任务
+func (c *ChatApi) storeTask(conversationID, messageID uint, cancel context.CancelFunc) {
+	global.ActiveLLMTasks.Lock()
+	defer global.ActiveLLMTasks.Unlock()
+	// 如果该会话已有任务在运行，先取消旧的
+	if oldTask, exists := global.ActiveLLMTasks.Data[conversationID]; exists {
+		oldTask.Cancel()
+		global.Log.Debugf("会话 %d 的旧AI任务(MsgID: %d)已被新任务(MsgID: %d)取代并取消。", conversationID, oldTask.MessageID, messageID)
+	}
+	global.ActiveLLMTasks.Data[conversationID] = global.TaskInfo{
+		Cancel:    cancel,
+		MessageID: messageID,
+	}
+}
+
+// cleanupTask 尝试清理任务。只有当 map 中存储的任务仍然是传入的 messageID 时，才执行删除并返回 true。
+func (c *ChatApi) cleanupTask(conversationID, messageID uint) bool {
+	global.ActiveLLMTasks.Lock()
+	defer global.ActiveLLMTasks.Unlock()
+
+	if task, exists := global.ActiveLLMTasks.Data[conversationID]; exists {
+		if task.MessageID == messageID {
+			delete(global.ActiveLLMTasks.Data, conversationID)
+			return true
+		}
+	}
+	return false
+}
+
 // runTriage 执行分诊与智能路由
 func (c *ChatApi) runTriage(ctx context.Context, req common.ChatRequest, fullHistory []common.LlmMessage, vectorResults []dao.SearchResult) (processed bool, err error) {
-	// 准备分诊台所需的上下文信息
+	// 准备分诊台所需的上下文信息，分诊台仅需极简上下文，单轮限制1条回复以节省Token
 	var triageHistory []common.LlmMessage
 	if len(fullHistory) > 0 {
-		triageHistoryLimit := int(global.Config.Ai.TriageHistoryLimit)
-		startIndex := len(fullHistory) - triageHistoryLimit
-		if startIndex < 0 {
-			startIndex = 0
-		}
-		triageHistory = fullHistory[startIndex:]
+		triageHistoryLimit := int(global.Config.Ai.TriageMaxHistoryRounds)
+		triageHistory = c.trimHistory(fullHistory, triageHistoryLimit, 1)
 	}
 
 	var retrievedQuestions []string
@@ -587,31 +614,49 @@ func (c *ChatApi) runComplexGeneration(ctx context.Context, req common.ChatReque
 	return llmAnswer, err
 }
 
-// storeTask 存储一个异步任务的取消函数，并取消旧任务
-func (c *ChatApi) storeTask(conversationID, messageID uint, cancel context.CancelFunc) {
-	global.ActiveLLMTasks.Lock()
-	defer global.ActiveLLMTasks.Unlock()
-	// 如果该会话已有任务在运行，先取消旧的
-	if oldTask, exists := global.ActiveLLMTasks.Data[conversationID]; exists {
-		oldTask.Cancel()
-		global.Log.Debugf("会话 %d 的旧AI任务(MsgID: %d)已被新任务(MsgID: %d)取代并取消。", conversationID, oldTask.MessageID, messageID)
+// trimHistory 根据轮数和每轮最大消息数修剪历史记录
+// maxRounds: 包含的最大用户消息数（即轮数）
+// maxAssistantPerRound: 每个用户消息后保留的最大Assistant消息数（防止单轮消息过多）
+func (c *ChatApi) trimHistory(history []common.LlmMessage, maxRounds int, maxAssistantPerRound int) []common.LlmMessage {
+	if len(history) == 0 {
+		return history
 	}
-	global.ActiveLLMTasks.Data[conversationID] = global.TaskInfo{
-		Cancel:    cancel,
-		MessageID: messageID,
+	if maxRounds <= 0 {
+		return []common.LlmMessage{}
 	}
-}
 
-// cleanupTask 尝试清理任务。只有当 map 中存储的任务仍然是传入的 messageID 时，才执行删除并返回 true。
-func (c *ChatApi) cleanupTask(conversationID, messageID uint) bool {
-	global.ActiveLLMTasks.Lock()
-	defer global.ActiveLLMTasks.Unlock()
+	var result []common.LlmMessage
+	rounds := 0
+	assistantCount := 0
 
-	if task, exists := global.ActiveLLMTasks.Data[conversationID]; exists {
-		if task.MessageID == messageID {
-			delete(global.ActiveLLMTasks.Data, conversationID)
-			return true
+	// 倒序遍历，确保保留最近的消息
+	for i := len(history) - 1; i >= 0; i-- {
+		msg := history[i]
+
+		if msg.Role == openai.ChatMessageRoleUser {
+			rounds++
+			// 如果超过了允许的最大轮数，则停止
+			if rounds > maxRounds {
+				break
+			}
+			// 重置助手消息计数器，因为我们已经进入了一个新的（按时间顺序是更早的）轮次
+			// 注意：此时assistantCount统计的是当前这个User消息 *之后* 的Assistant消息
+			assistantCount = 0
+
+			result = append(result, msg)
+		} else {
+			// 对于非用户消息（助手、系统、工具等），我们作为该轮的一部分进行计数
+			// 限制每轮Assistant消息的数量，避免Token被冗余回复占满
+			if assistantCount < maxAssistantPerRound {
+				result = append(result, msg)
+				assistantCount++
+			}
 		}
 	}
-	return false
+
+	// 倒序结果以恢复按时间顺序排列
+	for i, j := 0, len(result)-1; i < j; i, j = i+1, j-1 {
+		result[i], result[j] = result[j], result[i]
+	}
+	return result
 }

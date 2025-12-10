@@ -11,9 +11,20 @@ import (
 	"gitee.com/taoJie_1/mall-agent/internal/chatwoot"
 	"gitee.com/taoJie_1/mall-agent/internal/redis"
 	"gitee.com/taoJie_1/mall-agent/model/common"
+	"gitee.com/taoJie_1/mall-agent/model/enum"
 	"gitee.com/taoJie_1/mall-agent/utils"
 	"github.com/sashabaranov/go-openai"
 )
+
+// ignoredHistoryMessages 定义了不应包含在LLM历史上下文中的系统/转人工提示消息
+// 这些消息仅用于通知用户状态流转，对LLM理解上下文无益，甚至可能造成干扰
+var ignoredHistoryMessages = map[string]struct{}{
+	string(enum.ReplyMsgTransferSuccess):       {},
+	string(enum.ReplyMsgUnsupportedAttachment): {},
+	string(enum.ReplyMsgPromptTooLong):         {},
+	string(enum.ReplyMsgLlmError):              {},
+	string(enum.ReplyMsgAiRetrying):            {},
+}
 
 // HistoryService 定义了会话历史缓存服务的接口
 type HistoryService interface {
@@ -79,7 +90,7 @@ func (s *historyService) GetOrFetch(ctx context.Context, accountID, conversation
 
 	if locked {
 		// 2a. 成功获取锁，从Chatwoot API获取数据并缓存
-		global.Log.Debugf("会话 %d 历史记录Redis缓存未命中，成功获取锁，从Chatwoot API获取", conversationID)
+		global.Log.Debugf("会话 %d 历史记录Redis缓存未命中，成功获取锁，从Chatwoot API获取", conversationID, err)
 		defer func() {
 			// 使用后台 context 确保即使原始请求取消，锁释放也能执行
 			if err := global.RedisClient.Del(context.Background(), lockKey).Err(); err != nil {
@@ -160,12 +171,30 @@ func (s *historyService) fetchAndCache(ctx context.Context, accountID, conversat
 		}
 	}
 
+	// 计算历史消息的最大保留时间
+	var historyMaxAgeCutoff int64
+	if global.Config.Ai.HistoryMaxAge > 0 {
+		historyMaxAgeCutoff = time.Now().Unix() - global.Config.Ai.HistoryMaxAge
+	}
+
 	// 第二次遍历: 格式化历史记录为LLM需要的格式，并处理引用关系
 	var formattedHistory []common.LlmMessage
 	for _, msg := range chatwootMessages {
+		// 过滤掉超过历史最大保留时间的旧消息
+		if historyMaxAgeCutoff > 0 && msg.CreatedAt < historyMaxAgeCutoff {
+			continue
+		}
+
 		// 过滤掉私信备注、没有内容的附件消息、卡片消息
 		if msg.Private || msg.Content == "" || msg.ContentType == chatwoot.ContentTypeCards {
 			continue
+		}
+
+		// 过滤掉转人工等系统提示消息，避免污染LLM上下文
+		if msg.MessageType == chatwoot.MessageDirectionOutgoing {
+			if _, ok := ignoredHistoryMessages[msg.Content]; ok {
+				continue
+			}
 		}
 
 		// 过滤掉当前用户消息，因为它会作为LLM的content参数传入，避免重复

@@ -64,15 +64,17 @@ type Ai struct {
 	VectorSimilarityThreshold float32  `mapstructure:"vector_similarity_threshold" json:"vector_similarity_threshold" yaml:"vector_similarity_threshold"`
 	VectorSearchMinSimilarity float32  `mapstructure:"vector_search_min_similarity" json:"vector_search_min_similarity" yaml:"vector_search_min_similarity"`
 	TriageContextQuestions    uint     `mapstructure:"triage_context_questions" json:"triage_context_questions" yaml:"triage_context_questions"`
-	TriageHistoryLimit        uint     `mapstructure:"triage_history_limit" json:"triage_history_limit" yaml:"triage_history_limit"`
+	TriageMaxHistoryRounds    uint     `mapstructure:"triage_max_history_rounds" json:"triage_max_history_rounds" yaml:"triage_max_history_rounds"`
 	TriageTimeout             int64    `mapstructure:"triage_timeout" json:"triage_timeout" yaml:"triage_timeout"`
 	TransferGracePeriod       int64    `mapstructure:"transfer_grace_period" json:"transfer_grace_period" yaml:"transfer_grace_period"`
 	HumanModeGracePeriod      int64    `mapstructure:"human_mode_grace_period" json:"human_mode_grace_period" yaml:"human_mode_grace_period"`
 	ItemCardTTL               int64    `mapstructure:"item_card_ttl" json:"item_card_ttl" yaml:"item_card_ttl"`
 	AsyncJobTimeout           int64    `mapstructure:"async_job_timeout" json:"async_job_timeout" yaml:"async_job_timeout"`
-	MaxLlmHistoryMessages     uint     `mapstructure:"max_llm_history_messages" json:"max_llm_history_messages" yaml:"max_llm_history_messages"`
+	ChatMaxHistoryRounds      uint     `mapstructure:"chat_max_history_rounds" json:"chat_max_history_rounds" yaml:"chat_max_history_rounds"`
+	MaxAssistantPerRound      uint     `mapstructure:"max_assistant_per_round" json:"max_assistant_per_round" yaml:"max_assistant_per_round"`
 	KeywordSyncInterval       uint     `mapstructure:"keyword_sync_interval" json:"keyword_sync_interval" yaml:"keyword_sync_interval"`
 	KeywordReloadDebounce     uint     `mapstructure:"keyword_reload_debounce" json:"keyword_reload_debounce" yaml:"keyword_reload_debounce"`
+	HistoryMaxAge             int64    `mapstructure:"history_max_age" json:"history_max_age" yaml:"history_max_age"`
 	TransferKeywords          []string `mapstructure:"transfer_keywords" json:"transfer_keywords" yaml:"transfer_keywords"`
 }
 

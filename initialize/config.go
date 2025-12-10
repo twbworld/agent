@@ -195,8 +195,8 @@ func handleConfig(c *config.Config) {
 	if c.Ai.TriageContextQuestions == 0 {
 		c.Ai.TriageContextQuestions = 2
 	}
-	if c.Ai.TriageHistoryLimit == 0 {
-		c.Ai.TriageHistoryLimit = 4
+	if c.Ai.TriageMaxHistoryRounds == 0 {
+		c.Ai.TriageMaxHistoryRounds = 2
 	}
 	if c.Ai.TriageTimeout == 0 {
 		c.Ai.TriageTimeout = 10
@@ -213,14 +213,20 @@ func handleConfig(c *config.Config) {
 	if c.Ai.AsyncJobTimeout == 0 {
 		c.Ai.AsyncJobTimeout = 60
 	}
-	if c.Ai.MaxLlmHistoryMessages == 0 {
-		c.Ai.MaxLlmHistoryMessages = 20
+	if c.Ai.ChatMaxHistoryRounds == 0 {
+		c.Ai.ChatMaxHistoryRounds = 5
+	}
+	if c.Ai.MaxAssistantPerRound == 0 {
+		c.Ai.MaxAssistantPerRound = 5
 	}
 	if c.Ai.KeywordSyncInterval == 0 {
 		c.Ai.KeywordSyncInterval = 300
 	}
 	if c.Ai.KeywordReloadDebounce == 0 {
 		c.Ai.KeywordReloadDebounce = 600
+	}
+	if c.Ai.HistoryMaxAge == 0 {
+		c.Ai.HistoryMaxAge = 86400
 	}
 	if c.Oss.StoragePath == "" {
 		c.Oss.StoragePath = "agent/"

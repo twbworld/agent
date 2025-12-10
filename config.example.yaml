@@ -106,24 +106,28 @@ ai:
   vector_search_min_similarity: 0.75
   # 为分诊台提供向量搜索结果作为上下文时，取最相关的前N个问题(预设回复)
   triage_context_questions: 2
-  # 分诊台获取的最大历史消息数量
-  triage_history_limit: 4
+  # 分诊台获取的最大历史消息数量(轮数)
+  triage_max_history_rounds: 2
   # 分诊台超时时间(秒)
   triage_timeout: 10
-  # 转人工宽限期(秒);当系统被自动转给人工(如系统错误)后, 在宽限期内又收到新消息, 那么继续由AI处理,如果成功处理,那么将撤销"转人工"操作.
+  # 转人工宽限期(秒);当系统被自动转给人工(如系统错误)后, 在宽限期内又收到新消息, AI会重新接管会话(如AI处理成功,将撤销"转人工"操作).
   transfer_grace_period: 5
   # 人工模式宽限期(秒); 当一个会话被人工客服处理后，在该宽限期内，AI不会主动介入。宽限期过后，AI会重新接管会话。
   human_mode_grace_period: 900
   # 发送的商品/订单等上下文卡片的去重有效期(秒), 0表示不启用
   item_card_ttl: 21600
-  # AI处理(包括精确匹配和向量检索和LLM处理)的超时时间(秒)
+  # AI处理(包括精确匹配和向量检索和LLM处理)的总超时时间(秒)
   async_job_timeout: 60
-  # 传递给大型LLM的最大历史消息数量 (0表示不限制, chatwoot的api默认返回20条)
-  max_llm_history_messages: 20
+  # 传递给大型LLM的最大历史消息数量(轮数) (0表示不限制, chatwoot的api默认返回20条)
+  chat_max_history_rounds: 5
+  # 单轮对话中最多保留的Assistant消息数量,建议5-10
+  max_assistant_per_round: 5
   # 知识库定时同步的最小间隔(秒);避免任务短时间内重复执行。
   keyword_sync_interval: 300
   # 修改知识库后，触发自动重载的防抖延迟时间(秒); 避免任务短时间内重复执行。
   keyword_reload_debounce: 600
+  # 历史消息最大保留时间(秒), 超过此时间的消息将被过滤, 默认86400(24小时)
+  history_max_age: 86400
   # 用于触发转人工的关键词列表
   transfer_keywords:
     - 人工

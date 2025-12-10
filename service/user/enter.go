@@ -7,7 +7,6 @@ type ServiceGroup struct {
 	LlmService       LlmService
 	VectorService    VectorService
 	HistoryService   HistoryService
-	DashboardService DashboardService
 	Validator        Validator
 }
 
@@ -17,7 +16,6 @@ func NewServiceGroup(taskManager *task.Manager) ServiceGroup {
 		LlmService:       NewLlmService(),
 		VectorService:    NewVectorService(),
 		HistoryService:   NewHistoryService(),
-		DashboardService: NewDashboardService(),
 		Validator:        &validator{},
 	}
 }

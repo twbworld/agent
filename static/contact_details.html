@@ -261,7 +261,7 @@
           if (this.context.orderId) requestBody.order_id = this.context.orderId;
 
           try {
-            const response = await fetch(`/api/v1/chatwoot/details`, {
+            const response = await fetch(`/api/v1/admin/dashboard/details`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(requestBody),

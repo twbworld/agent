@@ -1,8 +1,7 @@
-package user
+package admin
 
 import (
 	"errors"
-
 	"gitee.com/taoJie_1/mall-agent/model/common"
 	"gitee.com/taoJie_1/mall-agent/service"
 	"github.com/gin-gonic/gin"
@@ -18,7 +17,7 @@ func (p *DashboardApi) GetDashboardDetails(ctx *gin.Context) {
 		return
 	}
 
-	details, err := service.Service.UserServiceGroup.DashboardService.GetDetails(ctx, req.UserID, req.GoodsID, req.OrderID)
+	details, err := service.Service.AdminServiceGroup.DashboardService.GetDetails(ctx, req.UserID, req.GoodsID, req.OrderID)
 	if err != nil {
 		common.Fail(ctx, err.Error())
 		return

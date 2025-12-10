@@ -50,7 +50,6 @@ func Start(ginServer *gin.Engine) {
 	{
 		v1.POST("/chat", controller.Api.UserApiGroup.ChatApi.HandleWebhook)
 		v1.POST("/mcp/reload", controller.Api.UserApiGroup.BaseApi.Reload)
-		v1.POST("/chatwoot/details", controller.Api.UserApiGroup.DashboardApi.GetDashboardDetails)
 
 		// 知识库管理页面的 API 路由
 		adminRoutes := v1.Group("/admin")
@@ -64,20 +63,18 @@ func Start(ginServer *gin.Engine) {
 				keywordRoutes.POST("/force-sync", controller.Api.AdminApiGroup.KeywordApi.ForceSync)
 			}
 			adminRoutes.POST("/upload/image", controller.Api.AdminApiGroup.UploadApi.UploadImage)
+			adminRoutes.POST("/dashboard/details", controller.Api.AdminApiGroup.DashboardApi.GetDashboardDetails)
 		}
-	}
-
-	chatwootGroup := ginServer.Group("/chatwoot")
-	{
-		//在chatwoot下"集成方式-仪表板应用"配置的, 用于在客服会话界面展示的页面
-		chatwootGroup.GET("/dashboard", func(ctx *gin.Context) {
-			ctx.HTML(http.StatusOK, "contact_details.html", nil)
-		})
 	}
 
 	// 知识库管理 HTML 页面路由
 	ginServer.GET("/keyword", func(ctx *gin.Context) {
 		ctx.HTML(http.StatusOK, "keyword.html", nil)
+	})
+
+	// Chatwoot仪表板应用 HTML 页面路由; 在chatwoot下"集成方式-仪表板应用"配置的, 用于在客服会话界面展示的页面
+	ginServer.GET("/admin/dashboard", func(ctx *gin.Context) {
+		ctx.HTML(http.StatusOK, "contact_details.html", nil)
 	})
 
 }

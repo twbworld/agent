@@ -1,14 +1,13 @@
-package user
+package admin
 
 import (
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"sync"
-
 	"gitee.com/taoJie_1/mall-agent/global"
 	"golang.org/x/sync/errgroup"
+	"sync"
 )
 
 const (

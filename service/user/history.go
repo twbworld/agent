@@ -90,7 +90,7 @@ func (s *historyService) GetOrFetch(ctx context.Context, accountID, conversation
 
 	if locked {
 		// 2a. 成功获取锁，从Chatwoot API获取数据并缓存
-		global.Log.Debugf("会话 %d 历史记录Redis缓存未命中，成功获取锁，从Chatwoot API获取", conversationID, err)
+		global.Log.Debugf("会话 %d 历史记录Redis缓存未命中，成功获取锁，从Chatwoot API获取", conversationID)
 		defer func() {
 			// 使用后台 context 确保即使原始请求取消，锁释放也能执行
 			if err := global.RedisClient.Del(context.Background(), lockKey).Err(); err != nil {

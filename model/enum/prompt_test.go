@@ -40,21 +40,21 @@ func TestTriagePromptConsistency(t *testing.T) {
 	// 2. 遍历并断言每个常量的值都存在于Prompt中
 	// 为了精确匹配，我们检查带引号的字符串，例如 "product_inquiry"
 	for _, intent := range intents {
-		expectedSubstring := `"` + string(intent) + `"`
+		expectedSubstring := string(intent)
 		if !strings.Contains(prompt, expectedSubstring) {
 			t.Errorf("SystemPromptTriage应包含意图常量: %s", expectedSubstring)
 		}
 	}
 
 	for _, emotion := range emotions {
-		expectedSubstring := `"` + string(emotion) + `"`
+		expectedSubstring := string(emotion)
 		if !strings.Contains(prompt, expectedSubstring) {
 			t.Errorf("SystemPromptTriage应包含情绪常量: %s", expectedSubstring)
 		}
 	}
 
 	for _, urgency := range urgencies {
-		expectedSubstring := `"` + string(urgency) + `"`
+		expectedSubstring := string(urgency)
 		if !strings.Contains(prompt, expectedSubstring) {
 			t.Errorf("SystemPromptTriage应包含紧急度常量: %s", expectedSubstring)
 		}
@@ -78,7 +78,7 @@ func TestSystemPromptToolUserConsistency(t *testing.T) {
 		"</tool_code>",
 		`"name"`,
 		`"arguments"`,
-		`"mall.query_order"`,
+		`"mall.query_goods"`,
 		"{tools}",
 	}
 

@@ -162,7 +162,7 @@ func handleConfig(c *config.Config) {
 	}
 	for i := range c.Llm {
 		if c.Llm[i].Timeout == 0 {
-			c.Llm[i].Timeout = 10
+			c.Llm[i].Timeout = 60
 		}
 	}
 	if c.LlmEmbedding.Timeout == 0 {

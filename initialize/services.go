@@ -164,16 +164,8 @@ func (i *Initializer) initChatwoot() error {
 	return nil
 }
 
+// initLlm 初始化LLM服务
 func (i *Initializer) initLlm() error {
-	if err := i.doInitLlm(); err != nil {
-		global.Log.Warnf("初始化LLM服务失败: %v", err)
-		return err
-	}
-	global.Log.Info("初始化LLM服务成功")
-	return nil
-}
-
-func (i *Initializer) doInitLlm() error {
 	if len(global.Config.Llm) == 0 {
 		return fmt.Errorf("未配置任何LLM")
 	}
@@ -182,7 +174,17 @@ func (i *Initializer) doInitLlm() error {
 	for _, cfg := range global.Config.Llm {
 		config := openai.DefaultConfig(cfg.Auth)
 		config.BaseURL = cfg.Url
-		config.HTTPClient = &http.Client{Timeout: time.Duration(cfg.Timeout) * time.Second}
+
+		// 动态获取业务层配置的超时时间作为基准
+		// HTTP客户端的超时时间必须 >= 业务Context的超时时间，否则Context控制将失效
+		minSafeTimeout := global.Config.Ai.AsyncJobTimeout
+
+		finalTimeout := cfg.Timeout
+		if finalTimeout < minSafeTimeout {
+			finalTimeout = minSafeTimeout
+		}
+
+		config.HTTPClient = &http.Client{Timeout: time.Duration(finalTimeout) * time.Second}
 		llmClients[enum.LlmSize(cfg.Size)] = openai.NewClientWithConfig(config)
 	}
 
@@ -207,6 +209,7 @@ func (i *Initializer) doInitLlm() error {
 	}
 
 	if err := g.Wait(); err != nil {
+		global.Log.Warnf("初始化LLM服务失败: %v", err)
 		return err
 	}
 
@@ -215,34 +218,44 @@ func (i *Initializer) doInitLlm() error {
 		llmClients,
 		global.Config.Llm,
 	)
+	global.Log.Info("初始化LLM服务成功")
 	return nil
 }
 
+// initLlmEmbedding 初始化向量化服务
 func (i *Initializer) initLlmEmbedding() error {
-	if err := i.doInitLlmEmbedding(); err != nil {
-		global.Log.Warnf("初始化向量化服务失败: %v", err)
-		return err
-	}
-	global.Log.Info("初始化向量化服务成功")
-	return nil
-}
+	cfg := global.Config.LlmEmbedding
+	config := openai.DefaultConfig(cfg.Auth)
+	config.BaseURL = cfg.Url
 
-func (i *Initializer) doInitLlmEmbedding() error {
-	config := openai.DefaultConfig(global.Config.LlmEmbedding.Auth)
-	config.BaseURL = global.Config.LlmEmbedding.Url
+	// 合理设置Embedding客户端的超时时间
+	finalTimeout := cfg.BatchTimeout
+	if cfg.Timeout > finalTimeout {
+		finalTimeout = cfg.Timeout
+	}
+
+	if finalTimeout == 0 {
+		finalTimeout = 60
+	}
+
+	config.HTTPClient = &http.Client{Timeout: time.Duration(finalTimeout) * time.Second}
+
 	openAIClient := openai.NewClientWithConfig(config)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	// 通过ListModels接口验证向量化服务是否可用
 	if _, err := openAIClient.ListModels(ctx); err != nil {
-		return fmt.Errorf("无法连接到向量化服务 (url: %s): %w", config.BaseURL, err)
+		err = fmt.Errorf("无法连接到向量化服务 (url: %s): %w", config.BaseURL, err)
+		global.Log.Warnf("初始化向量化服务失败: %v", err)
+		return err
 	}
 
 	global.EmbeddingService = embedding.NewClient(
 		openAIClient,
-		global.Config.LlmEmbedding.Model,
+		cfg.Model,
 	)
+	global.Log.Info("初始化向量化服务成功")
 	return nil
 }
 

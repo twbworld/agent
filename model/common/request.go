@@ -76,7 +76,14 @@ type Conversation struct {
 
 // Meta 存放会话的元数据
 type Meta struct {
-	Sender Sender `json:"sender"`
+	Sender   Sender  `json:"sender"`
+	Assignee *Sender `json:"assignee,omitempty"`
+	Team     *Team   `json:"team,omitempty"`
+}
+
+// Team 代表团队信息
+type Team struct {
+	ID int `json:"id"`
 }
 
 // Sender 代表元数据中的发送者信息

@@ -121,10 +121,17 @@ func (c *ChatApi) handleWebWidgetTriggered(ctx context.Context, contactID uint, 
 		}
 	}
 
-	// 发送卡片 (利用之前加了锁的 ActionService)
-	cardCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
-	service.Service.UserServiceGroup.ActionService.CheckAndSendProductCard(cardCtx, targetConversationID, attrs)
+	if targetConversationID > 0 {
+		// 并发执行上下文相关操作：发送卡片和分配团队
+		go func() {
+			actionCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+			defer cancel()
+			// 发送卡片
+			service.Service.UserServiceGroup.ActionService.CheckAndSendProductCard(actionCtx, targetConversationID, attrs)
+			// 根据规则分配团队 (currentTeamID为nil，因为此事件中无法得知)
+			service.Service.UserServiceGroup.ActionService.AssignConversationByRules(actionCtx, targetConversationID, attrs, nil)
+		}()
+	}
 }
 
 // handleMessageCreated 收到消息处理
@@ -146,11 +153,20 @@ func (c *ChatApi) handleMessageCreated(ctx *gin.Context, req common.ChatRequest)
 		return
 	}
 
+	// 将上下文属性和当前团队ID提取出来，用于后续操作
+	customAttrs := req.Conversation.Meta.Sender.CustomAttributes
+	var currentTeamID *int
+	if req.Conversation.Meta.Team != nil {
+		currentTeamID = &req.Conversation.Meta.Team.ID
+	}
+
 	go func() {
-		//理论上发送卡片的操作由webwidget_triggered事件处理，但为了避免不可预见的遗漏，这里再做一次
 		bgCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		service.Service.UserServiceGroup.ActionService.CheckAndSendProductCard(bgCtx, req.Conversation.ID, req.Conversation.Meta.Sender.CustomAttributes)
+		// 理论上发送卡片的操作由webwidget_triggered事件处理，但为了避免不可预见的遗漏，这里再做一次
+		service.Service.UserServiceGroup.ActionService.CheckAndSendProductCard(bgCtx, req.Conversation.ID, customAttrs)
+		// 每次收到消息时，都检查是否需要根据最新上下文重新分配团队
+		service.Service.UserServiceGroup.ActionService.AssignConversationByRules(bgCtx, req.Conversation.ID, customAttrs, currentTeamID)
 	}()
 
 	// 收到用户消息时，如果当前处于人工模式宽限期内，刷新宽限期时间

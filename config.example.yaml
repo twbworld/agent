@@ -54,6 +54,14 @@ chatwoot:
   auth: ""
   # 机器人秘钥 (用于机器人回复消息, 切换输入状态等)
   bot_auth: ""
+  # 客服团队ID配置
+  teams:
+    # 售前团队ID (商品咨询)
+    pre_sales_id: 0
+    # 售后团队ID (订单咨询)
+    after_sales_id: 0
+    # 默认兜底团队ID
+    default_id: 0
 # LLM配置, 最多可配3个, 小模型在前排序
 llm:
   - # LLM的api地址, "v1"结尾
@@ -128,12 +136,7 @@ ai:
   keyword_reload_debounce: 600
   # 历史消息最大保留时间(秒), 超过此时间的消息将被过滤, 默认86400(24小时)
   history_max_age: 86400
-  # 用于触发转人工的关键词列表
-  transfer_keywords:
-    - 人工
-    - 人工客服
-    - 转人工
-# MCP服务配置
+  # MCP服务配置
 mcp_servers:
   # MCP服务命名
   mcp_name:

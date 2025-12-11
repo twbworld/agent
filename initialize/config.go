@@ -228,6 +228,15 @@ func handleConfig(c *config.Config) {
 	if c.Ai.HistoryMaxAge == 0 {
 		c.Ai.HistoryMaxAge = 86400
 	}
+	if c.Chatwoot.Teams.PreSalesID == 0 {
+		c.Chatwoot.Teams.PreSalesID = 0
+	}
+	if c.Chatwoot.Teams.AfterSalesID == 0 {
+		c.Chatwoot.Teams.AfterSalesID = 0
+	}
+	if c.Chatwoot.Teams.DefaultID == 0 {
+		c.Chatwoot.Teams.DefaultID = 0
+	}
 	if c.Oss.StoragePath == "" {
 		c.Oss.StoragePath = "agent/"
 	}

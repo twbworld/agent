@@ -35,6 +35,8 @@ type ActionService interface {
 	RefreshHumanModeGracePeriod(ctx context.Context, conversationID uint)
 	// 热更新转人工关键词
 	UpdateTransferKeywords(keywords []string)
+	// 根据规则分配会话给相应的团队
+	AssignConversationByRules(ctx context.Context, conversationID uint, attrs common.CustomAttributes, currentTeamID *int)
 }
 
 type actionService struct {
@@ -65,6 +67,43 @@ func (a *actionService) UpdateTransferKeywords(keywords []string) {
 		newSet[strings.ToLower(kw)] = struct{}{}
 	}
 	a.transferKeywords = newSet
+}
+
+func (a *actionService) AssignConversationByRules(ctx context.Context, conversationID uint, attrs common.CustomAttributes, currentTeamID *int) {
+	if global.ChatwootService == nil {
+		return // 服务未初始化
+	}
+
+	preSalesID := global.Config.Chatwoot.Teams.PreSalesID
+	afterSalesID := global.Config.Chatwoot.Teams.AfterSalesID
+	defaultID := global.Config.Chatwoot.Teams.DefaultID
+
+	var targetTeamID int
+
+	if attrs.GoodsID != "" && preSalesID > 0 {
+		targetTeamID = preSalesID
+	} else if attrs.OrderID != "" && afterSalesID > 0 {
+		targetTeamID = afterSalesID
+	} else if defaultID > 0 {
+		targetTeamID = defaultID
+	}
+
+	if targetTeamID == 0 {
+		// 没有匹配到任何规则，并且没有配置默认团队，则不执行任何操作
+		return
+	}
+
+	// 如果知道当前团队，并且与目标团队相同，则跳过以避免不必要的API调用
+	if currentTeamID != nil && *currentTeamID == targetTeamID {
+		global.Log.Debugf("会话 %d 已分配给目标团队 %d，跳过重复分配", conversationID, targetTeamID)
+		return
+	}
+
+	if err := global.ChatwootService.AssignTeam(ctx, conversationID, targetTeamID); err != nil {
+		global.Log.Warnf("为会话 %d 分配团队 %d 失败: %v", conversationID, targetTeamID, err)
+	} else {
+		global.Log.Debugf("已成功将会话 %d 分配给团队 %d", conversationID, targetTeamID)
+	}
 }
 
 func (a *actionService) TransferToHuman(ctx context.Context, ConversationID uint, remark enum.TransferToHuman, message ...string) error {

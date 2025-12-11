@@ -24,11 +24,18 @@ type Redis struct {
 	HistoryLockExpiry      int64  `mapstructure:"history_lock_expiry" json:"history_lock_expiry" yaml:"history_lock_expiry"`
 }
 
+type Teams struct {
+	PreSalesID   int `mapstructure:"pre_sales_id" json:"pre_sales_id" yaml:"pre_sales_id"`
+	AfterSalesID int `mapstructure:"after_sales_id" json:"after_sales_id" yaml:"after_sales_id"`
+	DefaultID    int `mapstructure:"default_id" json:"default_id" yaml:"default_id"`
+}
+
 type Chatwoot struct {
 	Url       string `mapstructure:"url" json:"url" yaml:"url"`
 	AccountId int64  `mapstructure:"account_id" json:"account_id" yaml:"account_id"`
 	Auth      string `mapstructure:"auth" json:"auth" yaml:"auth"`
 	BotAuth   string `mapstructure:"bot_auth" json:"bot_auth" yaml:"bot_auth"`
+	Teams     Teams  `mapstructure:"teams" json:"teams" yaml:"teams"`
 }
 
 type modelConfig struct {

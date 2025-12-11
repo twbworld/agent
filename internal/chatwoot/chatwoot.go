@@ -132,6 +132,11 @@ type CardContentAttributes struct {
 	Items []CardItem `json:"items"`
 }
 
+// AssignTeamRequest 定义了分配团队API的请求体
+type AssignTeamRequest struct {
+	TeamID int `json:"team_id"`
+}
+
 // 定义了创建私信备注的请求体
 type CreatePrivateNoteRequest struct {
 	Content     string          `json:"content"`
@@ -219,6 +224,8 @@ type Service interface {
 	GetConversationMessages(ctx context.Context, accountID, conversationID uint) ([]Message, error)
 	// 获取指定联系人的所有会话
 	GetContactConversations(ctx context.Context, contactID uint) ([]ConversationSummary, error)
+	// 为会话分配一个团队
+	AssignTeam(ctx context.Context, conversationID uint, teamID int) error
 }
 
 // TransferToHumanRequest 定义了转人工API的请求体
@@ -448,4 +455,12 @@ func (c *Client) GetContactConversations(ctx context.Context, contactID uint) ([
 		return nil, err
 	}
 	return response.Payload, nil
+}
+
+func (c *Client) AssignTeam(ctx context.Context, conversationID uint, teamID int) error {
+	path := fmt.Sprintf("/api/v1/accounts/%d/conversations/%d/assignments", c.AccountID, conversationID)
+	payload := AssignTeamRequest{
+		TeamID: teamID,
+	}
+	return c.sendRequest(ctx, "POST", path, agentToken, payload, nil)
 }

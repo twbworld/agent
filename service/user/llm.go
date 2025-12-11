@@ -249,6 +249,14 @@ func (s *llmService) ExecuteToolCalls(ctx context.Context, llmAnswer string) ([]
 				}
 			}
 
+			// 处理数据敏感性: 对工具返回结果进行截断，防止Redis/Context爆满或泄露过多非必要信息
+			// 使用runes进行长度判断以支持多语言字符
+			const maxToolResultLength = 2048
+			runes := []rune(toolResultContent)
+			if len(runes) > maxToolResultLength {
+				toolResultContent = string(runes[:maxToolResultLength]) + "\n...(内容过长已截断)"
+			}
+
 			// 获取工具描述
 			toolDescription := "未知工具"
 			if desc, ok := toolDescriptions[toolCall.Name]; ok {

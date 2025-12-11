@@ -418,7 +418,8 @@ func (c *ChatApi) processMessageAsync(ctx context.Context, req common.ChatReques
 	// --- 分诊通过，进入深度处理路径 ---
 
 	// 5. 调用大型LLM服务 (含RAG和工具调用)
-	llmAnswer, err := c.runComplexGeneration(ctx, req, fullHistory, vectorResults)
+	// 修改：接收返回的中间工具消息，以便存入历史
+	llmAnswer, intermediateMsgs, err := c.runComplexGeneration(ctx, req, fullHistory, vectorResults)
 	if err != nil {
 		if errors.Is(err, context.Canceled) || ctx.Err() == context.Canceled {
 			global.Log.Debugf("会话 %d 的AI任务被新任务取代而取消，静默退出。", req.Conversation.ID)
@@ -470,8 +471,20 @@ func (c *ChatApi) processMessageAsync(ctx context.Context, req common.ChatReques
 	}
 
 	// 8. 发送消息并更新历史
+	// 将用户消息、中间工具调用过程(如有)和最终回复一并按顺序追加到Redis历史中
 	service.Service.UserServiceGroup.ActionService.SendMessage(ctx, req.Conversation.ID, llmAnswer)
-	go service.Service.UserServiceGroup.HistoryService.Append(context.Background(), req.Conversation.ID, common.LlmMessage{Role: openai.ChatMessageRoleUser, Content: req.Content}, common.LlmMessage{Role: openai.ChatMessageRoleAssistant, Content: llmAnswer})
+	go func() {
+		historyToAppend := make([]common.LlmMessage, 0, 2+len(intermediateMsgs))
+		// 先追加用户消息
+		historyToAppend = append(historyToAppend, common.LlmMessage{Role: openai.ChatMessageRoleUser, Content: req.Content})
+		// 追加中间的工具交互消息(Assistant Tool Call + Tool Results)
+		if len(intermediateMsgs) > 0 {
+			historyToAppend = append(historyToAppend, intermediateMsgs...)
+		}
+		// 最后追加Assistant的最终回复
+		historyToAppend = append(historyToAppend, common.LlmMessage{Role: openai.ChatMessageRoleAssistant, Content: llmAnswer})
+		service.Service.UserServiceGroup.HistoryService.Append(context.Background(), req.Conversation.ID, historyToAppend...)
+	}()
 }
 
 // storeTask 存储一个异步任务的取消函数，并取消旧任务
@@ -587,7 +600,8 @@ func (c *ChatApi) runTriage(ctx context.Context, req common.ChatRequest, fullHis
 }
 
 // runComplexGeneration 执行复杂的RAG+LLM生成，并处理工具调用
-func (c *ChatApi) runComplexGeneration(ctx context.Context, req common.ChatRequest, fullHistory []common.LlmMessage, vectorResults []dao.SearchResult) (string, error) {
+// 返回: 最终回复内容, 中间产生的消息历史(用于存入Redis), 错误
+func (c *ChatApi) runComplexGeneration(ctx context.Context, req common.ChatRequest, fullHistory []common.LlmMessage, vectorResults []dao.SearchResult) (string, []common.LlmMessage, error) {
 	// 准备给大型LLM的参考资料 (RAG)
 	var llmReferenceDocs []dao.SearchResult
 	if len(vectorResults) > 0 {
@@ -604,9 +618,16 @@ func (c *ChatApi) runComplexGeneration(ctx context.Context, req common.ChatReque
 	conversationHistory := fullHistory
 	llmAnswer, err := service.Service.UserServiceGroup.LlmService.GenerateResponseOrToolCall(ctx, &req, llmReferenceDocs, conversationHistory, req.Conversation.Meta.Sender)
 
+	// 用于收集本轮对话中产生的中间消息(工具调用请求+工具结果)，以便后续追加到Redis历史
+	var intermediateMsgs []common.LlmMessage
+
 	// 检查是否需要调用工具
 	if strings.Contains(llmAnswer, "<tool_code>") {
 		global.Log.Debugf("[runComplexGeneration] LLM请求调用工具, 会话ID: %d", req.Conversation.ID)
+
+		// 记录工具调用指令(Assistant角色)
+		assistantMsg := common.LlmMessage{Role: openai.ChatMessageRoleAssistant, Content: llmAnswer}
+		intermediateMsgs = append(intermediateMsgs, assistantMsg)
 
 		toolResults, execErr := service.Service.UserServiceGroup.LlmService.ExecuteToolCalls(ctx, llmAnswer)
 		if execErr != nil {
@@ -615,9 +636,12 @@ func (c *ChatApi) runComplexGeneration(ctx context.Context, req common.ChatReque
 		}
 
 		if len(toolResults) > 0 {
-			// 将用户问题、助手回复（工具调用指令）和所有工具执行结果一起添加到历史记录中
+			// 记录工具执行结果(Tool角色)
+			intermediateMsgs = append(intermediateMsgs, toolResults...)
+
+			// 将用户问题、助手回复（工具调用指令）和所有工具执行结果一起添加到历史记录中，用于最终合成
 			conversationHistory = append(conversationHistory, common.LlmMessage{Role: openai.ChatMessageRoleUser, Content: req.Content})
-			conversationHistory = append(conversationHistory, common.LlmMessage{Role: openai.ChatMessageRoleAssistant, Content: llmAnswer})
+			conversationHistory = append(conversationHistory, assistantMsg)
 			conversationHistory = append(conversationHistory, toolResults...)
 
 			global.Log.Debugln("=================再次调用大型LLM分析数据")
@@ -627,7 +651,7 @@ func (c *ChatApi) runComplexGeneration(ctx context.Context, req common.ChatReque
 		}
 	}
 
-	return llmAnswer, err
+	return llmAnswer, intermediateMsgs, err
 }
 
 // trimHistory 根据轮数和每轮最大消息数修剪历史记录

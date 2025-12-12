@@ -246,6 +246,7 @@ func (c *ChatApi) handleConversationResolved(conversationID uint) {
 	}
 }
 
+// processMessageAsync 异步处理消息逻辑
 func (c *ChatApi) processMessageAsync(ctx context.Context, req common.ChatRequest) {
 	defer func() {
 		if p := recover(); p != nil {
@@ -255,10 +256,9 @@ func (c *ChatApi) processMessageAsync(ctx context.Context, req common.ChatReques
 				return
 			}
 			global.Log.Errorf("[processMessageAsync] panic: %v", p)
-			// 仅在Context未被取消时，才因Panic转人工，防止竞态条件
-			if ctx.Err() != context.Canceled {
-				_ = service.Service.UserServiceGroup.ActionService.TransferToHuman(ctx, req.Conversation.ID, enum.TransferToHuman2, string(enum.ReplyMsgLlmError))
-			}
+
+			// 即使 Context 已超时，我们也需要使用新的 Background Context 来发送转人工通知
+			c.safeTransfer(ctx, req.Conversation.ID, enum.TransferToHuman2, string(enum.ReplyMsgLlmError))
 		}
 	}()
 
@@ -267,19 +267,18 @@ func (c *ChatApi) processMessageAsync(ctx context.Context, req common.ChatReques
 	// 1. 快速路径优先：同步执行关键词匹配
 	cannedAnswer, isAction, err := service.Service.UserServiceGroup.ActionService.MatchCannedResponse(&req)
 	if err != nil {
-		// 优先检查Context是否已取消
 		if errors.Is(err, context.Canceled) {
 			global.Log.Debugf("会话 %d 任务在关键词匹配前被取消，静默退出。", req.Conversation.ID)
 			return
 		}
 		global.Log.Errorf("[processMessageAsync] 匹配关键字失败: %v", err)
-		_ = service.Service.UserServiceGroup.ActionService.TransferToHuman(ctx, req.Conversation.ID, enum.TransferToHuman2, string(enum.ReplyMsgLlmError))
+		c.safeTransfer(ctx, req.Conversation.ID, enum.TransferToHuman2, string(enum.ReplyMsgLlmError))
 		return
 	}
 
 	// 转人工
 	if isAction {
-		_ = service.Service.UserServiceGroup.ActionService.TransferToHuman(ctx, req.Conversation.ID, enum.TransferToHuman1, string(enum.ReplyMsgTransferSuccess))
+		c.safeTransfer(ctx, req.Conversation.ID, enum.TransferToHuman1, string(enum.ReplyMsgTransferSuccess))
 		return
 	}
 
@@ -365,9 +364,7 @@ func (c *ChatApi) processMessageAsync(ctx context.Context, req common.ChatReques
 			return
 		}
 		global.Log.Errorf("[processMessageAsync] 并发获取数据时发生意外错误: %v", err)
-		if ctx.Err() != context.Canceled {
-			_ = service.Service.UserServiceGroup.ActionService.TransferToHuman(ctx, req.Conversation.ID, enum.TransferToHuman2, string(enum.ReplyMsgLlmError))
-		}
+		c.safeTransfer(ctx, req.Conversation.ID, enum.TransferToHuman2, string(enum.ReplyMsgLlmError))
 		return
 	}
 
@@ -406,9 +403,7 @@ func (c *ChatApi) processMessageAsync(ctx context.Context, req common.ChatReques
 			return
 		}
 		global.Log.Errorf("[processMessageAsync] 分诊失败: %v, 会话ID: %d", err, req.Conversation.ID)
-		if ctx.Err() != context.Canceled {
-			_ = service.Service.UserServiceGroup.ActionService.TransferToHuman(ctx, req.Conversation.ID, enum.TransferToHuman2, string(enum.ReplyMsgLlmError))
-		}
+		c.safeTransfer(ctx, req.Conversation.ID, enum.TransferToHuman2, string(enum.ReplyMsgLlmError))
 		return
 	}
 	if processed {
@@ -426,9 +421,7 @@ func (c *ChatApi) processMessageAsync(ctx context.Context, req common.ChatReques
 			return
 		}
 		global.Log.Errorf("[processMessageAsync] 复杂路径处理失败: %v", err)
-		if ctx.Err() != context.Canceled {
-			_ = service.Service.UserServiceGroup.ActionService.TransferToHuman(ctx, req.Conversation.ID, enum.TransferToHuman2, string(enum.ReplyMsgLlmError))
-		}
+		c.safeTransfer(ctx, req.Conversation.ID, enum.TransferToHuman2, string(enum.ReplyMsgLlmError))
 		return
 	}
 
@@ -437,13 +430,13 @@ func (c *ChatApi) processMessageAsync(ctx context.Context, req common.ChatReques
 	// 6. 最终回复处理
 	if strings.TrimSpace(llmAnswer) == enum.LlmUnsureTransferSignal {
 		global.Log.Debugf("[processMessageAsync] LLM不确定答案，主动转人工, 会话ID: %d", req.Conversation.ID)
-		_ = service.Service.UserServiceGroup.ActionService.TransferToHuman(ctx, req.Conversation.ID, enum.TransferToHuman5, "")
+		c.safeTransfer(ctx, req.Conversation.ID, enum.TransferToHuman5, "")
 		return
 	}
 
 	if llmAnswer == "" {
 		global.Log.Warnf("[processMessageAsync] LLM返回空回复，转人工, 会话ID: %d", req.Conversation.ID)
-		_ = service.Service.UserServiceGroup.ActionService.TransferToHuman(ctx, req.Conversation.ID, enum.TransferToHuman5, string(enum.ReplyMsgLlmError))
+		c.safeTransfer(ctx, req.Conversation.ID, enum.TransferToHuman5, string(enum.ReplyMsgLlmError))
 		return
 	}
 
@@ -471,8 +464,10 @@ func (c *ChatApi) processMessageAsync(ctx context.Context, req common.ChatReques
 	}
 
 	// 8. 发送消息并更新历史
-	// 将用户消息、中间工具调用过程(如有)和最终回复一并按顺序追加到Redis历史中
-	service.Service.UserServiceGroup.ActionService.SendMessage(ctx, req.Conversation.ID, llmAnswer)
+	sendCtx, sendCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer sendCancel()
+	service.Service.UserServiceGroup.ActionService.SendMessage(sendCtx, req.Conversation.ID, llmAnswer)
+
 	go func() {
 		historyToAppend := make([]common.LlmMessage, 0, 2+len(intermediateMsgs))
 		// 先追加用户消息
@@ -485,6 +480,26 @@ func (c *ChatApi) processMessageAsync(ctx context.Context, req common.ChatReques
 		historyToAppend = append(historyToAppend, common.LlmMessage{Role: openai.ChatMessageRoleAssistant, Content: llmAnswer})
 		service.Service.UserServiceGroup.HistoryService.Append(context.Background(), req.Conversation.ID, historyToAppend...)
 	}()
+}
+
+
+// safeTransfer 安全地执行转人工操作，自动处理上下文超时的情况
+func (c *ChatApi) safeTransfer(ctx context.Context, conversationID uint, reason enum.TransferToHuman, msg string) {
+	// 如果任务是因为被新任务取代（Canceled）而停止，则不应发送转人工，直接静默退出
+	if ctx.Err() == context.Canceled {
+		global.Log.Debugf("会话 %d 任务被主动取消（非超时），跳过转人工操作", conversationID)
+		return
+	}
+
+	// 如果 ctx.Err() 是 DeadlineExceeded (超时) 或其他错误，或者是 nil (正常)，
+	// 我们都使用一个新的 context 来执行转人工 API 调用，确保该操作不会因为原本的 ctx 超时而失败。
+	// 使用 10s 超时足以完成 API 请求
+	transferCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if err := service.Service.UserServiceGroup.ActionService.TransferToHuman(transferCtx, conversationID, reason, msg); err != nil {
+		global.Log.Errorf("[safeTransfer] 转人工失败: %v", err)
+	}
 }
 
 // storeTask 存储一个异步任务的取消函数，并取消旧任务
@@ -567,7 +582,7 @@ func (c *ChatApi) runTriage(ctx context.Context, req common.ChatRequest, fullHis
 		enum.TriageIntent(triageResult.Intent) == enum.TriageIntentRequestHuman ||
 		utils.InSlice(triggerTransferUrgencies, enum.TriageUrgency(triageResult.Urgency)) > -1 {
 		global.Log.Debugf("[Triage] 触发高优先级转人工规则, 意图: %s, 情绪: %s, 紧急度: %s, 会话ID: %d", triageResult.Intent, triageResult.Emotion, triageResult.Urgency, req.Conversation.ID)
-		_ = service.Service.UserServiceGroup.ActionService.TransferToHuman(ctx, req.Conversation.ID, enum.TransferToHuman3, string(enum.ReplyMsgTransferSuccess))
+		c.safeTransfer(ctx, req.Conversation.ID, enum.TransferToHuman3, string(enum.ReplyMsgTransferSuccess))
 		return true, nil
 	}
 

@@ -14,7 +14,7 @@ type ChatRequest struct {
 	ID           uint                     `json:"id"`
 	Content      string                   `json:"content"`
 	MessageType  chatwoot.ChatwootWebhook `json:"message_type"`
-	CreatedAt    string                   `json:"created_at"` // 时间戳
+	CreatedAt    int64                    `json:"created_at"` // 时间戳
 	Private      bool                     `json:"private"`    // 是否是私密消息
 	Conversation Conversation             `json:"conversation"`
 	Sender       Sender                   `json:"sender"`
@@ -22,23 +22,11 @@ type ChatRequest struct {
 	Attachments  []Attachment             `json:"attachments"`
 }
 
-// 对应 Chatwoot webhook 的事件 'conversation_created' 消息体
-type ConversationCreatedRequest struct {
-	Event
-	ID       uint                  `json:"id"`
-	Meta     Meta                  `json:"meta"`
-	Messages []MessageFromCreation `json:"messages"`
-}
-
 // 对应 Chatwoot webhook 的事件 'webwidget_triggered' 消息体
 type WebwidgetTriggeredRequest struct {
-	Event    string `json:"event"`
-	ID       uint   `json:"id"`
-	SourceID string `json:"source_id"`
-	Contact  struct {
-		ID               uint             `json:"id"`
-		CustomAttributes CustomAttributes `json:"custom_attributes"`
-	} `json:"contact"`
+	Event
+	ID      uint   `json:"id"`
+	Contact Sender `json:"contact"`
 }
 
 // 对应 Chatwoot webhook 的事件 'conversation_resolved' 消息体

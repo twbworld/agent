@@ -54,7 +54,7 @@ func (c *ChatApi) HandleWebhook(ctx *gin.Context) {
 			return
 		}
 		if req.Contact.ID != 0 {
-			go c.handleWebWidgetTriggered(context.Background(), req.Contact.ID, req.SourceID, req.Contact.CustomAttributes)
+			go c.handleWebWidgetTriggered(context.Background(), req.Contact.ID, *req.Contact.Identifier, req.Contact.CustomAttributes)
 		}
 		common.Success(ctx, nil)
 
@@ -94,7 +94,7 @@ func (c *ChatApi) handleWebWidgetTriggered(ctx context.Context, contactID uint, 
 	if len(conversations) == 0 {
 		//新用户，无历史会话 -> 主动创建会话
 		if sourceID == "" {
-			global.Log.Warnf("联系人 %d 无历史会话且 Webhook 缺少 source_id，无法主动创建会话", contactID)
+			global.Log.Warnf("联系人 %d 无历史会话且 Webhook 缺少 source_id (Contact.Identifier)，无法主动创建会话", contactID)
 			return
 		}
 		global.Log.Debugf("联系人 %d 为新用户，正在主动创建会话...", contactID)
@@ -136,19 +136,25 @@ func (c *ChatApi) handleWebWidgetTriggered(ctx context.Context, contactID uint, 
 
 // handleMessageCreated 收到消息处理
 func (c *ChatApi) handleMessageCreated(ctx *gin.Context, req common.ChatRequest) {
+	// 消息时效性检查 (防止处理过期的积压消息, 例如超过5分钟)
+	if req.CreatedAt > 0 && time.Now().Unix()-req.CreatedAt > 300 {
+		common.Success(ctx, nil)
+		return
+	}
+
 	// 处理"人工客服"消息: 将其计入Redis历史,并设置人工宽限期
 	if req.MessageType == chatwoot.MessageTypeOutgoing && req.Sender.Type == chatwoot.SenderUser {
 		service.Service.UserServiceGroup.ActionService.ActivateHumanModeGracePeriod(ctx.Request.Context(), req.Conversation.ID)
 
 		common.Success(ctx, nil)
-		if req.Content != "" {
+		if req.Content != "" && !req.Private {
 			go service.Service.UserServiceGroup.HistoryService.Append(context.Background(), req.Conversation.ID, common.LlmMessage{Role: openai.ChatMessageRoleAssistant, Content: req.Content})
 		}
 		return
 	}
 
-	// 处理非"用户"消息(即req.Conversation.Meta.Sender.Type=="agent_bot"机器人消息)
-	if req.MessageType != chatwoot.MessageTypeIncoming || req.Conversation.Meta.Sender.Type != chatwoot.SenderContact {
+	// 处理非"用户"消息(即req.Conversation.Meta.Sender.Type=="agent_bot"机器人消息)或私有消息
+	if req.MessageType != chatwoot.MessageTypeIncoming || req.Conversation.Meta.Sender.Type != chatwoot.SenderContact || req.Private {
 		common.Success(ctx, nil)
 		return
 	}
@@ -481,7 +487,6 @@ func (c *ChatApi) processMessageAsync(ctx context.Context, req common.ChatReques
 		service.Service.UserServiceGroup.HistoryService.Append(context.Background(), req.Conversation.ID, historyToAppend...)
 	}()
 }
-
 
 // safeTransfer 安全地执行转人工操作，自动处理上下文超时的情况
 func (c *ChatApi) safeTransfer(ctx context.Context, conversationID uint, reason enum.TransferToHuman, msg string) {

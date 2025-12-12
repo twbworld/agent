@@ -90,7 +90,3 @@ func FailAuth(ctx *gin.Context, message string) {
 func FailAuthWs(c chan *Response, message string) {
 	resultWs(c, enum.AuthErrorCode, enum.Msg(message), map[string]interface{}{})
 }
-
-type OllamaResponse struct {
-	Response string `json:"response"`
-}

@@ -87,7 +87,7 @@
 
     <div x-show="productData" class="bg-white border border-gray-200 rounded-xl shadow-md hover:shadow-lg transition-shadow duration-300 overflow-hidden dark:bg-gray-800 dark:border-gray-700">
       <div class="px-6 py-4 border-b border-gray-100 bg-gray-50/80 font-semibold text-gray-700 dark:bg-gray-700/40 dark:text-gray-200 dark:border-gray-700 flex items-center">
-        <span class="w-1 h-5 bg-purple-500 rounded-full mr-3"></span>当前咨询商品
+        <span class="w-1 h-5 bg-purple-500 rounded-full mr-3"></span>商品信息
       </div>
       <div class="p-6">
         <template x-if="productData">
@@ -102,10 +102,21 @@
 
             <div class="flex-grow md:border-l md:border-gray-100 md:pl-6 dark:border-gray-700 flex flex-col justify-center">
               <dl class="grid grid-cols-[80px_1fr] gap-y-4 text-sm">
+                <dt class="font-medium text-gray-500 dark:text-gray-400">商品ID</dt>
+                <dd class="text-gray-700 dark:text-gray-300 font-mono" x-text="productData.id || '-'"></dd>
                 <dt class="font-medium text-gray-500 dark:text-gray-400">描述</dt>
                 <dd class="text-gray-700 dark:text-gray-300 leading-relaxed" x-text="productData.desc || '-'"></dd>
                 <dt class="font-medium text-gray-500 dark:text-gray-400">SKU</dt>
-                <dd class="text-gray-700 dark:text-gray-300 font-medium" x-text="productData.sku_summary || '-'"></dd>
+                <dd class="text-gray-700 dark:text-gray-300 font-medium">
+                  <template x-if="productData.sku_summary">
+                    <div class="flex flex-col gap-1">
+                      <template x-for="line in parseSku(productData.sku_summary)" :key="line">
+                        <div x-text="line"></div>
+                      </template>
+                    </div>
+                  </template>
+                  <span x-show="!productData.sku_summary">-</span>
+                </dd>
                 <dt class="font-medium text-gray-500 dark:text-gray-400">状态</dt>
                 <dd>
                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-100 dark:bg-emerald-900 dark:text-emerald-200 dark:border-emerald-800" x-text="productData.status || '-'"></span>
@@ -295,6 +306,13 @@
           this.userData = data.user || null;
           this.productData = data.product || null;
           this.orderData = data.order || null;
+        },
+
+        // 解析 SKU 字符串为数组
+        parseSku(summary) {
+          if (!summary) return [];
+          // 去除前后空格并按换行符分割，过滤空行
+          return summary.trim().split('\n').map(s => s.trim()).filter(s => s.length > 0);
         }
       }
     }

@@ -54,7 +54,11 @@ func (c *ChatApi) HandleWebhook(ctx *gin.Context) {
 			return
 		}
 		if req.Contact.ID != 0 {
-			go c.handleWebWidgetTriggered(context.Background(), req.Contact.ID, *req.Contact.Identifier, req.Contact.CustomAttributes)
+			sourceID := req.SourceID
+			if sourceID == "" && req.Contact.Identifier != nil {
+				sourceID = *req.Contact.Identifier
+			}
+			go c.handleWebWidgetTriggered(context.Background(), req.Contact.ID, sourceID, req.Contact.CustomAttributes)
 		}
 		common.Success(ctx, nil)
 
@@ -116,7 +120,7 @@ func (c *ChatApi) handleWebWidgetTriggered(ctx context.Context, contactID uint, 
 	if len(conversations) == 0 {
 		//新用户，无历史会话 -> 主动创建会话
 		if sourceID == "" {
-			global.Log.Warnf("联系人 %d 无历史会话且 Webhook 缺少 source_id (Contact.Identifier)，无法主动创建会话", contactID)
+			global.Log.Warnf("联系人 %d 无历史会话且 Webhook 缺少 source_id，无法主动创建会话", contactID)
 			return
 		}
 		global.Log.Debugf("联系人 %d 为新用户，正在主动创建会话...", contactID)
@@ -164,9 +168,19 @@ func (c *ChatApi) handleWebWidgetTriggered(ctx context.Context, contactID uint, 
 // handleMessageCreated 收到消息处理
 func (c *ChatApi) handleMessageCreated(ctx *gin.Context, req common.ChatRequest) {
 	// 消息时效性检查 (防止处理过期的积压消息, 例如超过5分钟)
-	if req.CreatedAt > 0 && time.Now().Unix()-req.CreatedAt > 300 {
-		common.Success(ctx, nil)
-		return
+	if req.CreatedAt != "" {
+		parsedTime, err := time.Parse(time.RFC3339, req.CreatedAt)
+		if err != nil {
+			global.Log.Warnf("[handleMessageCreated] 解析消息时间失败: %v, 原值: %s", err, req.CreatedAt)
+			// 解析失败通常不应阻断业务，可选择继续或返回
+		} else {
+			// 如果消息时间距离现在超过 300秒 (5分钟)
+			if time.Since(parsedTime) > 300*time.Second {
+				global.Log.Debugf("忽略过期消息 ID: %d, 创建时间: %s", req.ID, req.CreatedAt)
+				common.Success(ctx, nil)
+				return
+			}
+		}
 	}
 
 	// 幂等性检查: 防止同个消息ID被重复处理 (Webhook重试机制可能导致重复)

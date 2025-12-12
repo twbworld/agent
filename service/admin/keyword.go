@@ -13,7 +13,7 @@ import (
 
 	"gitee.com/taoJie_1/mall-agent/dao"
 	"gitee.com/taoJie_1/mall-agent/global"
-	"gitee.com/taoJie_1/mall-agent/model/dto"
+	"gitee.com/taoJie_1/mall-agent/model/common"
 	"gitee.com/taoJie_1/mall-agent/model/enum"
 	"gitee.com/taoJie_1/mall-agent/task"
 	"gitee.com/taoJie_1/mall-agent/utils"
@@ -23,13 +23,13 @@ import (
 // KeywordService 定义知识库条目管理接口。
 type KeywordService interface {
 	// ListItems 从 Chatwoot 获取所有预设回复，并归类为知识条目。
-	ListItems(ctx context.Context) ([]*dto.KnowledgeItem, error)
+	ListItems(ctx context.Context) ([]*common.KnowledgeItem, error)
 	// UpsertItem 创建或更新知识条目。
-	UpsertItem(ctx context.Context, req *dto.UpsertKnowledgeItemRequest) error
+	UpsertItem(ctx context.Context, req *common.UpsertKnowledgeItemRequest) error
 	// DeleteItem 删除与知识条目相关的所有预设回复。
 	DeleteItem(ctx context.Context, itemID string) error
 	// GenerateQuestions 调用 LLM 根据上下文生成问题。
-	GenerateQuestions(ctx context.Context, req *dto.GenerateQuestionRequest) (*dto.GenerateQuestionResponse, error)
+	GenerateQuestions(ctx context.Context, req *common.GenerateQuestionRequest) (*common.GenerateQuestionResponse, error)
 	// ForceSync 手动触发知识库同步任务。
 	ForceSync(ctx context.Context) error
 }
@@ -43,7 +43,7 @@ func NewKeywordService(tm *task.Manager) KeywordService {
 	return &keywordService{taskManager: tm}
 }
 
-func (s *keywordService) ListItems(ctx context.Context) ([]*dto.KnowledgeItem, error) {
+func (s *keywordService) ListItems(ctx context.Context) ([]*common.KnowledgeItem, error) {
 	if global.ChatwootService == nil {
 		return nil, errors.New("chatwoot 服务未初始化")
 	}
@@ -54,7 +54,7 @@ func (s *keywordService) ListItems(ctx context.Context) ([]*dto.KnowledgeItem, e
 	}
 
 	// 按答案内容的哈希值对问题进行分组，并记录最新的更新时间
-	groupedItems := make(map[string]*dto.KnowledgeItem)
+	groupedItems := make(map[string]*common.KnowledgeItem)
 	for _, resp := range responses {
 		if resp.Content == "" {
 			continue
@@ -78,17 +78,17 @@ func (s *keywordService) ListItems(ctx context.Context) ([]*dto.KnowledgeItem, e
 
 		item, exists := groupedItems[contentHash]
 		if !exists {
-			item = &dto.KnowledgeItem{
+			item = &common.KnowledgeItem{
 				ID:        contentHash,
 				Answer:    resp.Content,
-				Questions: []*dto.Question{},
+				Questions: []*common.Question{},
 				UpdatedAt: updatedAtUnix,
 			}
 			groupedItems[contentHash] = item
 		}
 
 		// 追加问题
-		item.Questions = append(item.Questions, &dto.Question{
+		item.Questions = append(item.Questions, &common.Question{
 			ID:       resp.Id,
 			Question: qText,
 			Type:     string(qType),
@@ -101,7 +101,7 @@ func (s *keywordService) ListItems(ctx context.Context) ([]*dto.KnowledgeItem, e
 	}
 
 	// 将 map 转换为切片以便排序
-	knowledgeItems := make([]*dto.KnowledgeItem, 0, len(groupedItems))
+	knowledgeItems := make([]*common.KnowledgeItem, 0, len(groupedItems))
 	for _, item := range groupedItems {
 		knowledgeItems = append(knowledgeItems, item)
 	}
@@ -114,7 +114,7 @@ func (s *keywordService) ListItems(ctx context.Context) ([]*dto.KnowledgeItem, e
 	return knowledgeItems, nil
 }
 
-func (s *keywordService) UpsertItem(ctx context.Context, req *dto.UpsertKnowledgeItemRequest) error {
+func (s *keywordService) UpsertItem(ctx context.Context, req *common.UpsertKnowledgeItemRequest) error {
 	if global.ChatwootService == nil {
 		return errors.New("chatwoot 服务未初始化")
 	}
@@ -197,7 +197,7 @@ func (s *keywordService) DeleteItem(ctx context.Context, itemID string) error {
 	return nil
 }
 
-func (s *keywordService) GenerateQuestions(ctx context.Context, req *dto.GenerateQuestionRequest) (*dto.GenerateQuestionResponse, error) {
+func (s *keywordService) GenerateQuestions(ctx context.Context, req *common.GenerateQuestionRequest) (*common.GenerateQuestionResponse, error) {
 	if global.LlmService == nil {
 		return nil, errors.New("LLM 服务未初始化")
 	}
@@ -226,7 +226,7 @@ func (s *keywordService) GenerateQuestions(ctx context.Context, req *dto.Generat
 		}
 	}
 
-	return &dto.GenerateQuestionResponse{Questions: cleanedQuestions}, nil
+	return &common.GenerateQuestionResponse{Questions: cleanedQuestions}, nil
 }
 
 func (s *keywordService) ForceSync(ctx context.Context) error {

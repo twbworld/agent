@@ -177,8 +177,7 @@ func (s *historyService) fetchAndCache(ctx context.Context, accountID, conversat
 		historyMaxAgeCutoff = time.Now().Unix() - global.Config.Ai.HistoryMaxAge
 	}
 
-	// 第二次遍历: 格式化历史记录为LLM需要的格式，并处理引用关系
-	var formattedHistory []common.LlmMessage
+	formattedHistory := make([]common.LlmMessage, 0, len(chatwootMessages))
 	for _, msg := range chatwootMessages {
 		// 过滤掉超过历史最大保留时间的旧消息
 		if historyMaxAgeCutoff > 0 && msg.CreatedAt < historyMaxAgeCutoff {

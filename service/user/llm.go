@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 
@@ -204,6 +205,17 @@ func (s *llmService) ExecuteToolCalls(ctx context.Context, llmAnswer string) ([]
 	// +len("<tool_code>") 跳过标签本身
 	jsonContent := strings.TrimSpace(llmAnswer[startIdx+11 : endIdx])
 
+	// 处理 LLM 可能在 XML 标签内部再次包裹 Markdown 代码块的情况
+	if strings.HasPrefix(jsonContent, "```json") {
+		jsonContent = strings.TrimPrefix(jsonContent, "```json")
+		jsonContent = strings.TrimSuffix(jsonContent, "```")
+		jsonContent = strings.TrimSpace(jsonContent)
+	} else if strings.HasPrefix(jsonContent, "```") {
+		jsonContent = strings.TrimPrefix(jsonContent, "```")
+		jsonContent = strings.TrimSuffix(jsonContent, "```")
+		jsonContent = strings.TrimSpace(jsonContent)
+	}
+
 	var toolCalls common.ToolCalls
 	if err := json.Unmarshal([]byte(jsonContent), &toolCalls); err != nil {
 		global.Log.Errorf("[ExecuteToolCalls] 解析工具调用JSON数组失败: %v", err)
@@ -321,9 +333,17 @@ func (s *llmService) buildContextPrompt(sender common.Sender) (string, error) {
 		return "", nil
 	}
 
+	// 提取并排序 Keys，确保 Prompt 的确定性，从而提高 KV Cache 命中率
+	keys := make([]string, 0, len(attrMap))
+	for k := range attrMap {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
 	var attrBuilder strings.Builder
 	hasContent := false
-	for key, value := range attrMap {
+	for _, key := range keys {
+		value := attrMap[key]
 		// 忽略空值
 		if value == nil {
 			continue

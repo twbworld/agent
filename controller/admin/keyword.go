@@ -4,7 +4,6 @@ import (
 	"context"
 	"gitee.com/taoJie_1/mall-agent/global"
 	"gitee.com/taoJie_1/mall-agent/model/common"
-	"gitee.com/taoJie_1/mall-agent/model/dto"
 	"gitee.com/taoJie_1/mall-agent/service"
 	"github.com/gin-gonic/gin"
 )
@@ -21,7 +20,7 @@ func (k *KeywordApi) ListItems(c *gin.Context) {
 }
 
 func (k *KeywordApi) UpsertItem(c *gin.Context) {
-	var req dto.UpsertKnowledgeItemRequest
+	var req common.UpsertKnowledgeItemRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		common.Fail(c, err.Error())
 		return
@@ -49,7 +48,7 @@ func (k *KeywordApi) DeleteItem(c *gin.Context) {
 }
 
 func (k *KeywordApi) GenerateQuestions(c *gin.Context) {
-	var req dto.GenerateQuestionRequest
+	var req common.GenerateQuestionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		common.Fail(c, err.Error())
 		return

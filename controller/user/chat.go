@@ -83,6 +83,12 @@ func (c *ChatApi) HandleWebhook(ctx *gin.Context) {
 
 // handleWebWidgetTriggered 复活旧会话或创建新会话，并发送卡片
 func (c *ChatApi) handleWebWidgetTriggered(ctx context.Context, contactID uint, sourceID string, attrs common.CustomAttributes) {
+	defer func() {
+		if p := recover(); p != nil {
+			global.Log.Errorf("[handleWebWidgetTriggered] panic: %v", p)
+		}
+	}()
+
 	if global.RedisClient != nil {
 		lockKey := fmt.Sprintf("%s%d", redis.KeyPrefixContactCreationLock, contactID)
 		// 尝试获取锁，5秒过期
@@ -140,6 +146,11 @@ func (c *ChatApi) handleWebWidgetTriggered(ctx context.Context, contactID uint, 
 	if targetConversationID > 0 {
 		// 并发执行上下文相关操作：发送卡片和分配团队
 		go func() {
+			defer func() {
+				if p := recover(); p != nil {
+					global.Log.Errorf("[handleWebWidgetTriggered-Action] panic: %v", p)
+				}
+			}()
 			actionCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 			defer cancel()
 			// 发送卡片
@@ -194,6 +205,11 @@ func (c *ChatApi) handleMessageCreated(ctx *gin.Context, req common.ChatRequest)
 	}
 
 	go func() {
+		defer func() {
+			if p := recover(); p != nil {
+				global.Log.Errorf("[handleMessageCreated-Action] panic: %v", p)
+			}
+		}()
 		bgCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		// 理论上发送卡片的操作由webwidget_triggered事件处理，但为了避免不可预见的遗漏，这里再做一次
@@ -361,7 +377,11 @@ func (c *ChatApi) processMessageAsync(ctx context.Context, req common.ChatReques
 	}
 
 	// --- 进入智能处理路径 ---
-	go service.Service.UserServiceGroup.ActionService.ToggleTyping(ctx, req.Conversation.ID, true)
+	go func() {
+		typingCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		service.Service.UserServiceGroup.ActionService.ToggleTyping(typingCtx, req.Conversation.ID, true)
+	}()
 
 	// 2. 并发获取向量搜索结果和会话历史
 	var vectorResults []dao.SearchResult
@@ -610,11 +630,20 @@ func (c *ChatApi) runTriage(ctx context.Context, req common.ChatRequest, fullHis
 		enum.TriageUrgencyHigh,
 	}
 
-	if utils.InSlice(triggerTransferEmotions, enum.TriageEmotion(triageResult.Emotion)) > -1 ||
-		enum.TriageIntent(triageResult.Intent) == enum.TriageIntentRequestHuman ||
-		utils.InSlice(triggerTransferUrgencies, enum.TriageUrgency(triageResult.Urgency)) > -1 {
-		global.Log.Debugf("[Triage] 触发高优先级转人工规则, 意图: %s, 情绪: %s, 紧急度: %s, 会话ID: %d", triageResult.Intent, triageResult.Emotion, triageResult.Urgency, req.Conversation.ID)
-		c.safeTransfer(ctx, req.Conversation.ID, enum.TransferToHuman3, string(enum.ReplyMsgTransferSuccess))
+	// 映射具体的转人工原因
+	var transferReason enum.TransferToHuman
+	if enum.TriageIntent(triageResult.Intent) == enum.TriageIntentRequestHuman {
+		transferReason = enum.TransferToHuman1
+	} else if utils.InSlice(triggerTransferEmotions, enum.TriageEmotion(triageResult.Emotion)) > -1 {
+		transferReason = enum.TransferToHuman4
+	} else if utils.InSlice(triggerTransferUrgencies, enum.TriageUrgency(triageResult.Urgency)) > -1 {
+		transferReason = enum.TransferToHuman6
+	}
+
+	// 如果命中了上述任意转人工条件
+	if transferReason != "" {
+		global.Log.Debugf("[Triage] 触发高优先级转人工规则, 原因: %s, 意图: %s, 情绪: %s, 紧急度: %s, 会话ID: %d", transferReason, triageResult.Intent, triageResult.Emotion, triageResult.Urgency, req.Conversation.ID)
+		c.safeTransfer(ctx, req.Conversation.ID, transferReason, string(enum.ReplyMsgTransferSuccess))
 		return true, nil
 	}
 
@@ -712,7 +741,7 @@ func (c *ChatApi) trimHistory(history []common.LlmMessage, maxRounds int, maxAss
 		return []common.LlmMessage{}
 	}
 
-	var result []common.LlmMessage
+	result := make([]common.LlmMessage, 0, maxRounds*(1+maxAssistantPerRound))
 	rounds := 0
 	assistantCount := 0
 

@@ -129,7 +129,7 @@ const (
     - positive: 满意、感谢、积极。
 4. **urgency**:
     - critical: 极端紧急，如大面积服务中断、支付安全问题、法律风险。
-    - high: 紧急情况，如资损、重大投诉、重复问题无法解决。
+    - high: 紧急情况，涉及高额资损(如金额>1000元争议)、重大投诉、重复问题无法解决。
     - medium: 标准问题，如查物流、问商品。
     - low: 非紧急问题，如一般性咨询。
 
@@ -172,7 +172,7 @@ const (
 	TransferToHuman3 TransferToHuman = "自动[转人工]"
 	TransferToHuman4 TransferToHuman = "用户情绪激动[转人工]"
 	TransferToHuman5 TransferToHuman = "智能客服无法处理[转人工]"
-	TransferToHuman6 TransferToHuman = "金额过大[转人工]"
+	TransferToHuman6 TransferToHuman = "高风险业务/金额过大[转人工]"
 )
 
 type ReplyMessage string

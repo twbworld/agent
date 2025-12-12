@@ -21,6 +21,8 @@ const (
 	KeyPrefixLastProductSent     = "agent:last_product_sent:"              // 记录会话最后发送的商品ID
 	KeyPrefixLastOrderSent       = "agent:last_order_sent:"                // 记录会话最后发送的订单ID
 	KeyPrefixProductCardLock     = "agent:lock:product_card_sent:"         // 发送卡片的分布式锁
+	KeyPrefixMessageHandled      = "agent:msg_handled:"                    // 消息已处理标志(幂等性)
+	KeyPrefixContactCreationLock = "agent:lock:contact_creation:"          // 创建会话的分布式锁
 )
 
 var ErrNil = redis.Nil

@@ -83,6 +83,22 @@ func (c *ChatApi) HandleWebhook(ctx *gin.Context) {
 
 // handleWebWidgetTriggered 复活旧会话或创建新会话，并发送卡片
 func (c *ChatApi) handleWebWidgetTriggered(ctx context.Context, contactID uint, sourceID string, attrs common.CustomAttributes) {
+	if global.RedisClient != nil {
+		lockKey := fmt.Sprintf("%s%d", redis.KeyPrefixContactCreationLock, contactID)
+		// 尝试获取锁，5秒过期
+		acquired, err := global.RedisClient.SetNX(ctx, lockKey, 1, 5*time.Second).Result()
+		if err != nil {
+			global.Log.Errorf("获取联系人创建锁失败: %v", err)
+			return
+		}
+		if !acquired {
+			global.Log.Debugf("联系人 %d 的会话创建逻辑正在进行中，跳过并发请求", contactID)
+			return
+		}
+		// 释放锁
+		defer global.RedisClient.Del(context.Background(), lockKey)
+	}
+
 	conversations, err := global.ChatwootService.GetContactConversations(ctx, contactID)
 	if err != nil {
 		global.Log.Errorf("获取联系人 %d 的会话列表失败: %v", contactID, err)
@@ -140,6 +156,17 @@ func (c *ChatApi) handleMessageCreated(ctx *gin.Context, req common.ChatRequest)
 	if req.CreatedAt > 0 && time.Now().Unix()-req.CreatedAt > 300 {
 		common.Success(ctx, nil)
 		return
+	}
+
+	// 幂等性检查: 防止同个消息ID被重复处理 (Webhook重试机制可能导致重复)
+	if global.RedisClient != nil {
+		msgKey := fmt.Sprintf("%s%d", redis.KeyPrefixMessageHandled, req.ID)
+		// 记录消息ID，保留10分钟，如果 Key 已存在则 SetNX 返回 false
+		if ok, err := global.RedisClient.SetNX(ctx.Request.Context(), msgKey, 1, 10*time.Minute).Result(); err == nil && !ok {
+			global.Log.Debugf("忽略重复消息(幂等性拦截) ID: %d", req.ID)
+			common.Success(ctx, nil)
+			return
+		}
 	}
 
 	// 处理"人工客服"消息: 将其计入Redis历史,并设置人工宽限期

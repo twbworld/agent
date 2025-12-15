@@ -102,7 +102,7 @@
 
             <div class="flex-grow md:border-l md:border-gray-100 md:pl-6 dark:border-gray-700 flex flex-col justify-center">
               <dl class="grid grid-cols-[80px_1fr] gap-y-4 text-sm">
-                <dt class="font-medium text-gray-500 dark:text-gray-400">商品ID</dt>
+                <dt class="font-medium text-gray-500 dark:text-gray-400">ID</dt>
                 <dd class="text-gray-700 dark:text-gray-300 font-mono" x-text="productData.id || '-'"></dd>
                 <dt class="font-medium text-gray-500 dark:text-gray-400">描述</dt>
                 <dd class="text-gray-700 dark:text-gray-300 leading-relaxed" x-text="productData.desc || '-'"></dd>
@@ -191,6 +191,7 @@
           type: 'success',
           timeoutId: null
         },
+        token: '',
         context: {
           contactId: null,
           userId: null,
@@ -205,6 +206,9 @@
           if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
             this.darkMode = true;
           }
+
+          const urlParams = new URLSearchParams(window.location.search);
+          this.token = urlParams.get('token') || '';
 
           window.addEventListener('message', (event) => {
             if (this.hasFetched) return;
@@ -272,9 +276,14 @@
           if (this.context.orderId) requestBody.order_id = this.context.orderId;
 
           try {
+            const headers = { 'Content-Type': 'application/json' };
+            if (this.token) {
+              headers['Authorization'] = 'Bearer ' + this.token;
+            }
+
             const response = await fetch(`/api/v1/admin/dashboard/details`, {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              headers: headers,
               body: JSON.stringify(requestBody),
             });
 

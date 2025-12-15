@@ -13,6 +13,7 @@ type Config struct {
 	LogRetentionDays uint           `mapstructure:"log_retention_days" json:"log_retention_days" yaml:"log_retention_days"`
 	Tz               string         `mapstructure:"tz" json:"tz" yaml:"tz"`
 	Cors             []string       `mapstructure:"cors" json:"cors" yaml:"cors"`
+	Auth             Auth           `mapstructure:"auth" json:"auth" yaml:"auth"`
 	Database         Database       `mapstructure:"database" json:"database" yaml:"database"`
 	Redis            Redis          `mapstructure:"redis" json:"redis" yaml:"redis"`
 	Chatwoot         Chatwoot       `mapstructure:"chatwoot" json:"chatwoot" yaml:"chatwoot"`

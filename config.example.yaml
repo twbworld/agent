@@ -18,6 +18,10 @@ tz: "Asia/Shanghai"
 # 允许跨域的域名
 cors:
   - "*"
+# 认证配置
+auth:
+  # 客服信息面板token
+  dashboard: ""
 # 数据库配置
 database:
   #数据库类型(sqlite3|mysql); 小应用sqlite3, 大应用mysql

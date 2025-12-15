@@ -1,5 +1,9 @@
 package config
 
+type Auth struct {
+	Dashboard string `mapstructure:"dashboard" json:"dashboard" yaml:"dashboard"`
+}
+
 type Mcp struct {
 	Url  string `mapstructure:"url" json:"url" yaml:"url"`
 	Auth string `mapstructure:"auth" json:"auth" yaml:"auth"`

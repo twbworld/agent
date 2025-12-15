@@ -63,7 +63,8 @@ func Start(ginServer *gin.Engine) {
 				keywordRoutes.POST("/force-sync", controller.Api.AdminApiGroup.KeywordApi.ForceSync)
 			}
 			adminRoutes.POST("/upload/image", controller.Api.AdminApiGroup.UploadApi.UploadImage)
-			adminRoutes.POST("/dashboard/details", controller.Api.AdminApiGroup.DashboardApi.GetDashboardDetails)
+
+			adminRoutes.POST("/dashboard/details", middleware.AuthCheck, controller.Api.AdminApiGroup.DashboardApi.GetDashboardDetails)
 		}
 	}
 
@@ -73,7 +74,7 @@ func Start(ginServer *gin.Engine) {
 	})
 
 	// Chatwoot仪表板应用 HTML 页面路由; 在chatwoot下"集成方式-仪表板应用"配置的, 用于在客服会话界面展示的页面
-	ginServer.GET("/admin/dashboard", func(ctx *gin.Context) {
+	ginServer.GET("/admin/dashboard", middleware.AuthCheck, func(ctx *gin.Context) {
 		ctx.HTML(http.StatusOK, "contact_details.html", nil)
 	})
 

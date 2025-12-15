@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
+	"sync"
+
 	"gitee.com/taoJie_1/mall-agent/global"
 	"golang.org/x/sync/errgroup"
-	"sync"
 )
 
 const (
@@ -139,8 +141,16 @@ func (s *dashboardService) GetDetails(ctx context.Context, userID, goodsID, orde
 		g.Go(func() error {
 			details, err := s._getGoodsDetails(gCtx, clientName, goodsID)
 			if err != nil {
-				global.Log.Errorf("获取商品详情失败: %v", err)
-				return nil
+				if strings.Contains(err.Error(), "上架") || strings.Contains(err.Error(), "下架") {
+					// 商品可能已下架，商城api会响应mcp错误, 这里模拟一个下架的商品详情返回
+					details = map[string]interface{}{
+						"status": "已下架",
+						"id":     goodsID,
+					}
+				} else {
+					global.Log.Errorf("获取商品详情失败: %v", err)
+					return nil
+				}
 			}
 			mu.Lock()
 			allDetails["product"] = details

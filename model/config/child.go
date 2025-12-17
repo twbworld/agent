@@ -2,6 +2,7 @@ package config
 
 type Auth struct {
 	Dashboard string `mapstructure:"dashboard" json:"dashboard" yaml:"dashboard"`
+	Keyword   string `mapstructure:"keyword" json:"keyword" yaml:"keyword"`
 }
 
 type Mcp struct {

@@ -20,8 +20,10 @@ cors:
   - "*"
 # 认证配置
 auth:
-  # 客服信息面板token
+  # Chatwoot仪表板应用Token
   dashboard: ""
+  # 商城后台嵌入页面的Token
+  keyword: ""
 # 数据库配置
 database:
   #数据库类型(sqlite3|mysql); 小应用sqlite3, 大应用mysql

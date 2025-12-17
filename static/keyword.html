@@ -47,7 +47,7 @@
 <body class="bg-gray-50 text-gray-800 font-sans transition-colors duration-500 ease-in-out dark:bg-gray-900 dark:text-gray-100">
 
   <div x-data="kbApp()" x-init="initData()" @scroll.window="scrolled = (window.pageYOffset > 20)"
-    class="w-full lg:w-[90%] xl:w-[80%] mx-auto p-6 pb-24">
+    class="w-full lg:w-[90%] xl:w-[80%] mx-auto p-6 pb-24" x-cloak>
 
     <!-- 顶部导航栏 -->
     <div
@@ -478,24 +478,38 @@
         allItems: [], searchQuery: '', page: 1, pageSize: 10, loading: false, newItem: null, maxQuestions: 20,
         toast: { show: false, msg: '' },
         scrolled: false,
+        // 获取 URL 中的 token 参数
+        token: new URLSearchParams(window.location.search).get('token') || '',
         // 初始化深色模式状态：读取本地存储或系统偏好
         darkMode: localStorage.getItem('theme') === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches),
 
         async request(url, method = 'GET', body = null, isFormData = false) {
           this.loading = true;
           try {
-            const opts = { method };
+            const opts = { method, headers: {} };
+
+            // 自动注入 Token 到 Header
+            if (this.token) {
+               opts.headers['Authorization'] = 'Bearer ' + this.token;
+            }
+
             if (isFormData) {
               opts.body = body;
             } else {
-              opts.headers = { 'Content-Type': 'application/json' };
+              opts.headers['Content-Type'] = 'application/json';
               if (body) opts.body = JSON.stringify(body);
             }
             const res = await fetch(url, opts);
+            // 鉴权失败时刷新页面触发 PageAuthCheck
+            if (res.status === 401) {
+                window.location.reload();
+                return;
+            }
             const json = await res.json();
             if (json.code !== 0) throw new Error(json.message);
             return json.data;
           } catch (e) {
+            console.error(e); // 打印错误以便排查
             this.showToast(e.message || '请求失败');
             throw e;
           } finally {
@@ -508,8 +522,12 @@
           this.applyTheme();
           try {
             const data = await this.request('/api/v1/admin/keywords');
+            // 安全处理数据，防止后端返回的 questions 为 null 导致页面白屏
             this.allItems = (data || []).map(item => ({
-              ...item, isEditing: false, editBuffer: this.createBuffer(item.answer, item.questions)
+              ...item,
+              questions: item.questions || [], // 确保 questions 是数组
+              isEditing: false,
+              editBuffer: this.createBuffer(item.answer, item.questions)
             }));
           } catch (e) { }
         },
@@ -530,7 +548,9 @@
         },
 
         createBuffer(answer = '', questions = []) {
-          return { answer, questions: questions.length ? JSON.parse(JSON.stringify(questions)) : [{ question: '', type: 'AI_SEMANTIC' }] };
+          // 安全处理 null 值
+          const qs = questions || [];
+          return { answer, questions: qs.length ? JSON.parse(JSON.stringify(qs)) : [{ question: '', type: 'AI_SEMANTIC' }] };
         },
 
         async handleGen(buffer, payload, insertIdx = -1) {
@@ -684,7 +704,12 @@
         get filteredItems() {
           if (!this.searchQuery) return this.allItems;
           const q = this.searchQuery.toLowerCase();
-          return this.allItems.filter(i => i.answer.toLowerCase().includes(q) || i.questions.some(sq => sq.question.toLowerCase().includes(q)));
+          // 安全处理 item.questions 为空的情况
+          return this.allItems.filter(i => {
+             const hasAns = i.answer && i.answer.toLowerCase().includes(q);
+             const hasQs = i.questions && i.questions.some(sq => sq.question.toLowerCase().includes(q));
+             return hasAns || hasQs;
+          });
         },
         get totalPages() { return Math.ceil(this.filteredItems.length / this.pageSize) || 1; },
         get pagedItems() { const s = (this.page - 1) * this.pageSize; return this.filteredItems.slice(s, s + this.pageSize); },

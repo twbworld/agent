@@ -53,6 +53,8 @@ func Start(ginServer *gin.Engine) {
 
 		// 知识库管理页面的 API 路由
 		adminRoutes := v1.Group("/admin")
+		// 为所有 admin 接口添加鉴权中间件
+		adminRoutes.Use(middleware.AuthCheck)
 		{
 			keywordRoutes := adminRoutes.Group("/keywords")
 			{
@@ -64,17 +66,17 @@ func Start(ginServer *gin.Engine) {
 			}
 			adminRoutes.POST("/upload/image", controller.Api.AdminApiGroup.UploadApi.UploadImage)
 
-			adminRoutes.POST("/dashboard/details", middleware.AuthCheck, controller.Api.AdminApiGroup.DashboardApi.GetDashboardDetails)
+			adminRoutes.POST("/dashboard/details", controller.Api.AdminApiGroup.DashboardApi.GetDashboardDetails)
 		}
 	}
 
-	// 知识库管理 HTML 页面路由
-	ginServer.GET("/keyword", func(ctx *gin.Context) {
+	// 知识库管理 HTML 页面路由, 增加页面鉴权
+	ginServer.GET("/keyword", middleware.PageAuthCheck, func(ctx *gin.Context) {
 		ctx.HTML(http.StatusOK, "keyword.html", nil)
 	})
 
-	// Chatwoot仪表板应用 HTML 页面路由; 在chatwoot下"集成方式-仪表板应用"配置的, 用于在客服会话界面展示的页面
-	ginServer.GET("/admin/dashboard", middleware.AuthCheck, func(ctx *gin.Context) {
+	// Chatwoot仪表板应用 HTML 页面路由; 在chatwoot下"集成方式-仪表板应用"配置的, 用于在客服会话界面展示的页面, 增加页面鉴权
+	ginServer.GET("/admin/dashboard", middleware.PageAuthCheck, func(ctx *gin.Context) {
 		ctx.HTML(http.StatusOK, "contact_details.html", nil)
 	})
 

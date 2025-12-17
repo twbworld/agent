@@ -87,6 +87,7 @@ type Ai struct {
 	KeywordSyncInterval       uint     `mapstructure:"keyword_sync_interval" json:"keyword_sync_interval" yaml:"keyword_sync_interval"`
 	KeywordReloadDebounce     uint     `mapstructure:"keyword_reload_debounce" json:"keyword_reload_debounce" yaml:"keyword_reload_debounce"`
 	HistoryMaxAge             int64    `mapstructure:"history_max_age" json:"history_max_age" yaml:"history_max_age"`
+	TransferMsgCooldown       int64    `mapstructure:"transfer_msg_cooldown" json:"transfer_msg_cooldown" yaml:"transfer_msg_cooldown"`
 	TransferKeywords          []string `mapstructure:"transfer_keywords" json:"transfer_keywords" yaml:"transfer_keywords"`
 }
 

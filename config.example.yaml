@@ -142,7 +142,14 @@ ai:
   keyword_reload_debounce: 600
   # 历史消息最大保留时间(秒), 超过此时间的消息将被过滤, 默认86400(24小时)
   history_max_age: 86400
-  # MCP服务配置
+  # 转人工提示消息的冷却时间(秒), 避免频繁发送转人工提示
+  transfer_msg_cooldown: 300
+  # 用于触发转人工的关键词列表
+  transfer_keywords:
+    - 人工
+    - 人工客服
+    - 转人工
+# MCP服务配置
 mcp_servers:
   # MCP服务命名
   mcp_name:

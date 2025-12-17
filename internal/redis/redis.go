@@ -23,6 +23,7 @@ const (
 	KeyPrefixProductCardLock     = "agent:lock:product_card_sent:"         // 发送卡片的分布式锁
 	KeyPrefixMessageHandled      = "agent:msg_handled:"                    // 消息已处理标志(幂等性)
 	KeyPrefixContactCreationLock = "agent:lock:contact_creation:"          // 创建会话的分布式锁
+	KeyPrefixTransferMsgSent     = "agent:transfer_msg_sent:"              // 转人工提示消息已发送的冷却Key
 )
 
 var ErrNil = redis.Nil

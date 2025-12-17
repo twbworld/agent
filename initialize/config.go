@@ -228,6 +228,9 @@ func handleConfig(c *config.Config) {
 	if c.Ai.HistoryMaxAge == 0 {
 		c.Ai.HistoryMaxAge = 86400
 	}
+	if c.Ai.TransferMsgCooldown == 0 {
+		c.Ai.TransferMsgCooldown = 300
+	}
 	if c.Chatwoot.Teams.PreSalesID == 0 {
 		c.Chatwoot.Teams.PreSalesID = 0
 	}

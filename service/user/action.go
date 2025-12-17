@@ -137,6 +137,27 @@ func (a *actionService) TransferToHuman(ctx context.Context, ConversationID uint
 		userMessage = message[0]
 	}
 
+	shouldSendMessage := false
+	// 只有当有内容需要发送时，才去抢锁
+	if userMessage != "" && global.RedisClient != nil {
+		cooldownKey := fmt.Sprintf("%s%d", redis.KeyPrefixTransferMsgSent, ConversationID)
+		ttlSeconds := global.Config.Ai.TransferMsgCooldown
+        if ttlSeconds <= 0 {
+            ttlSeconds = 300
+        }
+		ttl := time.Duration(ttlSeconds) * time.Second
+
+		acquired, err := global.RedisClient.SetNX(ctx, cooldownKey, "1", ttl).Result()
+
+		if err == nil && acquired {
+			shouldSendMessage = true
+		} else {
+			global.Log.Debugf("会话 %d 转人工提示处于冷却中或并发拦截，跳过发送消息: %s", ConversationID, userMessage)
+		}
+	} else if userMessage != "" && global.RedisClient == nil {
+		shouldSendMessage = true
+	}
+
 	// 第一阶段：并发执行“发送消息”和“创建备注”
 	g, gCtx := errgroup.WithContext(ctx)
 	if remark != "" {
@@ -147,7 +168,7 @@ func (a *actionService) TransferToHuman(ctx context.Context, ConversationID uint
 			return nil
 		})
 	}
-	if userMessage != "" {
+	if shouldSendMessage {
 		g.Go(func() error {
 			if err := global.ChatwootService.CreateMessage(gCtx, ConversationID, userMessage); err != nil {
 				global.Log.Warnf("[action]为会话 %d 发送转人工提示失败: %v", ConversationID, err)

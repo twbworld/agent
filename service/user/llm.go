@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"gitee.com/taoJie_1/mall-agent/dao"
 	"gitee.com/taoJie_1/mall-agent/global"
@@ -176,6 +177,11 @@ func (s *llmService) GenerateResponseOrToolCall(ctx context.Context, param *comm
 	if finalContent.Len() > 0 {
 		finalContent.WriteString("\n")
 	}
+
+	finalContent.WriteString("--- 当前系统时间 ---\n")
+	finalContent.WriteString(time.Now().Format("2006-01-02 15:04:05"))
+	finalContent.WriteString("\n\n")
+
 	finalContent.WriteString("--- 用户问题 ---\n")
 	finalContent.WriteString(param.Content)
 

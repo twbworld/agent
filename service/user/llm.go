@@ -47,7 +47,7 @@ func (s *llmService) Triage(ctx context.Context, content string, history []commo
 	var prompt strings.Builder
 
 	if len(history) > 0 {
-		prompt.WriteString("最近的对话历史:\n")
+		prompt.WriteString("--- 最近的对话历史 ---\n")
 		for _, msg := range history {
 			// 为保证prompt简洁，只显示最核心信息
 			fmt.Fprintf(&prompt, "- %s: %s\n", msg.Role, msg.Content)
@@ -60,21 +60,23 @@ func (s *llmService) Triage(ctx context.Context, content string, history []commo
 		global.Log.Warnf("[Triage] 构建上下文提示词失败: %v", err)
 		// 不中断流程，继续执行
 	} else if contextPrompt != "" {
-		prompt.WriteString("上下文信息:\n")
+		prompt.WriteString("--- 上下文信息 ---\n")
 		prompt.WriteString(contextPrompt)
 		prompt.WriteString("\n")
 	}
 
-	fmt.Fprintf(&prompt, "用户最新问题:\n\"%s\"\n\n", content)
+	prompt.WriteString("--- 用户最新问题 ---\n")
+	prompt.WriteString(content)
+	prompt.WriteString("\n\n")
 
 	if len(retrievedQuestions) > 0 {
-		prompt.WriteString("根据用户的提问，我们在知识库中检索到以下可能相关的问题：\n")
+		prompt.WriteString("--- 可能相关的问题 ---\n")
 		for i, q := range retrievedQuestions {
-			fmt.Fprintf(&prompt, "%d. \"%s\"\n", i+1, q)
+			fmt.Fprintf(&prompt, "%d. %s\n", i+1, q)
 		}
-		prompt.WriteString("\n")
 	}
-	prompt.WriteString("请结合以上所有信息进行综合判断。")
+
+	global.Log.Debugln("LLM-Triage提示词==========", prompt.String())
 
 	// 使用小模型和专用的Triage Prompt
 	triageResultJSON, err := global.LlmService.GetCompletion(ctx, enum.ModelSmall, enum.SystemPromptTriage, prompt.String(), 0.2)
@@ -138,10 +140,12 @@ func (s *llmService) GenerateResponseOrToolCall(ctx context.Context, param *comm
 					}
 				}
 
+				toolsListBuilder.WriteString(fmt.Sprintf("### name: %s.%s\n", clientName, tool.Name))
+				toolsListBuilder.WriteString(fmt.Sprintf("description: %s\n", tool.Description))
 				if argsSchema != "" {
-					toolsListBuilder.WriteString(fmt.Sprintf("- %s.%s: %s. Arguments: %s\n", clientName, tool.Name, tool.Description, argsSchema))
+					toolsListBuilder.WriteString(fmt.Sprintf("parameters: %s\n", argsSchema))
 				} else {
-					toolsListBuilder.WriteString(fmt.Sprintf("- %s.%s: %s\n", clientName, tool.Name, tool.Description))
+					toolsListBuilder.WriteString("parameters: {}\n")
 				}
 			}
 		}
@@ -159,7 +163,7 @@ func (s *llmService) GenerateResponseOrToolCall(ctx context.Context, param *comm
 		global.Log.Warnf("[GenerateResponseOrToolCall] 构建上下文提示词失败: %v", err)
 		// 不中断流程，继续执行
 	} else if contextPrompt != "" {
-		finalContent.WriteString("上下文信息:\n")
+		finalContent.WriteString("--- 上下文信息 ---\n")
 		finalContent.WriteString(contextPrompt)
 		finalContent.WriteString("\n")
 	}
@@ -176,18 +180,15 @@ func (s *llmService) GenerateResponseOrToolCall(ctx context.Context, param *comm
 		}
 	}
 
-	if finalContent.Len() > 0 {
-		finalContent.WriteString("\n")
-	}
-
 	finalContent.WriteString("--- 当前系统时间 ---\n")
 	finalContent.WriteString(time.Now().Format("2006-01-02 15:04:05"))
 	finalContent.WriteString("\n\n")
 
-	finalContent.WriteString("--- 用户问题 ---\n")
+	finalContent.WriteString("--- 用户最新问题 ---\n")
 	finalContent.WriteString(param.Content)
 
 	global.Log.Debugln("LLM提示词==========", finalContent.String())
+	global.Log.Debugln("LLM系统提示词==========", systemPromptBuilder.String())
 
 	return global.LlmService.ChatCompletionWithHistory(
 		ctx,
@@ -313,12 +314,7 @@ func (s *llmService) buildContextPrompt(sender common.Sender) (string, error) {
 		return "", nil
 	}
 
-	var prompt strings.Builder
-	prompt.WriteString("上下文信息:\n")
-	prompt.WriteString(attrBuilder.String())
-	prompt.WriteString("\n")
-
-	return prompt.String(), nil
+	return attrBuilder.String(), nil
 }
 
 func customAttributesToMap(attrs common.CustomAttributes) (map[string]interface{}, error) {
@@ -479,7 +475,7 @@ func (s *llmService) formatToolMessage(toolName string, descMap map[string]strin
 	}
 
 	finalContent := fmt.Sprintf(
-		"[工具名称]: %s\n[工具作用]: %s\n[返回结果]:\n%s",
+		"工具名称: %s\n工具作用: %s\n返回结果:%s",
 		toolName,
 		toolDescription,
 		content,

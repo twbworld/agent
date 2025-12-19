@@ -294,7 +294,7 @@
 
             const apiResponse = await response.json();
             if (apiResponse.code !== 0) {
-              throw new Error(apiResponse.message || '获取数据失败');
+              throw new Error(apiResponse.msg || '获取数据失败');
             }
 
             this.populateDetails(apiResponse.data);

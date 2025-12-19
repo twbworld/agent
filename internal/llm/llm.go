@@ -3,6 +3,7 @@ package llm
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 
 	"gitee.com/taoJie_1/mall-agent/model/common"
@@ -14,7 +15,6 @@ import (
 
 // client 封装了与LLM交互的底层逻辑
 type client struct {
-	log        *logrus.Logger
 	llmClients map[enum.LlmSize]*openai.Client
 	llmConfigs []config.Llm
 }
@@ -29,7 +29,6 @@ type Service interface {
 // NewClient 创建一个新的LLM客户端实例，并通过依赖注入初始化
 func NewClient(log *logrus.Logger, clients map[enum.LlmSize]*openai.Client, configs []config.Llm) Service {
 	return &client{
-		log:        log,
 		llmClients: clients,
 		llmConfigs: configs,
 	}
@@ -101,8 +100,7 @@ func (c *client) createChatCompletion(ctx context.Context, size enum.LlmSize, me
 		if errors.Is(err, context.Canceled) || ctx.Err() == context.Canceled {
 			return "", context.Canceled
 		}
-		c.log.Errorf("LLM API调用失败: %v", err)
-		return "", errors.New("LLM服务暂不可用, 请稍后再试")
+		return "", fmt.Errorf("LLM API调用失败:  %v", err)
 	}
 
 	if len(resp.Choices) == 0 || resp.Choices[0].Message.Content == "" {

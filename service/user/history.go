@@ -31,7 +31,8 @@ type HistoryService interface {
 	// GetOrFetch 封装了完整的“缓存优先”逻辑。
 	// 它首先尝试从Redis获取历史记录。如果缓存未命中，它将使用分布式锁来防止缓存击穿，
 	// 然后从Chatwoot API回源获取数据，最后将数据存入Redis并返回。
-	GetOrFetch(ctx context.Context, accountID, conversationID uint, currentMessage string) ([]common.LlmMessage, error)
+	// forceFetch: 可选参数，若为 true 则强制跳过缓存直接回源
+	GetOrFetch(ctx context.Context, accountID, conversationID uint, currentMessage string, forceFetch ...bool) ([]common.LlmMessage, error)
 
 	// Append 将一条或多条消息原子性地追加到指定会话的历史记录中，并刷新其TTL。
 	Append(ctx context.Context, conversationID uint, messages ...common.LlmMessage) error
@@ -47,24 +48,31 @@ func NewHistoryService() HistoryService {
 	return &historyService{}
 }
 
-func (s *historyService) GetOrFetch(ctx context.Context, accountID, conversationID uint, currentMessage string) ([]common.LlmMessage, error) {
+func (s *historyService) GetOrFetch(ctx context.Context, accountID, conversationID uint, currentMessage string, forceFetch ...bool) ([]common.LlmMessage, error) {
+	// 解析是否强制回源
+	isForce := len(forceFetch) > 0 && forceFetch[0]
+
 	if global.RedisClient == nil {
 		return nil, fmt.Errorf("Redis客户端未初始化")
 	}
 
-	// 1. 尝试从Redis获取聊天记录
-	history, err := global.RedisClient.GetConversationHistory(ctx, conversationID)
-	if err != nil && err != redis.ErrNil {
-		if errors.Is(err, context.Canceled) {
-			return nil, err
+	// 1. 尝试从Redis获取聊天记录 (非强制模式下)
+	if !isForce {
+		history, err := global.RedisClient.GetConversationHistory(ctx, conversationID)
+		if err != nil && err != redis.ErrNil {
+			if errors.Is(err, context.Canceled) {
+				return nil, err
+			}
+			global.Log.Warnf("从Redis获取会话 %d 历史记录失败: %v, 将尝试从Chatwoot获取", conversationID, err)
+		} else if history != nil {
+			global.Log.Debugf("会话 %d 历史记录从Redis缓存命中", conversationID)
+			return history, nil
 		}
-		global.Log.Warnf("从Redis获取会话 %d 历史记录失败: %v, 将尝试从Chatwoot获取", conversationID, err)
-	} else if history != nil {
-		global.Log.Debugf("会话 %d 历史记录从Redis缓存命中", conversationID)
-		return history, nil
+	} else {
+		global.Log.Debugf("会话 %d 触发强制回源，跳过缓存读取", conversationID)
 	}
 
-	// --- 缓存未命中，进入回源逻辑 ---
+	// --- 缓存未命中或强制回源，进入回源逻辑 ---
 
 	if global.ChatwootService == nil {
 		return nil, fmt.Errorf("Chatwoot客户端未初始化")
@@ -90,30 +98,39 @@ func (s *historyService) GetOrFetch(ctx context.Context, accountID, conversation
 
 	if locked {
 		// 2a. 成功获取锁，从Chatwoot API获取数据并缓存
-		global.Log.Debugf("会话 %d 历史记录Redis缓存未命中，成功获取锁，从Chatwoot API获取", conversationID)
+		if !isForce {
+			global.Log.Debugf("会话 %d 历史记录Redis缓存未命中，成功获取锁，从Chatwoot API获取", conversationID)
+		}
 		defer func() {
 			// 使用后台 context 确保即使原始请求取消，锁释放也能执行
 			if err := global.RedisClient.Del(context.Background(), lockKey).Err(); err != nil {
 				global.Log.Warnf("释放会话 %d 历史记录锁失败: %v", conversationID, err)
 			}
 		}()
-		// 在获取锁后，再次检查缓存，防止在获取锁的过程中，已有其他请求完成了缓存填充（双重检查锁定）
-		history, err := global.RedisClient.GetConversationHistory(ctx, conversationID)
-		if errors.Is(err, context.Canceled) {
-			return nil, err
+
+		// 在获取锁后，再次检查缓存（双重检查锁定），防止在获取锁的过程中，已有其他请求完成了缓存填充
+		// 注意：如果是强制回源(isForce=true)，则跳过此检查，确保从API拉取
+		if !isForce {
+			history, err := global.RedisClient.GetConversationHistory(ctx, conversationID)
+			if errors.Is(err, context.Canceled) {
+				return nil, err
+			}
+			if err == nil && history != nil {
+				global.Log.Debugf("获取锁后发现会话 %d 缓存已存在", conversationID)
+				return history, nil
+			}
 		}
-		if err == nil && history != nil {
-			global.Log.Debugf("获取锁后发现会话 %d 缓存已存在", conversationID)
-			return history, nil
-		}
+
 		return s.fetchAndCache(ctx, accountID, conversationID, currentMessage)
 	}
 
 	// 2b. 未获取到锁，说明其他goroutine正在回源，等待后重试
+	// 即使是强制回源，如果已有其他请求正在回源（持有锁），我们等待其结果也是“新”的，
+	// 因此不需要在锁被占用时执意去调API，等待锁释放读取Redis即可。
 	global.Log.Debugf("会话 %d 历史记录锁被占用，等待后重试", conversationID)
 	time.Sleep(200 * time.Millisecond) // 短暂等待
 
-	history, err = global.RedisClient.GetConversationHistory(ctx, conversationID)
+	history, err := global.RedisClient.GetConversationHistory(ctx, conversationID)
 	if err == nil && history != nil {
 		global.Log.Debugf("等待后，会话 %d 历史记录从Redis缓存命中", conversationID)
 		return history, nil

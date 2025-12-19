@@ -13,6 +13,7 @@ import (
 	"gitee.com/taoJie_1/mall-agent/model/config"
 	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/sashabaranov/go-openai"
 	"github.com/sirupsen/logrus"
 )
 
@@ -303,7 +304,7 @@ func (c *client) ExecuteTool(ctx context.Context, clientName string, toolName st
 	// 按需执行 连接-调用-关闭
 	session, err := mcpClient.Connect(ctx, transport, nil)
 	if err != nil {
-		return "", fmt.Errorf("执行工具时连接到MCP服务 '%s' 失败: %w", clientName, err)
+		return "", fmt.Errorf("[连接工具错误]%w", err)
 	}
 	defer session.Close()
 
@@ -314,17 +315,50 @@ func (c *client) ExecuteTool(ctx context.Context, clientName string, toolName st
 
 	res, err := session.CallTool(ctx, &params)
 	if err != nil {
-		return "", fmt.Errorf("调用工具 '%s' 失败: %w", params.Name, err)
+		return "", fmt.Errorf("[调用工具错误]%w", err)
 	}
 
 	if res.IsError {
-		var errorContent strings.Builder
+		// 优先提取面向Assistant(AI)的错误信息，避免拼接冗长的用户提示语
+		var assistantErr, userErr, defaultErr strings.Builder
 		for _, content := range res.Content {
 			if textContent, ok := content.(*mcp.TextContent); ok {
-				errorContent.WriteString(textContent.Text)
+				isAssistant := false
+				isUser := false
+				// 解析受众(Audience)标签
+				if textContent.Annotations != nil {
+					for _, role := range textContent.Annotations.Audience {
+						switch role {
+						case openai.ChatMessageRoleAssistant:
+							isAssistant = true
+						case openai.ChatMessageRoleUser:
+							isUser = true
+						}
+					}
+				}
+				if isAssistant {
+					assistantErr.WriteString(textContent.Text)
+				} else if isUser {
+					userErr.WriteString(textContent.Text)
+				} else {
+					defaultErr.WriteString(textContent.Text)
+				}
 			}
 		}
-		return "", fmt.Errorf("工具 '%s' 执行返回错误: %s", params.Name, errorContent.String())
+
+		// 按优先级返回: Assistant > User > Default
+		// Assistant信息通常包含具体的技术错误细节，最适合LLM进行自我修正或判断
+		if assistantErr.Len() > 0 {
+			return "", fmt.Errorf("[工具响应错误] %s", assistantErr.String())
+		}
+		if userErr.Len() > 0 {
+			return "", fmt.Errorf("[工具响应错误] %s", userErr.String())
+		}
+		if defaultErr.Len() > 0 {
+			return "", fmt.Errorf("[工具响应错误] %s", defaultErr.String())
+		}
+
+		return "", fmt.Errorf("[工具响应错误] 未知错误")
 	}
 
 	var resultBuilder strings.Builder

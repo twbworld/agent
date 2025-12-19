@@ -67,7 +67,7 @@ func (s *dashboardService) getGoodsDetails(ctx context.Context, clientName, good
 
 	resultStr, err := global.McpService.ExecuteTool(ctx, clientName, mcpToolQueryGoods, json.RawMessage(arguments))
 	if err != nil {
-		return nil, fmt.Errorf("调用MCP工具 %s 失败: %w", mcpToolQueryGoods, err)
+		return nil, fmt.Errorf("调用MCP工具 %s.%s 失败: %w", clientName, mcpToolQueryGoods, err)
 	}
 
 	var details map[string]interface{}
@@ -85,7 +85,7 @@ func (s *dashboardService) getOrderDetails(ctx context.Context, clientName, orde
 
 	resultStr, err := global.McpService.ExecuteTool(ctx, clientName, mcpToolQueryOrder, json.RawMessage(arguments))
 	if err != nil {
-		return nil, fmt.Errorf("调用MCP工具 %s 失败: %w", mcpToolQueryOrder, err)
+		return nil, fmt.Errorf("调用MCP工具 %s.%s 失败: %w", clientName, mcpToolQueryOrder, err)
 	}
 
 	var details map[string]interface{}
@@ -103,7 +103,7 @@ func (s *dashboardService) getUserDetails(ctx context.Context, clientName, userI
 
 	resultStr, err := global.McpService.ExecuteTool(ctx, clientName, mcpToolQueryUser, json.RawMessage(arguments))
 	if err != nil {
-		return nil, fmt.Errorf("调用MCP工具 %s 失败: %w", mcpToolQueryUser, err)
+		return nil, fmt.Errorf("调用MCP工具 %s.%s 失败: %w", clientName, mcpToolQueryUser, err)
 	}
 
 	var details map[string]interface{}
@@ -129,13 +129,19 @@ func (s *dashboardService) GetDetails(ctx context.Context, userID, goodsID, orde
 
 	var mu sync.Mutex
 	allDetails := make(map[string]interface{})
+	var firstErr error
 	g, gCtx := errgroup.WithContext(ctx)
 
 	if userID != "" {
 		g.Go(func() error {
 			details, err := s.getUserDetails(gCtx, clientName, userID)
 			if err != nil {
-				global.Log.Errorf("获取用户详情失败: %v", err)
+				global.Log.Errorf("%v", err)
+				mu.Lock()
+				if firstErr == nil {
+					firstErr = err
+				}
+				mu.Unlock()
 				return nil
 			}
 			mu.Lock()
@@ -156,7 +162,12 @@ func (s *dashboardService) GetDetails(ctx context.Context, userID, goodsID, orde
 						"id":     goodsID,
 					}
 				} else {
-					global.Log.Errorf("获取商品详情失败: %v", err)
+					global.Log.Errorf("%v", err)
+					mu.Lock()
+					if firstErr == nil {
+						firstErr = err
+					}
+					mu.Unlock()
 					return nil
 				}
 			}
@@ -171,7 +182,12 @@ func (s *dashboardService) GetDetails(ctx context.Context, userID, goodsID, orde
 		g.Go(func() error {
 			details, err := s.getOrderDetails(gCtx, clientName, orderID)
 			if err != nil {
-				global.Log.Errorf("获取订单详情失败: %v", err)
+				global.Log.Errorf("%v", err)
+				mu.Lock()
+				if firstErr == nil {
+					firstErr = err
+				}
+				mu.Unlock()
 				return nil
 			}
 			mu.Lock()
@@ -186,6 +202,9 @@ func (s *dashboardService) GetDetails(ctx context.Context, userID, goodsID, orde
 	}
 
 	if len(allDetails) == 0 {
+		if firstErr != nil {
+			return nil, firstErr
+		}
 		return nil, errors.New("未能获取到任何详情信息")
 	}
 

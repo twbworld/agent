@@ -187,6 +187,8 @@ func (s *llmService) GenerateResponseOrToolCall(ctx context.Context, param *comm
 	finalContent.WriteString("--- 用户问题 ---\n")
 	finalContent.WriteString(param.Content)
 
+	global.Log.Debugln("LLM提示词==========", finalContent.String())
+
 	return global.LlmService.ChatCompletionWithHistory(
 		ctx,
 		enum.ModelLarge,
@@ -208,7 +210,7 @@ func (s *llmService) ExecuteToolCalls(ctx context.Context, llmAnswer string, sen
 	if err != nil {
 		global.Log.Errorf("[ExecuteToolCalls] 解析工具调用JSON数组失败: %v", err)
 		return []common.LlmMessage{{
-			Role:    openai.ChatMessageRoleTool,
+			Role:    openai.ChatMessageRoleUser,
 			Content: fmt.Sprintf("工具调用格式错误: %v", err),
 		}}, nil
 	}
@@ -332,8 +334,6 @@ func customAttributesToMap(attrs common.CustomAttributes) (map[string]interface{
 	return attrMap, nil
 }
 
-
-
 // processSingleToolCall 处理单个工具调用的完整生命周期
 func (s *llmService) processSingleToolCall(ctx context.Context, toolCall common.ToolCallParams, sender common.Sender, toolsMap map[string]mcp.Tool, descMap map[string]string) common.LlmMessage {
 	var resultStr string
@@ -358,7 +358,7 @@ func (s *llmService) processSingleToolCall(ctx context.Context, toolCall common.
 	global.Log.Debugln(string(safeArgs), "得到工具结果===============")
 	rawResult, err := global.McpService.ExecuteTool(ctx, clientName, toolName, safeArgs)
 	if err != nil {
-		errMsg := fmt.Sprintf("工具 '%s' 调用失败: %v", toolCall.Name, err)
+		errMsg := fmt.Sprintf("[%s]%v", toolCall.Name, err)
 		global.Log.Errorf("[ExecuteToolCalls] %s", errMsg)
 		return s.formatToolMessage(toolCall.Name, descMap, errMsg)
 	}
@@ -486,7 +486,7 @@ func (s *llmService) formatToolMessage(toolName string, descMap map[string]strin
 	)
 
 	return common.LlmMessage{
-		Role:    openai.ChatMessageRoleTool,
+		Role:    openai.ChatMessageRoleUser,
 		Content: finalContent,
 	}
 }

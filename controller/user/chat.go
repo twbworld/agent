@@ -362,7 +362,7 @@ func (c *ChatApi) processMessageAsync(ctx context.Context, req common.ChatReques
 		global.Log.Debugf("会话 %d 处于转人工宽限期，AI将继续处理新消息", req.Conversation.ID)
 		isGracePeriodOverride = true
 	} else {
-		// 宽限期标志不存在，执行常规状态检查
+		// 宽限期标志仍然存在，执行常规状态检查
 		if errors.Is(err, context.Canceled) {
 			return
 		}
@@ -719,7 +719,7 @@ func (c *ChatApi) runComplexGeneration(ctx context.Context, req common.ChatReque
 		assistantMsg := common.LlmMessage{Role: openai.ChatMessageRoleAssistant, Content: llmAnswer}
 		intermediateMsgs = append(intermediateMsgs, assistantMsg)
 
-		toolResults, execErr := service.Service.UserServiceGroup.LlmService.ExecuteToolCalls(ctx, llmAnswer)
+		toolResults, execErr := service.Service.UserServiceGroup.LlmService.ExecuteToolCalls(ctx, llmAnswer, req.Conversation.Meta.Sender)
 		if execErr != nil {
 			global.Log.Errorf("[runComplexGeneration] 工具执行过程出错: %v", execErr)
 			// 出错不打断流程，让LLM根据错误信息（已包含在toolResults中）尝试恢复或告知用户

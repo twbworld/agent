@@ -14,6 +14,8 @@ import (
 	"gitee.com/taoJie_1/mall-agent/global"
 	"gitee.com/taoJie_1/mall-agent/model/common"
 	"gitee.com/taoJie_1/mall-agent/model/enum"
+	"gitee.com/taoJie_1/mall-agent/service/admin"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/sashabaranov/go-openai"
 	"golang.org/x/sync/errgroup"
 )
@@ -24,7 +26,7 @@ type LlmService interface {
 	// GenerateResponseOrToolCall 负责业务层面的决策，例如决定使用哪个模型、哪个Prompt，并生成初步回复或工具调用指令
 	GenerateResponseOrToolCall(ctx context.Context, param *common.ChatRequest, referenceDocs []dao.SearchResult, history []common.LlmMessage, sender common.Sender) (string, error)
 	// ExecuteToolCalls 解析LLM回复中的工具调用指令，并发执行MCP工具，并返回格式化后的工具消息列表
-	ExecuteToolCalls(ctx context.Context, llmAnswer string) ([]common.LlmMessage, error)
+	ExecuteToolCalls(ctx context.Context, llmAnswer string, sender common.Sender) ([]common.LlmMessage, error)
 	// SynthesizeToolResult 在工具调用后，综合所有信息（包括工具结果）生成最终的自然语言回复, 不需要知识库(向量)数据了
 	SynthesizeToolResult(ctx context.Context, history []common.LlmMessage) (string, error)
 }
@@ -196,113 +198,56 @@ func (s *llmService) GenerateResponseOrToolCall(ctx context.Context, param *comm
 }
 
 // ExecuteToolCalls 解析并执行工具调用
-func (s *llmService) ExecuteToolCalls(ctx context.Context, llmAnswer string) ([]common.LlmMessage, error) {
+func (s *llmService) ExecuteToolCalls(ctx context.Context, llmAnswer string, sender common.Sender) ([]common.LlmMessage, error) {
 	if global.McpService == nil {
 		return nil, fmt.Errorf("MCP服务未初始化")
 	}
 
-	// 提取JSON内容
-	startIdx := strings.Index(llmAnswer, "<tool_code>")
-	endIdx := strings.Index(llmAnswer, "</tool_code>")
-	if startIdx == -1 || endIdx == -1 {
-		return nil, fmt.Errorf("未找到完整的工具调用标签")
-	}
-
-	// +len("<tool_code>") 跳过标签本身
-	jsonContent := strings.TrimSpace(llmAnswer[startIdx+11 : endIdx])
-
-	// 处理 LLM 可能在 XML 标签内部再次包裹 Markdown 代码块的情况
-	if strings.HasPrefix(jsonContent, "```json") {
-		jsonContent = strings.TrimPrefix(jsonContent, "```json")
-		jsonContent = strings.TrimSuffix(jsonContent, "```")
-		jsonContent = strings.TrimSpace(jsonContent)
-	} else if strings.HasPrefix(jsonContent, "```") {
-		jsonContent = strings.TrimPrefix(jsonContent, "```")
-		jsonContent = strings.TrimSuffix(jsonContent, "```")
-		jsonContent = strings.TrimSpace(jsonContent)
-	}
-
-	var toolCalls common.ToolCalls
-	if err := json.Unmarshal([]byte(jsonContent), &toolCalls); err != nil {
+	// 1. 解析工具调用指令
+	toolCalls, err := s.parseToolCalls(llmAnswer)
+	if err != nil {
 		global.Log.Errorf("[ExecuteToolCalls] 解析工具调用JSON数组失败: %v", err)
-		// 解析失败时，将错误信息作为Tool Message返回，让LLM感知到错误
 		return []common.LlmMessage{{
 			Role:    openai.ChatMessageRoleTool,
 			Content: fmt.Sprintf("工具调用格式错误: %v", err),
 		}}, nil
 	}
-
 	if len(toolCalls) == 0 {
 		return nil, nil
 	}
 
-	// 获取工具描述以便在结果中增强上下文
+	// 2. 准备工具定义的快速查找映射
+	allToolsMap := make(map[string]mcp.Tool)
+	clients := global.McpService.GetAvailableToolsWithClient()
+	for cName, tools := range clients {
+		for _, t := range tools {
+			allToolsMap[cName+"."+t.Name] = t
+		}
+	}
 	toolDescriptions := global.McpService.GetToolDescriptions()
 
-	// 并发执行
+	// 3. 并发执行工具调用
 	var toolResults []common.LlmMessage
 	var mu sync.Mutex
 	g, gCtx := errgroup.WithContext(ctx)
 	g.SetLimit(5) // 限制并发数
 
 	for _, toolCall := range toolCalls {
-		toolCall := toolCall // 避免闭包陷阱
+		// 捕获循环变量
+		tc := toolCall
 		g.Go(func() error {
-			var toolResultContent string
-			parts := strings.SplitN(toolCall.Name, ".", 2)
-
-			// 验证工具名称格式
-			if len(parts) != 2 {
-				toolResultContent = fmt.Sprintf("工具名称格式错误，必须为 '客户端名称.工具名称'，实际为: '%s'", toolCall.Name)
-				global.Log.Errorf("[ExecuteToolCalls] %s", toolResultContent)
-			} else {
-				clientName, toolName := parts[0], parts[1]
-				result, err := global.McpService.ExecuteTool(gCtx, clientName, toolName, toolCall.Arguments)
-				if err != nil {
-					toolResultContent = fmt.Sprintf("工具 '%s' 调用失败: %v", toolCall.Name, err)
-					global.Log.Errorf("[ExecuteToolCalls] %s", toolResultContent)
-				} else {
-					toolResultContent = result
-					global.Log.Debugf("=================成功获取Mcp数据 for '%s': %s", toolCall.Name, toolResultContent)
-				}
-			}
-
-			// 处理数据敏感性: 对工具返回结果进行截断，防止Redis/Context爆满或泄露过多非必要信息
-			// 使用runes进行长度判断以支持多语言字符
-			const maxToolResultLength = 2048
-			runes := []rune(toolResultContent)
-			if len(runes) > maxToolResultLength {
-				toolResultContent = string(runes[:maxToolResultLength]) + "\n...(内容过长已截断)"
-			}
-
-			// 获取工具描述
-			toolDescription := "未知工具"
-			if desc, ok := toolDescriptions[toolCall.Name]; ok {
-				toolDescription = desc
-			}
-
-			// 构建结构化的返回消息
-			finalContent := fmt.Sprintf(
-				"[工具名称]: %s\n[工具作用]: %s\n[返回结果]:\n%s",
-				toolCall.Name,
-				toolDescription,
-				toolResultContent,
-			)
+			// 执行单个工具逻辑
+			msg := s.processSingleToolCall(gCtx, tc, sender, allToolsMap, toolDescriptions)
 
 			mu.Lock()
-			toolResults = append(toolResults, common.LlmMessage{
-				Role:    openai.ChatMessageRoleTool,
-				Content: finalContent,
-			})
+			toolResults = append(toolResults, msg)
 			mu.Unlock()
 			return nil
 		})
 	}
 
-	// 等待执行完成
 	if err := g.Wait(); err != nil {
 		global.Log.Errorf("[ExecuteToolCalls] 执行MCP工具组时发生错误: %v", err)
-		// 即使部分失败，也尽量返回已收集到的结果
 	}
 
 	return toolResults, nil
@@ -323,7 +268,7 @@ func (s *llmService) SynthesizeToolResult(ctx context.Context, history []common.
 	)
 }
 
-// buildContextPrompt 从 sender 对象构建上下文提示字符串
+//从 sender 对象构建上下文提示字符串
 func (s *llmService) buildContextPrompt(sender common.Sender) (string, error) {
 	attrMap, err := customAttributesToMap(sender.CustomAttributes)
 	if err != nil {
@@ -350,14 +295,13 @@ func (s *llmService) buildContextPrompt(sender common.Sender) (string, error) {
 	hasContent := false
 	for _, key := range keys {
 		value := attrMap[key]
-		// 忽略空值
 		if value == nil {
 			continue
 		}
 		if vStr, ok := value.(string); ok && vStr != "" {
 			attrBuilder.WriteString(fmt.Sprintf("- %s: %s\n", key, vStr))
 			hasContent = true
-		} else if _, ok := value.(string); !ok { // 处理非字符串类型
+		} else if _, ok := value.(string); !ok {
 			attrBuilder.WriteString(fmt.Sprintf("- %s: %v\n", key, value))
 			hasContent = true
 		}
@@ -375,10 +319,8 @@ func (s *llmService) buildContextPrompt(sender common.Sender) (string, error) {
 	return prompt.String(), nil
 }
 
-// customAttributesToMap 使用JSON序列化和反序列化将CustomAttributes结构体安全地转换为map
 func customAttributesToMap(attrs common.CustomAttributes) (map[string]interface{}, error) {
 	var attrMap map[string]interface{}
-	// 通过JSON序列化和反序列化来转换
 	bytes, err := json.Marshal(attrs)
 	if err != nil {
 		return nil, err
@@ -388,4 +330,192 @@ func customAttributesToMap(attrs common.CustomAttributes) (map[string]interface{
 		return nil, err
 	}
 	return attrMap, nil
+}
+
+
+
+// processSingleToolCall 处理单个工具调用的完整生命周期
+func (s *llmService) processSingleToolCall(ctx context.Context, toolCall common.ToolCallParams, sender common.Sender, toolsMap map[string]mcp.Tool, descMap map[string]string) common.LlmMessage {
+	var resultStr string
+	parts := strings.SplitN(toolCall.Name, ".", 2)
+
+	// 1. 校验名称格式
+	if len(parts) != 2 {
+		errMsg := fmt.Sprintf("工具名称格式错误，必须为 '客户端名称.工具名称'，实际为: '%s'", toolCall.Name)
+		global.Log.Errorf("[ExecuteToolCalls] %s", errMsg)
+		return s.formatToolMessage(toolCall.Name, descMap, errMsg)
+	}
+
+	clientName, toolName := parts[0], parts[1]
+
+	// 2. 参数安全注入与权限校验
+	safeArgs, shouldExecute, rejectReason := s.ensureSafeArguments(toolCall, sender, toolsMap)
+	if !shouldExecute {
+		return s.formatToolMessage(toolCall.Name, descMap, rejectReason)
+	}
+
+	// 3. 执行工具
+	global.Log.Debugln(string(safeArgs), "得到工具结果===============")
+	rawResult, err := global.McpService.ExecuteTool(ctx, clientName, toolName, safeArgs)
+	if err != nil {
+		errMsg := fmt.Sprintf("工具 '%s' 调用失败: %v", toolCall.Name, err)
+		global.Log.Errorf("[ExecuteToolCalls] %s", errMsg)
+		return s.formatToolMessage(toolCall.Name, descMap, errMsg)
+	}
+
+	// 4. 结果归属权校验 (IDOR 防护)
+	if !s.verifyToolResultOwnership(rawResult, sender) {
+		currentUserID := ""
+		if sender.Identifier != nil {
+			currentUserID = *sender.Identifier
+		}
+		warnMsg := fmt.Sprintf("安全拦截: 拒绝访问。数据归属与当前用户(%s)不一致。", currentUserID)
+		global.Log.Warnf("[ExecuteToolCalls] IDOR拦截: 工具=%s, User=%s", toolCall.Name, currentUserID)
+		return s.formatToolMessage(toolCall.Name, descMap, warnMsg)
+	}
+
+	resultStr = rawResult
+	global.Log.Debugf("=================成功获取Mcp数据 for '%s': %s", toolCall.Name, resultStr)
+
+	return s.formatToolMessage(toolCall.Name, descMap, resultStr)
+}
+
+// ensureSafeArguments 检查并注入必要的安全参数(如user_id)，返回处理后的参数和是否允许执行
+func (s *llmService) ensureSafeArguments(toolCall common.ToolCallParams, sender common.Sender, toolsMap map[string]mcp.Tool) (json.RawMessage, bool, string) {
+	toolDef, exists := toolsMap[toolCall.Name]
+	if !exists {
+		// 如果工具未定义在映射中，不做Schema检查，直接放行(或根据策略处理，此处保持原逻辑放行)
+		return toolCall.Arguments, true, ""
+	}
+
+	// 解析当前参数
+	var argMap map[string]interface{}
+	if err := json.Unmarshal(toolCall.Arguments, &argMap); err != nil {
+		// 参数格式错误，但交给后续流程处理或直接尝试执行
+		if argMap == nil {
+			argMap = make(map[string]interface{})
+		}
+	}
+
+	// 解析工具Schema以检查是否需要注入user_id
+	// 注意: 这种反射/Marshal方式虽然性能一般，但为了保持原逻辑的动态性暂时保留
+	var schemaMap map[string]interface{}
+	b, _ := json.Marshal(toolDef.InputSchema)
+	_ = json.Unmarshal(b, &schemaMap)
+
+	props, ok := schemaMap["properties"].(map[string]interface{})
+	if !ok {
+		return toolCall.Arguments, true, ""
+	}
+
+	// 检查是否包含 user_id 字段定义
+	if _, hasUser := props[admin.McpArgUserId]; hasUser {
+		var safeUserID string
+		if sender.Identifier != nil {
+			safeUserID = *sender.Identifier
+		}
+
+		// 拦截匿名用户
+		if safeUserID == "" {
+			global.Log.Warnf("[ExecuteToolCalls] 拦截匿名用户调用敏感工具: %s", toolCall.Name)
+			return nil, false, "执行失败: 当前用户未登录(无身份标识)，无法执行涉及用户数据的操作。"
+		}
+
+		// 强制注入/覆盖 user_id
+		argMap[admin.McpArgUserId] = safeUserID
+		if newArgs, err := json.Marshal(argMap); err == nil {
+			return newArgs, true, ""
+		}
+	}
+
+	return toolCall.Arguments, true, ""
+}
+
+// verifyToolResultOwnership 检查工具返回的数据是否属于当前用户
+func (s *llmService) verifyToolResultOwnership(rawResult string, sender common.Sender) bool {
+	// 尝试解析JSON结果
+	var resultData map[string]interface{}
+	if json.Unmarshal([]byte(rawResult), &resultData) != nil {
+		// 非JSON结果，默认安全(或无法判断归属)，放行
+		return true
+	}
+
+	// 提取数据中的用户ID
+	var dataUserID string
+	if v, ok := resultData[admin.McpArgUserId]; ok {
+		dataUserID = fmt.Sprintf("%v", v)
+	} else if v, ok := resultData["userId"]; ok {
+		dataUserID = fmt.Sprintf("%v", v)
+	} else if v, ok := resultData["uid"]; ok {
+		dataUserID = fmt.Sprintf("%v", v)
+	}
+
+	// 如果数据中没有包含用户ID，则认为不涉及敏感归属，放行
+	if dataUserID == "" {
+		return true
+	}
+
+	// 比较当前用户ID
+	currentUserID := ""
+	if sender.Identifier != nil {
+		currentUserID = *sender.Identifier
+	}
+
+	return dataUserID == currentUserID
+}
+
+// formatToolMessage 格式化工具返回的消息，并进行截断处理
+func (s *llmService) formatToolMessage(toolName string, descMap map[string]string, content string) common.LlmMessage {
+	// 截断结果
+	const maxToolResultLength = 2048
+	runes := []rune(content)
+	if len(runes) > maxToolResultLength {
+		content = string(runes[:maxToolResultLength]) + "\n...(内容过长已截断)"
+	}
+
+	toolDescription := "未知工具"
+	if desc, ok := descMap[toolName]; ok {
+		toolDescription = desc
+	}
+
+	finalContent := fmt.Sprintf(
+		"[工具名称]: %s\n[工具作用]: %s\n[返回结果]:\n%s",
+		toolName,
+		toolDescription,
+		content,
+	)
+
+	return common.LlmMessage{
+		Role:    openai.ChatMessageRoleTool,
+		Content: finalContent,
+	}
+}
+
+// parseToolCalls 提取并解析工具调用JSON
+func (s *llmService) parseToolCalls(llmAnswer string) (common.ToolCalls, error) {
+	startIdx := strings.Index(llmAnswer, "<tool_code>")
+	endIdx := strings.Index(llmAnswer, "</tool_code>")
+	if startIdx == -1 || endIdx == -1 {
+		return nil, fmt.Errorf("未找到完整的工具调用标签")
+	}
+
+	// +len("<tool_code>") 跳过标签本身
+	jsonContent := strings.TrimSpace(llmAnswer[startIdx+11 : endIdx])
+
+	// 处理 LLM 可能在 XML 标签内部再次包裹 Markdown 代码块的情况
+	if strings.HasPrefix(jsonContent, "```json") {
+		jsonContent = strings.TrimPrefix(jsonContent, "```json")
+		jsonContent = strings.TrimSuffix(jsonContent, "```")
+		jsonContent = strings.TrimSpace(jsonContent)
+	} else if strings.HasPrefix(jsonContent, "```") {
+		jsonContent = strings.TrimPrefix(jsonContent, "```")
+		jsonContent = strings.TrimSuffix(jsonContent, "```")
+		jsonContent = strings.TrimSpace(jsonContent)
+	}
+
+	var toolCalls common.ToolCalls
+	if err := json.Unmarshal([]byte(jsonContent), &toolCalls); err != nil {
+		return nil, err
+	}
+	return toolCalls, nil
 }

@@ -16,9 +16,10 @@ const (
 	// preferredMcpClient 是首选的MCP客户端名称
 	preferredMcpClient = "mall-mcp"
 	// 工具名称
-	mcpToolQueryGoods = "query_goods"
-	mcpToolQueryOrder = "query_order"
-	mcpToolQueryUser  = "query_user"
+	mcpToolQueryGoods     = "query_goods"
+	mcpToolQueryOrder     = "query_order"
+	mcpToolQueryOrderList = "query_order_list"
+	mcpToolQueryUser      = "query_user"
 	// 参数名称
 	mcpArgGoodsId = "goods_id"
 	mcpArgOrderId = "order_id"
@@ -95,6 +96,26 @@ func (s *dashboardService) getOrderDetails(ctx context.Context, clientName, orde
 	return details, nil
 }
 
+func (s *dashboardService) getOrderList(ctx context.Context, clientName, userID string) (map[string]interface{}, error) {
+	argsMap := map[string]interface{}{
+		McpArgUserId: userID,
+		"page_no": 1,
+		"page_size": 10,
+	}
+	arguments, _ := json.Marshal(argsMap)
+
+	resultStr, err := global.McpService.ExecuteTool(ctx, clientName, mcpToolQueryOrderList, json.RawMessage(arguments))
+	if err != nil {
+		return nil, fmt.Errorf("调用MCP工具 %s.%s 失败: %w", clientName, mcpToolQueryOrderList, err)
+	}
+
+	var details map[string]interface{}
+	if err := json.Unmarshal([]byte(resultStr), &details); err != nil {
+		return nil, fmt.Errorf("解析MCP返回的订单详情JSON失败: %w, 原始返回: %s", err, resultStr)
+	}
+	return details, nil
+}
+
 func (s *dashboardService) getUserDetails(ctx context.Context, clientName, userID string) (map[string]interface{}, error) {
 	argsMap := map[string]interface{}{
 		McpArgUserId: userID,
@@ -128,7 +149,7 @@ func (s *dashboardService) GetDetails(ctx context.Context, userID, goodsID, orde
 	}
 
 	var mu sync.Mutex
-	allDetails := make(map[string]interface{})
+	data := make(map[string]interface{})
 	var firstErr error
 	g, gCtx := errgroup.WithContext(ctx)
 
@@ -145,7 +166,23 @@ func (s *dashboardService) GetDetails(ctx context.Context, userID, goodsID, orde
 				return nil
 			}
 			mu.Lock()
-			allDetails["user"] = details
+			data["user"] = details
+			mu.Unlock()
+			return nil
+		})
+		g.Go(func() error {
+			details, err := s.getOrderList(gCtx, clientName, userID)
+			if err != nil {
+				global.Log.Errorf("%v", err)
+				mu.Lock()
+				if firstErr == nil {
+					firstErr = err
+				}
+				mu.Unlock()
+				return nil
+			}
+			mu.Lock()
+			data["order_list"] = details
 			mu.Unlock()
 			return nil
 		})
@@ -172,7 +209,7 @@ func (s *dashboardService) GetDetails(ctx context.Context, userID, goodsID, orde
 				}
 			}
 			mu.Lock()
-			allDetails["product"] = details
+			data["product"] = details
 			mu.Unlock()
 			return nil
 		})
@@ -191,7 +228,7 @@ func (s *dashboardService) GetDetails(ctx context.Context, userID, goodsID, orde
 				return nil
 			}
 			mu.Lock()
-			allDetails["order"] = details
+			data["order"] = details
 			mu.Unlock()
 			return nil
 		})
@@ -201,12 +238,12 @@ func (s *dashboardService) GetDetails(ctx context.Context, userID, goodsID, orde
 		return nil, err
 	}
 
-	if len(allDetails) == 0 {
+	if len(data) == 0 {
 		if firstErr != nil {
 			return nil, firstErr
 		}
 		return nil, errors.New("未能获取到任何详情信息")
 	}
 
-	return allDetails, nil
+	return data, nil
 }

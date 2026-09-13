@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"time"
 
-	"gitee.com/taoJie_1/mall-agent/global"
-	"gitee.com/taoJie_1/mall-agent/initialize"
-	"gitee.com/taoJie_1/mall-agent/task"
+	"github.com/twbworld/agent/global"
+	"github.com/twbworld/agent/initialize"
+	"github.com/twbworld/agent/task"
 )
 
 func main() {

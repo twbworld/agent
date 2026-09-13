@@ -2,7 +2,8 @@ package mcp
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -10,11 +11,11 @@ import (
 	"sync"
 	"time"
 
-	"gitee.com/taoJie_1/mall-agent/model/config"
 	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/sashabaranov/go-openai"
 	"github.com/sirupsen/logrus"
+	"github.com/twbworld/agent/model/config"
 )
 
 // Service 定义了与MCP服务交互的接口
@@ -28,7 +29,7 @@ type Service interface {
 	// GetToolDescriptions 返回一个从工具全名到其描述的映射
 	GetToolDescriptions() map[string]string
 	// ExecuteTool 解析并执行来自LLM的工具调用请求
-	ExecuteTool(ctx context.Context, clientName string, toolName string, arguments json.RawMessage) (string, error)
+	ExecuteTool(ctx context.Context, clientName string, toolName string, arguments jsontext.Value) (string, error)
 	// AddOrUpdateClient 添加或更新一个MCP客户端配置，并执行一次性连接以发现工具
 	AddOrUpdateClient(name string, cfg config.Mcp) error
 	// RemoveClient 移除一个MCP客户端
@@ -196,12 +197,12 @@ func (c *client) GetToolDescriptions() map[string]string {
 
 // coerceArguments 尝试根据工具的 schema 转换参数类型。
 // 例如，如果 schema 要求一个整数，它会将字符串 "123" 转换为数字 123。
-func (c *client) coerceArguments(arguments json.RawMessage, schema *jsonschema.Schema) (json.RawMessage, error) {
+func (c *client) coerceArguments(arguments jsontext.Value, schema *jsonschema.Schema) (jsontext.Value, error) {
 	if len(arguments) == 0 || string(arguments) == "null" {
 		return arguments, nil
 	}
 
-	var argsMap map[string]interface{}
+	var argsMap map[string]any
 	if err := json.Unmarshal(arguments, &argsMap); err != nil {
 		return nil, fmt.Errorf("无法将参数解码为map: %w", err)
 	}
@@ -249,7 +250,7 @@ func (c *client) coerceArguments(arguments json.RawMessage, schema *jsonschema.S
 	return coercedJSON, nil
 }
 
-func (c *client) ExecuteTool(ctx context.Context, clientName string, toolName string, arguments json.RawMessage) (string, error) {
+func (c *client) ExecuteTool(ctx context.Context, clientName string, toolName string, arguments jsontext.Value) (string, error) {
 	c.mu.RLock()
 	cfg, cfgOk := c.configs[clientName]
 	mcpClient, clientOk := c.clients[clientName]

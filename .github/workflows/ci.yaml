@@ -1,39 +1,45 @@
-
 name: CI
 
 on:
   workflow_dispatch:
-  workflow_call:
   push:
     branches:
-      - '*'
+      - '**'
     paths-ignore:
-      - '.*'
       - 'LICENSE'
       - 'Dockerfile'
       - 'README.md'
+      - 'docs/**'
   pull_request:
     branches:
-      - '*'
+      - '**'
     paths-ignore:
-      - '.*'
       - 'LICENSE'
       - 'README.md'
+      - 'docs/**'
 
 jobs:
   test:
     name: Run Go Tests and Build
-    uses: ./.github/workflows/test.yaml
+    uses: twbworld/proxy/.github/workflows/test.yaml@main
+
+  review:
+    needs: test
+    uses: twbworld/proxy/.github/workflows/review.yaml@main
+    permissions:
+      contents: read
+      security-events: write
+    secrets: inherit
 
   dependency-review:
     name: Check Dependencies for Vulnerabilities
-    if: github.base_ref != '' || github.head_ref != ''
+    if: github.event_name == 'pull_request'
     needs: test
     runs-on: ubuntu-latest
     permissions:
       contents: read
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Dependency Review
-        uses: actions/dependency-review-action@v3
+        uses: actions/dependency-review-action@v4

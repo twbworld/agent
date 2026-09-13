@@ -1,18 +1,22 @@
 package initialize
 
 import (
+	"context"
 	"flag"
 	"fmt"
+	"reflect"
 	"strings"
 	"sync"
 	"time"
 
-	"gitee.com/taoJie_1/mall-agent/global"
-	"gitee.com/taoJie_1/mall-agent/model/config"
-	"gitee.com/taoJie_1/mall-agent/task"
 	"github.com/fsnotify/fsnotify"
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/viper"
+	"github.com/twbworld/agent/global"
+	"github.com/twbworld/agent/model/config"
+	"github.com/twbworld/agent/service"
+	"github.com/twbworld/agent/task"
+	"golang.org/x/sync/errgroup"
 )
 
 var (
@@ -192,6 +196,15 @@ func handleConfig(c *config.Config) {
 	if c.Ai.VectorSimilarityThreshold == 0 {
 		c.Ai.VectorSimilarityThreshold = 0.9
 	}
+	if c.Ai.VectorSearchMinSimilarity == 0 {
+		c.Ai.VectorSearchMinSimilarity = 0.75
+	}
+	if c.Ai.AgentTemperature == 0 {
+		c.Ai.AgentTemperature = 0.5
+	}
+	if c.Ai.TriageTemperature == 0 {
+		c.Ai.TriageTemperature = 0.2
+	}
 	if c.Ai.TriageContextQuestions == 0 {
 		c.Ai.TriageContextQuestions = 2
 	}
@@ -215,6 +228,9 @@ func handleConfig(c *config.Config) {
 	}
 	if c.Ai.ChatMaxHistoryRounds == 0 {
 		c.Ai.ChatMaxHistoryRounds = 5
+	}
+	if c.Ai.MaxReActRounds == 0 {
+		c.Ai.MaxReActRounds = 5
 	}
 	if c.Ai.MaxAssistantPerRound == 0 {
 		c.Ai.MaxAssistantPerRound = 5
@@ -243,4 +259,170 @@ func handleConfig(c *config.Config) {
 	if c.Oss.StoragePath == "" {
 		c.Oss.StoragePath = "agent/"
 	}
+}
+
+// HandleConfigChange 检测配置变化并安全地、并发地重载相关服务
+func (i *Initializer) HandleConfigChange(oldConfig, newConfig *config.Config) {
+	i.reloadLock.Lock()
+	defer i.reloadLock.Unlock()
+
+	var restartNeeded []string
+
+	// --- 1. 检查不可热重载的高风险配置 ---
+	if !reflect.DeepEqual(oldConfig.Database, newConfig.Database) {
+		restartNeeded = append(restartNeeded, "database")
+	}
+	if oldConfig.GinAddr != newConfig.GinAddr {
+		restartNeeded = append(restartNeeded, "gin_addr")
+	}
+	if oldConfig.GinLogPath != newConfig.GinLogPath || oldConfig.RunLogPath != newConfig.RunLogPath {
+		restartNeeded = append(restartNeeded, "log_path")
+	}
+
+	// --- 2. 并发执行可安全热重载的任务 ---
+	eg, _ := errgroup.WithContext(context.Background())
+
+	// 时区重载
+	if oldConfig.Tz != newConfig.Tz {
+		eg.Go(func() error {
+			if err := i.InitTz(); err != nil {
+				global.Log.Errorf("热重载时区失败: %v", err)
+				return err
+			}
+			return nil
+		})
+	}
+
+	// Redis客户端重载
+	if !reflect.DeepEqual(oldConfig.Redis, newConfig.Redis) {
+		eg.Go(func() error {
+			if err := i.redisClose(); err != nil {
+				global.Log.Warnf("关闭旧Redis客户端失败: %v", err)
+			}
+			if err := i.initRedis(); err != nil {
+				global.Log.Errorf("热重载Redis客户端失败: %v", err)
+				return err
+			}
+			return nil
+		})
+	}
+
+	// Chatwoot客户端重载
+	if !reflect.DeepEqual(oldConfig.Chatwoot, newConfig.Chatwoot) {
+		eg.Go(func() error {
+			if err := i.initChatwoot(); err != nil {
+				global.Log.Errorf("热重载Chatwoot客户端失败: %v", err)
+				return err
+			}
+			return nil
+		})
+	}
+
+	// LLM服务重载
+	if !reflect.DeepEqual(oldConfig.Llm, newConfig.Llm) {
+		eg.Go(func() error {
+			if err := i.initLlm(); err != nil {
+				global.Log.Errorf("热重载LLM服务失败: %v", err)
+				return err
+			}
+			return nil
+		})
+	}
+
+	// 向量化模型服务重载
+	if !reflect.DeepEqual(oldConfig.LlmEmbedding, newConfig.LlmEmbedding) {
+		eg.Go(func() error {
+			if err := i.initLlmEmbedding(); err != nil {
+				global.Log.Errorf("热重载向量化模型服务失败: %v", err)
+				return err
+			}
+			return nil
+		})
+	}
+
+	// 向量数据库客户端重载
+	if !reflect.DeepEqual(oldConfig.VectorDb, newConfig.VectorDb) {
+		eg.Go(func() error {
+			if err := i.vectorDbClose(); err != nil {
+				global.Log.Warnf("关闭旧向量数据库客户端失败: %v", err)
+			}
+			if err := i.initVectorDb(); err != nil {
+				global.Log.Errorf("热重载向量数据库客户端失败: %v", err)
+				return err
+			}
+			return nil
+		})
+	}
+
+	// AI相关业务逻辑配置重载
+	if !reflect.DeepEqual(oldConfig.Ai, newConfig.Ai) {
+		eg.Go(func() error {
+			// 安全地更新 ActionService 的关键词配置，而不是重建整个 ServiceGroup
+			if service.Service.UserServiceGroup.ActionService != nil {
+				service.Service.UserServiceGroup.ActionService.UpdateTransferKeywords(newConfig.Ai.TransferKeywords)
+				global.Log.Info("热重载AI业务配置(转人工关键词)完成")
+			}
+			return nil
+		})
+	}
+
+	// MCP服务重载
+	if !reflect.DeepEqual(oldConfig.McpServers, newConfig.McpServers) {
+		eg.Go(func() error {
+			if global.McpService == nil {
+				// 如果之前未初始化，则进行初始化
+				if err := i.initMcp(); err != nil {
+					global.Log.Errorf("热重载期间初始化MCP服务失败: %v", err)
+					return err
+				}
+				return nil
+			}
+
+			oldMap := oldConfig.McpServers
+			newMap := newConfig.McpServers
+
+			for name, oldCfg := range oldMap {
+				if newCfg, ok := newMap[name]; !ok {
+					// 被移除
+					global.McpService.RemoveClient(name)
+				} else if !reflect.DeepEqual(oldCfg, newCfg) {
+					// 被修改
+					global.McpService.AddOrUpdateClient(name, newCfg)
+				}
+			}
+
+			// 新增的
+			for name, newCfg := range newMap {
+				if _, ok := oldMap[name]; !ok {
+					global.McpService.AddOrUpdateClient(name, newCfg)
+				}
+			}
+			return nil
+		})
+	}
+
+	// OSS 服务重载
+	if !reflect.DeepEqual(oldConfig.Oss, newConfig.Oss) {
+		eg.Go(func() error {
+			if err := i.ossClose(); err != nil {
+				global.Log.Warnf("关闭旧OSS客户端失败: %v", err)
+			}
+			if err := i.initOss(); err != nil {
+				global.Log.Errorf("热重载OSS客户端失败: %v", err)
+				return err
+			}
+			return nil
+		})
+	}
+
+	if err := eg.Wait(); err != nil {
+		global.Log.Errorf("并发热重载过程中发生错误: %v", err)
+	}
+
+	// --- 3. 如果有需要重启的变更，发出统一警告 ---
+	if len(restartNeeded) > 0 {
+		global.Log.Warnf("检测到存在需要 重启服务 才能生效的配置变更: [%s]。", strings.Join(restartNeeded, ", "))
+	}
+
+	global.Log.Info("配置变更处理完成")
 }

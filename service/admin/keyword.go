@@ -2,6 +2,7 @@ package admin
 
 import (
 	"context"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"sort"
@@ -9,14 +10,15 @@ import (
 	"sync"
 	"time"
 
-	"gitee.com/taoJie_1/mall-agent/internal/chatwoot"
-
-	"gitee.com/taoJie_1/mall-agent/dao"
-	"gitee.com/taoJie_1/mall-agent/global"
-	"gitee.com/taoJie_1/mall-agent/model/common"
-	"gitee.com/taoJie_1/mall-agent/model/enum"
-	"gitee.com/taoJie_1/mall-agent/task"
-	"gitee.com/taoJie_1/mall-agent/utils"
+	"github.com/sashabaranov/go-openai"
+	"github.com/twbworld/agent/dao"
+	"github.com/twbworld/agent/global"
+	"github.com/twbworld/agent/internal/chatwoot"
+	"github.com/twbworld/agent/internal/llm"
+	"github.com/twbworld/agent/model/common"
+	"github.com/twbworld/agent/model/enum"
+	"github.com/twbworld/agent/task"
+	"github.com/twbworld/agent/utils"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -143,7 +145,6 @@ func (s *keywordService) UpsertItem(ctx context.Context, req *common.UpsertKnowl
 	g.SetLimit(10)
 
 	for _, q := range req.Questions {
-		q := q
 		g.Go(func() error {
 			shortCode := s.buildShortCode(q.Type, q.Question)
 			newResp, err := global.ChatwootService.CreateCannedResponse(gCtx, shortCode, req.Answer)
@@ -209,19 +210,60 @@ func (s *keywordService) GenerateQuestions(ctx context.Context, req *common.Gene
 		prompt = enum.SystemPromptGenQuestionFromContent
 	}
 
-	// 要求 LLM 返回换行分隔的列表，便于解析。
-	fullPrompt := fmt.Sprintf("%s\n\n%s", req.Context, enum.SystemPromptGenQuestionInstruction)
+	// 定义符合 Structured Outputs 要求的严格 Schema 约束
+	schema := map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"questions": map[string]any{
+				"type": "array",
+				"items": map[string]any{
+					"type": "string",
+				},
+				"description": "生成的相关问题列表",
+			},
+		},
+		"required":             []string{"questions"},
+		"additionalProperties": false,
+	}
 
-	rawResult, err := global.LlmService.GetCompletion(ctx, enum.ModelSmall, prompt, fullPrompt, 0.5)
+	// 使用结构化输出调用小模型
+	respMsg, err := global.LlmService.Chat(ctx, &llm.ChatRequest{
+		Size:         enum.ModelSmall,
+		SystemPrompt: prompt,
+		Messages: []common.LlmMessage{
+			{Role: openai.ChatMessageRoleUser, Content: req.Context},
+		},
+		SchemaName:      enum.SchemaNameGenerateQuestion,
+		Schema:          schema,
+		Strict:          true,
+		Temperature:     new(float32(0.5)),
+		DisableThinking: true,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("调用LLM生成问题失败: %w", err)
 	}
 
-	questions := strings.Split(rawResult, "\n")
+	// 容错清洗：部分开源模型可能在 JSON 外包裹 Markdown 代码块
+	jsonContent := strings.TrimSpace(respMsg.Content)
+	if after, ok := strings.CutPrefix(jsonContent, "```json"); ok {
+		jsonContent = after
+		jsonContent = strings.TrimSuffix(jsonContent, "```")
+		jsonContent = strings.TrimSpace(jsonContent)
+	} else if after, ok := strings.CutPrefix(jsonContent, "```"); ok {
+		jsonContent = after
+		jsonContent = strings.TrimSuffix(jsonContent, "```")
+		jsonContent = strings.TrimSpace(jsonContent)
+	}
+
+	var resp common.GenerateQuestionResponse
+	if err := json.Unmarshal([]byte(jsonContent), &resp); err != nil {
+		return nil, fmt.Errorf("解析问题JSON失败: %w, 原始返回: %s", err, respMsg.Content)
+	}
+
+	// 保底过滤，剔除空字符串
 	var cleanedQuestions []string
-	for _, q := range questions {
-		trimmed := strings.TrimSpace(q)
-		if trimmed != "" {
+	for _, q := range resp.Questions {
+		if trimmed := strings.TrimSpace(q); trimmed != "" {
 			cleanedQuestions = append(cleanedQuestions, trimmed)
 		}
 	}
@@ -258,8 +300,7 @@ func (s *keywordService) findAndDeleteByGroupID(ctx context.Context, groupID str
 
 	g, gCtx := errgroup.WithContext(ctx)
 	g.SetLimit(10)
-	for _, r := range responsesToDelete {
-		resp := r
+	for _, resp := range responsesToDelete {
 		g.Go(func() error {
 			return global.ChatwootService.DeleteCannedResponse(gCtx, resp.Id)
 		})
@@ -338,8 +379,8 @@ func (s *keywordService) parseShortCode(shortCode string) (qType enum.KeywordTyp
 	if hybridPrefix != "" && strings.HasPrefix(shortCode, hybridPrefix) {
 		return enum.KeywordTypeHybrid, strings.TrimPrefix(shortCode, hybridPrefix)
 	}
-	if strings.HasPrefix(shortCode, semanticPrefix) {
-		return enum.KeywordTypeSemantic, strings.TrimPrefix(shortCode, semanticPrefix)
+	if after, ok := strings.CutPrefix(shortCode, semanticPrefix); ok {
+		return enum.KeywordTypeSemantic, after
 	}
 	return enum.KeywordTypeExact, shortCode
 }

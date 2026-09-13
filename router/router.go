@@ -4,10 +4,10 @@ import (
 	"net/http"
 	"strings"
 
-	"gitee.com/taoJie_1/mall-agent/controller"
-	"gitee.com/taoJie_1/mall-agent/global"
-	"gitee.com/taoJie_1/mall-agent/middleware"
-	"gitee.com/taoJie_1/mall-agent/model/common"
+	"github.com/twbworld/agent/controller"
+	"github.com/twbworld/agent/global"
+	"github.com/twbworld/agent/middleware"
+	"github.com/twbworld/agent/model/common"
 
 	"github.com/gin-gonic/gin"
 )

@@ -4,8 +4,8 @@ import (
 	"context"
 	"database/sql"
 
-	"gitee.com/taoJie_1/mall-agent/dao"
-	"gitee.com/taoJie_1/mall-agent/global"
+	"github.com/twbworld/agent/dao"
+	"github.com/twbworld/agent/global"
 )
 
 type VectorService interface {
@@ -15,7 +15,7 @@ type VectorService interface {
 
 type vectorService struct{}
 
-func NewVectorService() *vectorService {
+func NewVectorService() VectorService {
 	return &vectorService{}
 }
 

@@ -5,12 +5,12 @@
 # ide
 .idea/
 .project/
-.vscode/*
+.vscode/
+.vs/
 !.vscode/settings.json
 !.vscode/tasks.json
 !.vscode/launch.json
 !.vscode/extensions.json
-.vs/
 *.tmlanguage.cache
 *.tmPreferences.cache
 *.stTheme.cache
@@ -22,6 +22,7 @@ vendor/
 _vendor/
 *.ipr
 *.iml
+！
 
 #js
 node_modules/
@@ -37,9 +38,8 @@ temp/
 
 #log
 logs/*
-!logs/.gitkeep
 log/*
-!log/.gitkeep
+*.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
@@ -71,10 +71,11 @@ ehthumbs_vista.db
 /jspm_packages
 /bower_components
 .eslintcache
+.env
 /config.yaml
 /*.db
-/*.db*
-__debug*
+repomix-output.xml
+
 
 /worktree*/
 .phpunit.result.cache

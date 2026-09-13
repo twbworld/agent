@@ -1,8 +1,8 @@
 package initialize
 
 import (
-	"gitee.com/taoJie_1/mall-agent/global"
-	"gitee.com/taoJie_1/mall-agent/task"
+	"github.com/twbworld/agent/global"
+	"github.com/twbworld/agent/task"
 )
 
 // loadData 加载业务所需数据

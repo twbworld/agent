@@ -6,12 +6,12 @@ import (
 	"strings"
 	"time"
 
-	"gitee.com/taoJie_1/mall-agent/model/db"
+	"github.com/twbworld/agent/model/db"
 )
 
 type dbUtils struct{}
 
-func (u *dbUtils) getBatchInsertSql(d db.Dbfunc, data []map[string]interface{}) (string, []interface{}, error) {
+func (u *dbUtils) getBatchInsertSql(d db.Dbfunc, data []map[string]any) (string, []any, error) {
 	if len(data) == 0 {
 		return "", nil, nil
 	}
@@ -37,7 +37,7 @@ func (u *dbUtils) getBatchInsertSql(d db.Dbfunc, data []map[string]interface{}) 
 	fields.WriteByte(')')
 
 	valueStrings := make([]string, 0, len(data))
-	valueArgs := make([]interface{}, 0, len(data)*len(keys))
+	valueArgs := make([]any, 0, len(data)*len(keys))
 	tags := db.GetBaseFieldDbTags()
 	now := time.Now().Unix()
 
@@ -81,15 +81,15 @@ func (u *dbUtils) getBatchInsertSql(d db.Dbfunc, data []map[string]interface{}) 
 	return sql.String(), valueArgs, nil
 }
 
-func (u *dbUtils) getUpdateSql(d db.Dbfunc, id uint, data map[string]interface{}) (string, []interface{}) {
+func (u *dbUtils) getUpdateSql(d db.Dbfunc, id uint, data map[string]any) (string, []any) {
 	if len(data) < 1 {
-		return ``, []interface{}{}
+		return ``, []any{}
 	}
 
 	var (
 		fields strings.Builder
 		sql    strings.Builder
-		args   []interface{} = make([]interface{}, 0, len(data))
+		args   []any = make([]any, 0, len(data))
 	)
 
 	for k, v := range data {

@@ -1,7 +1,7 @@
 package controller
 
-import "gitee.com/taoJie_1/mall-agent/controller/user"
-import "gitee.com/taoJie_1/mall-agent/controller/admin"
+import "github.com/twbworld/agent/controller/user"
+import "github.com/twbworld/agent/controller/admin"
 
 var Api = new(ApiGroup)
 

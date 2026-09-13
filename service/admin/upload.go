@@ -3,7 +3,7 @@ package admin
 import (
 	"errors"
 	"fmt"
-	"gitee.com/taoJie_1/mall-agent/global"
+	"github.com/twbworld/agent/global"
 	"mime/multipart"
 	"net/http"
 	"strings"
@@ -57,7 +57,7 @@ func (s *uploadService) UploadImage(file *multipart.FileHeader) (string, error) 
 		return "", fmt.Errorf("无法读取文件头: %w", err)
 	}
 	// http.DetectContentType 会返回 "mime/type; charset=..." 的格式
-	fileType := strings.Split(http.DetectContentType(buffer), ";")[0]
+	fileType, _, _ := strings.Cut(http.DetectContentType(buffer), ";")
 
 	if !allowedImageTypes[fileType] {
 		return "", fmt.Errorf("不支持的文件类型: %s", fileType)

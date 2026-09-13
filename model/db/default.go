@@ -4,8 +4,8 @@ import (
 	"reflect"
 	"sync"
 
-	"gitee.com/taoJie_1/mall-agent/global"
-	"gitee.com/taoJie_1/mall-agent/utils"
+	"github.com/twbworld/agent/global"
+	"github.com/twbworld/agent/utils"
 )
 
 // 所有数据库结构体 都需实现的接口
@@ -42,7 +42,7 @@ func GetBaseFieldDbTags() struct {
 	UpdatedAtDbTag string
 } {
 	once.Do(func() {
-		t := reflect.TypeOf(BaseField{})
+		t := reflect.TypeFor[BaseField]()
 
 		if field, found := t.FieldByName("CreatedAt"); found {
 			baseFieldInfo.CreatedAtDbTag = field.Tag.Get("db")

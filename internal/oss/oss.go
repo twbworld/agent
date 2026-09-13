@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"gitee.com/taoJie_1/mall-agent/model/config"
-	"gitee.com/taoJie_1/mall-agent/utils"
 	"github.com/aliyun/aliyun-oss-go-sdk/oss"
+	"github.com/twbworld/agent/model/config"
+	"github.com/twbworld/agent/utils"
 )
 
 // Service 定义对象存储服务的接口
@@ -36,10 +36,10 @@ type aliyunOssService struct {
 func NewClient(cfg config.Oss, location *time.Location) (Service, error) {
 	// OSS SDK 的 Endpoint 不包含协议头，如果配置中包含了协议头，需要去除
 	endpoint := cfg.Endpoint
-	if strings.HasPrefix(endpoint, "http://") {
-		endpoint = strings.TrimPrefix(endpoint, "http://")
-	} else if strings.HasPrefix(endpoint, "https://") {
-		endpoint = strings.TrimPrefix(endpoint, "https://")
+	if after, ok := strings.CutPrefix(endpoint, "http://"); ok {
+		endpoint = after
+	} else if after, ok := strings.CutPrefix(endpoint, "https://"); ok {
+		endpoint = after
 	}
 
 	client, err := oss.New(endpoint, cfg.AccessKeyId, cfg.AccessKeySecret)

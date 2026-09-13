@@ -3,9 +3,9 @@ package middleware
 import (
 	"net/http"
 
-	"gitee.com/taoJie_1/mall-agent/global"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	"github.com/twbworld/agent/global"
 )
 
 // 跨域

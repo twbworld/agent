@@ -1,28 +1,78 @@
 package initialize
 
 import (
+	"bytes"
 	"context"
+	"encoding/json/v2"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"time"
 
-	"gitee.com/taoJie_1/mall-agent/dao"
-	"gitee.com/taoJie_1/mall-agent/global"
-	"gitee.com/taoJie_1/mall-agent/internal/chatwoot"
-	"gitee.com/taoJie_1/mall-agent/internal/embedding"
-	"gitee.com/taoJie_1/mall-agent/internal/llm"
-	"gitee.com/taoJie_1/mall-agent/internal/mcp"
-	"gitee.com/taoJie_1/mall-agent/internal/oss"
-	"gitee.com/taoJie_1/mall-agent/internal/redis"
-	"gitee.com/taoJie_1/mall-agent/internal/vector"
-	"gitee.com/taoJie_1/mall-agent/model/enum"
-	"gitee.com/taoJie_1/mall-agent/utils"
 	"github.com/sashabaranov/go-openai"
 	"github.com/sirupsen/logrus"
+	"github.com/twbworld/agent/dao"
+	"github.com/twbworld/agent/global"
+	"github.com/twbworld/agent/internal/chatwoot"
+	"github.com/twbworld/agent/internal/embedding"
+	"github.com/twbworld/agent/internal/llm"
+	"github.com/twbworld/agent/internal/mcp"
+	"github.com/twbworld/agent/internal/oss"
+	"github.com/twbworld/agent/internal/redis"
+	"github.com/twbworld/agent/internal/vector"
+	"github.com/twbworld/agent/model/enum"
+	"github.com/twbworld/agent/utils"
 	"golang.org/x/sync/errgroup"
 )
+
+type llmTransport struct {
+	Base http.RoundTripper
+}
+
+func (t *llmTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	// 1. 卫语句检查：非目标请求直接透传，0 级嵌套
+	enabled, _ := req.Context().Value(llm.DisableThinkingKey).(bool)
+	if !enabled || req.Body == nil {
+		return t.Base.RoundTrip(req)
+	}
+
+	// 2. 注入参数（内部做好容错，失败也不中断主请求）
+	_ = injectDisableThinking(req)
+
+	return t.Base.RoundTrip(req)
+}
+
+// injectDisableThinking 篡改请求体，注入 {"enable_thinking": false}
+func injectDisableThinking(req *http.Request) error {
+	bodyBytes, err := io.ReadAll(req.Body)
+	if err != nil {
+		return err
+	}
+	// 防御性保底：读取后立即恢复未修改的 Body，确保后续无论在哪一步出错退出，原请求都不受损
+	req.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+
+	var bodyMap map[string]any
+	if err := json.Unmarshal(bodyBytes, &bodyMap); err != nil {
+		return err
+	}
+
+	bodyMap["enable_thinking"] = false
+
+	newBodyBytes, err := json.Marshal(bodyMap)
+	if err != nil {
+		return err
+	}
+
+	// 覆写篡改后的请求体
+	req.Body = io.NopCloser(bytes.NewReader(newBodyBytes))
+	req.ContentLength = int64(len(newBodyBytes))
+	req.GetBody = func() (io.ReadCloser, error) {
+		return io.NopCloser(bytes.NewReader(newBodyBytes)), nil
+	}
+
+	return nil
+}
 
 // setupLogFile 是一个辅助函数，用于创建和打开一个每日轮转的日志文件。
 func (i *Initializer) setupLogFile(logPath string) (*os.File, error) {
@@ -62,13 +112,11 @@ func (i *Initializer) InitLog() error {
 
 	global.Log = logrus.New()
 	global.Log.SetFormatter(&CustomJSONFormatter{
-		JSONFormatter: logrus.JSONFormatter{
-			TimestampFormat: time.RFC3339,
-			FieldMap: logrus.FieldMap{
-				logrus.FieldKeyLevel: "level",
-				logrus.FieldKeyMsg:   "msg",
-				logrus.FieldKeyTime:  "time",
-			},
+		TimestampFormat: time.RFC3339,
+		FieldMap: logrus.FieldMap{
+			logrus.FieldKeyLevel: "level",
+			logrus.FieldKeyMsg:   "msg",
+			logrus.FieldKeyTime:  "time",
 		},
 	})
 	if global.Config.Debug {
@@ -179,19 +227,18 @@ func (i *Initializer) initLlm() error {
 		// HTTP客户端的超时时间必须 >= 业务Context的超时时间，否则Context控制将失效
 		minSafeTimeout := global.Config.Ai.AsyncJobTimeout
 
-		finalTimeout := cfg.Timeout
-		if finalTimeout < minSafeTimeout {
-			finalTimeout = minSafeTimeout
-		}
+		finalTimeout := max(cfg.Timeout, minSafeTimeout)
 
-		config.HTTPClient = &http.Client{Timeout: time.Duration(finalTimeout) * time.Second}
+		config.HTTPClient = &http.Client{
+			Timeout:   time.Duration(finalTimeout) * time.Second,
+			Transport: &llmTransport{Base: http.DefaultTransport},
+		}
 		llmClients[enum.LlmSize(cfg.Size)] = openai.NewClientWithConfig(config)
 	}
 
 	g, gCtx := errgroup.WithContext(context.Background())
 	// 并发地对所有配置的LLM服务进行连接测试
 	for _, cfg := range global.Config.Llm {
-		cfg := cfg // 避免闭包陷阱
 		g.Go(func() error {
 			size := enum.LlmSize(cfg.Size)
 			client := llmClients[size]
@@ -229,10 +276,7 @@ func (i *Initializer) initLlmEmbedding() error {
 	config.BaseURL = cfg.Url
 
 	// 合理设置Embedding客户端的超时时间
-	finalTimeout := cfg.BatchTimeout
-	if cfg.Timeout > finalTimeout {
-		finalTimeout = cfg.Timeout
-	}
+	finalTimeout := max(cfg.Timeout, cfg.BatchTimeout)
 
 	if finalTimeout == 0 {
 		finalTimeout = 60

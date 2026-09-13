@@ -3,7 +3,7 @@ package chatwoot
 import (
 	"bytes"
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"fmt"
 	"io"
 	"net/http"
@@ -109,7 +109,7 @@ type CreateMessageRequest struct {
 	MessageType       ChatwootWebhook `json:"message_type"`
 	Private           bool            `json:"private"`
 	ContentType       ContentType     `json:"content_type"`
-	ContentAttributes interface{}     `json:"content_attributes,omitempty"`
+	ContentAttributes any             `json:"content_attributes,omitempty"`
 }
 
 // CardAction 定义了卡片中的动作按钮
@@ -267,7 +267,7 @@ const (
 )
 
 // sendRequest 是一个通用的请求发送函数，用于处理所有与Chatwoot API的交互
-func (c *Client) sendRequest(ctx context.Context, method, path string, token tokenType, requestBody, responsePayload interface{}) error {
+func (c *Client) sendRequest(ctx context.Context, method, path string, token tokenType, requestBody, responsePayload any) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -306,7 +306,7 @@ func (c *Client) sendRequest(ctx context.Context, method, path string, token tok
 	}
 
 	if responsePayload != nil {
-		if err := json.NewDecoder(resp.Body).Decode(responsePayload); err != nil {
+		if err := json.UnmarshalRead(resp.Body, responsePayload); err != nil {
 			return fmt.Errorf("解析JSON响应失败: %w", err)
 		}
 	}

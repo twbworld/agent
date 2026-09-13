@@ -7,13 +7,13 @@ import (
 	"os"
 	"time"
 
-	"gitee.com/taoJie_1/mall-agent/global"
-	"gitee.com/taoJie_1/mall-agent/internal/chatwoot"
-	"gitee.com/taoJie_1/mall-agent/internal/redis"
-	"gitee.com/taoJie_1/mall-agent/model/common"
-	"gitee.com/taoJie_1/mall-agent/model/enum"
-	"gitee.com/taoJie_1/mall-agent/utils"
 	"github.com/sashabaranov/go-openai"
+	"github.com/twbworld/agent/global"
+	"github.com/twbworld/agent/internal/chatwoot"
+	"github.com/twbworld/agent/internal/redis"
+	"github.com/twbworld/agent/model/common"
+	"github.com/twbworld/agent/model/enum"
+	"github.com/twbworld/agent/utils"
 )
 
 // ignoredHistoryMessages 定义了不应包含在LLM历史上下文中的系统/转人工提示消息

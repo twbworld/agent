@@ -2,7 +2,7 @@ package initialize
 
 import (
 	"context"
-	"gitee.com/taoJie_1/mall-agent/task"
+	"github.com/twbworld/agent/task"
 	"io"
 	"net/http"
 	"os"
@@ -11,14 +11,14 @@ import (
 	"syscall"
 	"time"
 
-	"gitee.com/taoJie_1/mall-agent/global"
-	"gitee.com/taoJie_1/mall-agent/router"
-	"gitee.com/taoJie_1/mall-agent/service"
-	"gitee.com/taoJie_1/mall-agent/service/admin"
-	"gitee.com/taoJie_1/mall-agent/service/common"
-	"gitee.com/taoJie_1/mall-agent/service/user"
-	"gitee.com/taoJie_1/mall-agent/utils"
 	"github.com/gin-gonic/gin"
+	"github.com/twbworld/agent/global"
+	"github.com/twbworld/agent/router"
+	"github.com/twbworld/agent/service"
+	"github.com/twbworld/agent/service/admin"
+	"github.com/twbworld/agent/service/common"
+	"github.com/twbworld/agent/service/user"
+	"github.com/twbworld/agent/utils"
 )
 
 var server *http.Server

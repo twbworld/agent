@@ -5,9 +5,9 @@ import (
 	"io"
 	"sync"
 
-	"gitee.com/taoJie_1/mall-agent/global"
-	"gitee.com/taoJie_1/mall-agent/task"
 	"github.com/robfig/cron/v3"
+	"github.com/twbworld/agent/global"
+	"github.com/twbworld/agent/task"
 	"golang.org/x/sync/errgroup"
 )
 

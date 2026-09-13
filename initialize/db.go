@@ -4,12 +4,12 @@ import (
 	"fmt"
 	"time"
 
-	"gitee.com/taoJie_1/mall-agent/dao"
-	"gitee.com/taoJie_1/mall-agent/global"
-	"gitee.com/taoJie_1/mall-agent/model/enum"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/mattn/go-sqlite3"
+	"github.com/twbworld/agent/dao"
+	"github.com/twbworld/agent/global"
+	"github.com/twbworld/agent/model/enum"
 )
 
 type mysql struct{}

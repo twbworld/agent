@@ -2,16 +2,16 @@ package dao
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"time"
 	"unicode/utf8"
 
-	"gitee.com/taoJie_1/mall-agent/global"
-	"gitee.com/taoJie_1/mall-agent/internal/chatwoot"
-	"gitee.com/taoJie_1/mall-agent/internal/redis"
 	redisv8 "github.com/go-redis/redis/v8"
+	"github.com/twbworld/agent/global"
+	"github.com/twbworld/agent/internal/chatwoot"
+	"github.com/twbworld/agent/internal/redis"
 )
 
 type KeywordsDb struct{}
@@ -55,7 +55,7 @@ func (d *KeywordsDb) SaveKeywordsToRedis(ctx context.Context, responses []chatwo
 
 	// 使用HSet一次性设置多个字段
 	// HSet key field1 value1 field2 value2 ...
-	args := make([]interface{}, 0, len(responses)*2)
+	args := make([]any, 0, len(responses)*2)
 	for _, resp := range responses {
 		// 检查 short_code 是否超出配置的长度限制
 		if utf8.RuneCountInString(resp.ShortCode) > int(global.Config.Ai.MaxShortCodeLength) {

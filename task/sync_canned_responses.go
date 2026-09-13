@@ -9,12 +9,15 @@ import (
 	"sync"
 	"time"
 
-	"gitee.com/taoJie_1/mall-agent/dao"
-	"gitee.com/taoJie_1/mall-agent/global"
-	"gitee.com/taoJie_1/mall-agent/internal/chatwoot"
-	"gitee.com/taoJie_1/mall-agent/internal/redis"
-	"gitee.com/taoJie_1/mall-agent/internal/vector"
-	"gitee.com/taoJie_1/mall-agent/model/enum"
+	"github.com/sashabaranov/go-openai"
+	"github.com/twbworld/agent/dao"
+	"github.com/twbworld/agent/global"
+	"github.com/twbworld/agent/internal/chatwoot"
+	"github.com/twbworld/agent/internal/llm"
+	"github.com/twbworld/agent/internal/redis"
+	"github.com/twbworld/agent/internal/vector"
+	"github.com/twbworld/agent/model/common"
+	"github.com/twbworld/agent/model/enum"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -38,7 +41,9 @@ func (m *Manager) KeywordReloader() error {
 	}
 	// 确保函数退出时释放锁
 	defer func() {
-		if releaseErr := dao.App.KeywordsDb.ReleaseSyncLock(ctx, agentID); releaseErr != nil {
+		releaseCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		if releaseErr := dao.App.KeywordsDb.ReleaseSyncLock(releaseCtx, agentID); releaseErr != nil {
 			global.Log.Errorf("释放Redis同步锁失败: %v", releaseErr)
 		}
 	}()
@@ -212,32 +217,40 @@ func (m *Manager) generateVectorDocs(ctx context.Context, rules []chatwoot.Canne
 		resp             chatwoot.CannedResponse
 		standardQuestion string
 	}
-	var completedJobs []semanticJob
+
+	completedJobs := make([]semanticJob, 0, len(rules))
 	var mu sync.Mutex
 	var llmGroup errgroup.Group
 	llmGroup.SetLimit(10)
 
 	for _, resp := range rules {
-		r := resp // 避免闭包陷阱
 		llmGroup.Go(func() error {
-			_, seedQuestion := m.parseShortCode(r.ShortCode)
+			_, seedQuestion := m.parseShortCode(resp.ShortCode)
 			if seedQuestion == "" {
 				return nil
 			}
 
-			// 根据输入文本（关键词或内容），使用小模型生成一个标准的、自然的问句
-			standardQuestion, err := global.LlmService.GetCompletion(ctx, enum.ModelSmall, enum.SystemPromptGenQuestionFromKeyword, seedQuestion, 0.2)
+			respMsg, err := global.LlmService.Chat(ctx, &llm.ChatRequest{
+				Size:         enum.ModelSmall,
+				SystemPrompt: enum.SystemPromptGenQuestionFromKeyword,
+				Messages: []common.LlmMessage{
+					{Role: openai.ChatMessageRoleUser, Content: seedQuestion},
+				},
+				Temperature:     new(global.Config.Ai.TriageTemperature),
+				DisableThinking: true,
+			})
 			if err != nil {
-				global.Log.Warnf("为ID %d 的内容生成标准问题失败: %v", r.Id, err)
+				global.Log.Warnf("为ID %d 的内容生成标准问题失败: %v", resp.Id, err)
 				return nil
 			}
-			standardQuestion = strings.Trim(standardQuestion, `"'。， `)
+
+			standardQuestion := strings.Trim(respMsg.Content, `"'。， `)
 			if standardQuestion == "" {
 				return nil
 			}
 
 			mu.Lock()
-			completedJobs = append(completedJobs, semanticJob{resp: r, standardQuestion: standardQuestion})
+			completedJobs = append(completedJobs, semanticJob{resp: resp, standardQuestion: standardQuestion})
 			mu.Unlock()
 			return nil
 		})
@@ -248,7 +261,7 @@ func (m *Manager) generateVectorDocs(ctx context.Context, rules []chatwoot.Canne
 		return nil, nil
 	}
 
-	// 批量为所有生成的标准问题创建向量(其实也可以在上一步的LLM生成向量, 但向量质量不如Embedding模型)
+	// 此处已有预分配，保持原样
 	questionsToEmbed := make([]string, len(completedJobs))
 	for i, job := range completedJobs {
 		questionsToEmbed[i] = job.standardQuestion
@@ -261,18 +274,18 @@ func (m *Manager) generateVectorDocs(ctx context.Context, rules []chatwoot.Canne
 		return nil, fmt.Errorf("批量创建向量失败: %w", err)
 	}
 
-	var documents []vector.Document
+	// 优化3：精准预分配 documents 切片空间
+	documents := make([]vector.Document, 0, len(completedJobs))
 	for i, job := range completedJobs {
-		doc := vector.Document{
-			ID:        fmt.Sprintf("%s%d", dao.CannedResponseVectorIDPrefix, job.resp.Id),
-			Metadata:  map[string]interface{}{
+		documents = append(documents, vector.Document{
+			ID: fmt.Sprintf("%s%d", dao.CannedResponseVectorIDPrefix, job.resp.Id),
+			Metadata: map[string]any{
 				dao.VectorMetadataKeyQuestion: job.standardQuestion,
 				dao.VectorMetadataKeyAnswer:   job.resp.Content,
 				dao.VectorMetadataKeySourceID: int64(job.resp.Id),
 			},
 			Embedding: embeddings[i],
-		}
-		documents = append(documents, doc)
+		})
 	}
 	return documents, nil
 }
@@ -309,7 +322,6 @@ func (m *Manager) syncExactMatchCache(ctx context.Context, exactMatchRules []cha
 	return nil
 }
 
-
 // pruneVectorDb 清理向量数据库中不再存在的条目。
 func (m *Manager) pruneVectorDb(ctx context.Context, activeIDs []string) error {
 	if global.VectorDb == nil {
@@ -342,12 +354,11 @@ func (m *Manager) parseShortCode(shortCode string) (qType enum.KeywordType, qTex
 	if hybridPrefix != "" && strings.HasPrefix(shortCode, hybridPrefix) {
 		return enum.KeywordTypeHybrid, strings.TrimPrefix(shortCode, hybridPrefix)
 	}
-	if strings.HasPrefix(shortCode, semanticPrefix) {
-		return enum.KeywordTypeSemantic, strings.TrimPrefix(shortCode, semanticPrefix)
+	if after, ok := strings.CutPrefix(shortCode, semanticPrefix); ok {
+		return enum.KeywordTypeSemantic, after
 	}
 	return enum.KeywordTypeExact, shortCode
 }
-
 
 // LoadKeywords 从Redis加载关键词到内存，并处理分布式锁
 func (m *Manager) LoadKeywords() error {

@@ -1,6 +1,6 @@
 package config
 
-import "encoding/json"
+import "encoding/json/v2"
 
 type Config struct {
 	Debug            bool           `mapstructure:"debug" json:"debug" yaml:"debug"`

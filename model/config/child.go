@@ -75,6 +75,8 @@ type Ai struct {
 	VectorSearchTopK          int64    `mapstructure:"vector_search_top_k" json:"vector_search_top_k" yaml:"vector_search_top_k"`
 	VectorSimilarityThreshold float32  `mapstructure:"vector_similarity_threshold" json:"vector_similarity_threshold" yaml:"vector_similarity_threshold"`
 	VectorSearchMinSimilarity float32  `mapstructure:"vector_search_min_similarity" json:"vector_search_min_similarity" yaml:"vector_search_min_similarity"`
+	AgentTemperature          float32  `mapstructure:"agent_temperature" json:"agent_temperature,omitempty" yaml:"agent_temperature,omitempty"`
+	TriageTemperature         float32  `mapstructure:"triage_temperature" json:"triage_temperature,omitempty" yaml:"triage_temperature,omitempty"`
 	TriageContextQuestions    uint     `mapstructure:"triage_context_questions" json:"triage_context_questions" yaml:"triage_context_questions"`
 	TriageMaxHistoryRounds    uint     `mapstructure:"triage_max_history_rounds" json:"triage_max_history_rounds" yaml:"triage_max_history_rounds"`
 	TriageTimeout             int64    `mapstructure:"triage_timeout" json:"triage_timeout" yaml:"triage_timeout"`
@@ -83,6 +85,7 @@ type Ai struct {
 	ItemCardTTL               int64    `mapstructure:"item_card_ttl" json:"item_card_ttl" yaml:"item_card_ttl"`
 	AsyncJobTimeout           int64    `mapstructure:"async_job_timeout" json:"async_job_timeout" yaml:"async_job_timeout"`
 	ChatMaxHistoryRounds      uint     `mapstructure:"chat_max_history_rounds" json:"chat_max_history_rounds" yaml:"chat_max_history_rounds"`
+	MaxReActRounds            uint     `mapstructure:"max_react_rounds" json:"max_react_rounds" yaml:"max_react_rounds"`
 	MaxAssistantPerRound      uint     `mapstructure:"max_assistant_per_round" json:"max_assistant_per_round" yaml:"max_assistant_per_round"`
 	KeywordSyncInterval       uint     `mapstructure:"keyword_sync_interval" json:"keyword_sync_interval" yaml:"keyword_sync_interval"`
 	KeywordReloadDebounce     uint     `mapstructure:"keyword_reload_debounce" json:"keyword_reload_debounce" yaml:"keyword_reload_debounce"`

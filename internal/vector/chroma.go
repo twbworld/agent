@@ -9,7 +9,7 @@ import (
 // Document 是一个通用的向量文档结构体，用于在应用内部传递数据
 type Document struct {
 	ID        string
-	Metadata  map[string]interface{}
+	Metadata  map[string]any
 	Embedding []float32
 }
 
@@ -66,6 +66,22 @@ func (f *NoOpEmbeddingFunction) EmbedDocuments(ctx context.Context, texts []stri
 
 func (f *NoOpEmbeddingFunction) EmbedQuery(ctx context.Context, text string) (embeddings.Embedding, error) {
 	return nil, nil
+}
+
+func (f *NoOpEmbeddingFunction) Name() string {
+	return "noop-embedding-function"
+}
+
+func (f *NoOpEmbeddingFunction) GetConfig() embeddings.EmbeddingFunctionConfig {
+	return embeddings.EmbeddingFunctionConfig{}
+}
+
+func (f *NoOpEmbeddingFunction) DefaultSpace() embeddings.DistanceMetric {
+	return embeddings.L2
+}
+
+func (f *NoOpEmbeddingFunction) SupportedSpaces() []embeddings.DistanceMetric {
+	return []embeddings.DistanceMetric{embeddings.L2}
 }
 
 func (c *client) GetOrCreateCollection(ctx context.Context, name string) (chroma.Collection, error) {

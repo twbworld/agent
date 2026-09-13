@@ -1,9 +1,9 @@
 package service
 
 import (
-	"gitee.com/taoJie_1/mall-agent/service/admin"
-	"gitee.com/taoJie_1/mall-agent/service/common"
-	"gitee.com/taoJie_1/mall-agent/service/user"
+	"github.com/twbworld/agent/service/admin"
+	"github.com/twbworld/agent/service/common"
+	"github.com/twbworld/agent/service/user"
 )
 
 type ServiceGroup struct {

@@ -4,9 +4,9 @@ import (
 	"net/http"
 	"strings"
 
-	"gitee.com/taoJie_1/mall-agent/global"
-	"gitee.com/taoJie_1/mall-agent/model/common"
 	"github.com/gin-gonic/gin"
+	"github.com/twbworld/agent/global"
+	"github.com/twbworld/agent/model/common"
 )
 
 // AuthCheck 简单的令牌鉴权中间件(API通用)

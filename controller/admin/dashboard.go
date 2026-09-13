@@ -2,9 +2,9 @@ package admin
 
 import (
 	"errors"
-	"gitee.com/taoJie_1/mall-agent/model/common"
-	"gitee.com/taoJie_1/mall-agent/service"
 	"github.com/gin-gonic/gin"
+	"github.com/twbworld/agent/model/common"
+	"github.com/twbworld/agent/service"
 )
 
 type DashboardApi struct{}

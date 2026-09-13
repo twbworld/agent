@@ -4,7 +4,7 @@ import (
 	"sync"
 	"time"
 
-	"gitee.com/taoJie_1/mall-agent/global"
+	"github.com/twbworld/agent/global"
 )
 
 var (

@@ -8,10 +8,10 @@ import (
 	"strings"
 	"time"
 
-	"gitee.com/taoJie_1/mall-agent/global"
-	"gitee.com/taoJie_1/mall-agent/internal/vector"
 	chroma "github.com/amikos-tech/chroma-go/pkg/api/v2"
 	"github.com/amikos-tech/chroma-go/pkg/embeddings"
+	"github.com/twbworld/agent/global"
+	"github.com/twbworld/agent/internal/vector"
 )
 
 // CannedResponseVectorIDPrefix 是向量数据库中快捷回复文档ID的前缀
@@ -24,7 +24,6 @@ const (
 	VectorMetadataKeyAnswer   = "answer"
 	VectorMetadataKeySourceID = "source_id"
 )
-
 
 type SearchResult struct {
 	Question   string
@@ -175,7 +174,7 @@ func (d *VectorDb) Search(ctx context.Context, query string, topK int) ([]Search
 	}
 
 	var results []SearchResult
-	for i := 0; i < len(distances); i++ {
+	for i := range distances {
 		distance := distances[i]
 		metadata := metadatas[i]
 

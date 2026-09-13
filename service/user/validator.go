@@ -2,7 +2,7 @@ package user
 
 import (
 	"errors"
-	"gitee.com/taoJie_1/mall-agent/model/common"
+	"github.com/twbworld/agent/model/common"
 	"strings"
 )
 

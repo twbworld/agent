@@ -2,13 +2,14 @@ package admin
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"strings"
 	"sync"
 
-	"gitee.com/taoJie_1/mall-agent/global"
+	"github.com/twbworld/agent/global"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -31,7 +32,7 @@ const (
 
 type DashboardService interface {
 	// GetDetails 调用MCP服务获取用户、商品或订单的聚合详情
-	GetDetails(ctx context.Context, userID, goodsID, orderID string) (map[string]interface{}, error)
+	GetDetails(ctx context.Context, userID, goodsID, orderID string) (map[string]any, error)
 }
 
 type dashboardService struct{}
@@ -60,81 +61,81 @@ func (s *dashboardService) getClientName() (string, error) {
 	return clientName, nil
 }
 
-func (s *dashboardService) getGoodsDetails(ctx context.Context, clientName, goodsID string) (map[string]interface{}, error) {
-	argsMap := map[string]interface{}{
+func (s *dashboardService) getGoodsDetails(ctx context.Context, clientName, goodsID string) (map[string]any, error) {
+	argsMap := map[string]any{
 		mcpArgGoodsId: goodsID,
 	}
 	arguments, _ := json.Marshal(argsMap)
 
-	resultStr, err := global.McpService.ExecuteTool(ctx, clientName, mcpToolQueryGoods, json.RawMessage(arguments))
+	resultStr, err := global.McpService.ExecuteTool(ctx, clientName, mcpToolQueryGoods, jsontext.Value(arguments))
 	if err != nil {
 		return nil, fmt.Errorf("调用MCP工具 %s.%s 失败: %w", clientName, mcpToolQueryGoods, err)
 	}
 
-	var details map[string]interface{}
+	var details map[string]any
 	if err := json.Unmarshal([]byte(resultStr), &details); err != nil {
 		return nil, fmt.Errorf("解析MCP返回的商品详情JSON失败: %w, 原始返回: %s", err, resultStr)
 	}
 	return details, nil
 }
 
-func (s *dashboardService) getOrderDetails(ctx context.Context, clientName, orderID string) (map[string]interface{}, error) {
-	argsMap := map[string]interface{}{
+func (s *dashboardService) getOrderDetails(ctx context.Context, clientName, orderID string) (map[string]any, error) {
+	argsMap := map[string]any{
 		mcpArgOrderId: orderID,
 	}
 	arguments, _ := json.Marshal(argsMap)
 
-	resultStr, err := global.McpService.ExecuteTool(ctx, clientName, mcpToolQueryOrder, json.RawMessage(arguments))
+	resultStr, err := global.McpService.ExecuteTool(ctx, clientName, mcpToolQueryOrder, jsontext.Value(arguments))
 	if err != nil {
 		return nil, fmt.Errorf("调用MCP工具 %s.%s 失败: %w", clientName, mcpToolQueryOrder, err)
 	}
 
-	var details map[string]interface{}
+	var details map[string]any
 	if err := json.Unmarshal([]byte(resultStr), &details); err != nil {
 		return nil, fmt.Errorf("解析MCP返回的订单详情JSON失败: %w, 原始返回: %s", err, resultStr)
 	}
 	return details, nil
 }
 
-func (s *dashboardService) getOrderList(ctx context.Context, clientName, userID string) (map[string]interface{}, error) {
-	argsMap := map[string]interface{}{
+func (s *dashboardService) getOrderList(ctx context.Context, clientName, userID string) (map[string]any, error) {
+	argsMap := map[string]any{
 		McpArgUserId: userID,
-		"page_no": 1,
-		"page_size": 10,
+		"page_no":    1,
+		"page_size":  10,
 	}
 	arguments, _ := json.Marshal(argsMap)
 
-	resultStr, err := global.McpService.ExecuteTool(ctx, clientName, mcpToolQueryOrderList, json.RawMessage(arguments))
+	resultStr, err := global.McpService.ExecuteTool(ctx, clientName, mcpToolQueryOrderList, jsontext.Value(arguments))
 	if err != nil {
 		return nil, fmt.Errorf("调用MCP工具 %s.%s 失败: %w", clientName, mcpToolQueryOrderList, err)
 	}
 
-	var details map[string]interface{}
+	var details map[string]any
 	if err := json.Unmarshal([]byte(resultStr), &details); err != nil {
 		return nil, fmt.Errorf("解析MCP返回的订单详情JSON失败: %w, 原始返回: %s", err, resultStr)
 	}
 	return details, nil
 }
 
-func (s *dashboardService) getUserDetails(ctx context.Context, clientName, userID string) (map[string]interface{}, error) {
-	argsMap := map[string]interface{}{
+func (s *dashboardService) getUserDetails(ctx context.Context, clientName, userID string) (map[string]any, error) {
+	argsMap := map[string]any{
 		McpArgUserId: userID,
 	}
 	arguments, _ := json.Marshal(argsMap)
 
-	resultStr, err := global.McpService.ExecuteTool(ctx, clientName, mcpToolQueryUser, json.RawMessage(arguments))
+	resultStr, err := global.McpService.ExecuteTool(ctx, clientName, mcpToolQueryUser, jsontext.Value(arguments))
 	if err != nil {
 		return nil, fmt.Errorf("调用MCP工具 %s.%s 失败: %w", clientName, mcpToolQueryUser, err)
 	}
 
-	var details map[string]interface{}
+	var details map[string]any
 	if err := json.Unmarshal([]byte(resultStr), &details); err != nil {
 		return nil, fmt.Errorf("解析MCP返回的用户详情JSON失败: %w, 原始返回: %s", err, resultStr)
 	}
 	return details, nil
 }
 
-func (s *dashboardService) GetDetails(ctx context.Context, userID, goodsID, orderID string) (map[string]interface{}, error) {
+func (s *dashboardService) GetDetails(ctx context.Context, userID, goodsID, orderID string) (map[string]any, error) {
 	if global.McpService == nil {
 		return nil, errors.New("MCP服务未初始化")
 	}
@@ -149,7 +150,7 @@ func (s *dashboardService) GetDetails(ctx context.Context, userID, goodsID, orde
 	}
 
 	var mu sync.Mutex
-	data := make(map[string]interface{})
+	data := make(map[string]any)
 	var firstErr error
 	g, gCtx := errgroup.WithContext(ctx)
 
@@ -194,7 +195,7 @@ func (s *dashboardService) GetDetails(ctx context.Context, userID, goodsID, orde
 			if err != nil {
 				if strings.Contains(err.Error(), "上架") || strings.Contains(err.Error(), "下架") {
 					// 商品可能已下架，商城api会响应mcp错误, 这里模拟一个下架的商品详情返回
-					details = map[string]interface{}{
+					details = map[string]any{
 						"status": "已下架",
 						"id":     goodsID,
 					}

@@ -5,15 +5,15 @@ import (
 	"sync"
 	"time"
 
-	"gitee.com/taoJie_1/mall-agent/internal/chatwoot"
-	"gitee.com/taoJie_1/mall-agent/internal/embedding"
-	"gitee.com/taoJie_1/mall-agent/internal/llm"
-	"gitee.com/taoJie_1/mall-agent/internal/mcp"
-	"gitee.com/taoJie_1/mall-agent/internal/oss"
-	"gitee.com/taoJie_1/mall-agent/internal/redis"
-	"gitee.com/taoJie_1/mall-agent/internal/vector"
-	"gitee.com/taoJie_1/mall-agent/model/config"
 	"github.com/sirupsen/logrus"
+	"github.com/twbworld/agent/internal/chatwoot"
+	"github.com/twbworld/agent/internal/embedding"
+	"github.com/twbworld/agent/internal/llm"
+	"github.com/twbworld/agent/internal/mcp"
+	"github.com/twbworld/agent/internal/oss"
+	"github.com/twbworld/agent/internal/redis"
+	"github.com/twbworld/agent/internal/vector"
+	"github.com/twbworld/agent/model/config"
 )
 
 // 全局变量

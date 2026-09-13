@@ -2,28 +2,29 @@ package user
 
 import (
 	"bytes"
+	"cmp"
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"io"
-	"strings"
+	"slices"
 	"time"
 	"unicode/utf8"
 
-	"gitee.com/taoJie_1/mall-agent/internal/chatwoot"
-	"gitee.com/taoJie_1/mall-agent/internal/redis"
-	"gitee.com/taoJie_1/mall-agent/utils"
 	"github.com/sashabaranov/go-openai"
+	"github.com/twbworld/agent/internal/chatwoot"
+	"github.com/twbworld/agent/internal/redis"
+	"github.com/twbworld/agent/utils"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/gin-gonic/gin"
 
-	"gitee.com/taoJie_1/mall-agent/dao"
-	"gitee.com/taoJie_1/mall-agent/global"
-	"gitee.com/taoJie_1/mall-agent/model/common"
-	"gitee.com/taoJie_1/mall-agent/model/enum"
-	"gitee.com/taoJie_1/mall-agent/service"
+	"github.com/twbworld/agent/dao"
+	"github.com/twbworld/agent/global"
+	"github.com/twbworld/agent/model/common"
+	"github.com/twbworld/agent/model/enum"
+	"github.com/twbworld/agent/service"
 )
 
 type ChatApi struct{}
@@ -480,8 +481,7 @@ func (c *ChatApi) processMessageAsync(ctx context.Context, req common.ChatReques
 	// --- 分诊通过，进入深度处理路径 ---
 
 	// 5. 调用大型LLM服务 (含RAG和工具调用)
-	// 修改：接收返回的中间工具消息，以便存入历史
-	llmAnswer, intermediateMsgs, err := c.runComplexGeneration(ctx, req, fullHistory, vectorResults)
+	llmResp, intermediateMsgs, err := c.runComplexGeneration(ctx, req, fullHistory, vectorResults)
 	if err != nil {
 		if errors.Is(err, context.Canceled) || ctx.Err() == context.Canceled {
 			global.Log.Debugf("会话 %d 的AI任务被新任务取代而取消，静默退出。", req.Conversation.ID)
@@ -492,16 +492,16 @@ func (c *ChatApi) processMessageAsync(ctx context.Context, req common.ChatReques
 		return
 	}
 
-	global.Log.Debugln("LLM回答=================", llmAnswer)
+	global.Log.Debugf("LLM回答================= %+v", llmResp)
 
 	// 6. 最终回复处理
-	if strings.TrimSpace(llmAnswer) == enum.LlmUnsureTransferSignal {
-		global.Log.Debugf("[processMessageAsync] LLM不确定答案，主动转人工, 会话ID: %d", req.Conversation.ID)
-		c.safeTransfer(ctx, req.Conversation.ID, enum.TransferToHuman5, "")
+	if llmResp.TransferToHuman {
+		global.Log.Debugf("[processMessageAsync] LLM不确定答案，主动转人工, 会话ID: %d, 原因: %s", req.Conversation.ID, llmResp.TransferReason)
+		c.safeTransfer(ctx, req.Conversation.ID, cmp.Or(llmResp.TransferReason, enum.TransferToHuman5), "")
 		return
 	}
 
-	if llmAnswer == "" {
+	if llmResp.Reply == "" {
 		global.Log.Warnf("[processMessageAsync] LLM返回空回复，转人工, 会话ID: %d", req.Conversation.ID)
 		c.safeTransfer(ctx, req.Conversation.ID, enum.TransferToHuman5, string(enum.ReplyMsgLlmError))
 		return
@@ -533,7 +533,7 @@ func (c *ChatApi) processMessageAsync(ctx context.Context, req common.ChatReques
 	// 8. 发送消息并更新历史
 	sendCtx, sendCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer sendCancel()
-	service.Service.UserServiceGroup.ActionService.SendMessage(sendCtx, req.Conversation.ID, llmAnswer)
+	service.Service.UserServiceGroup.ActionService.SendMessage(sendCtx, req.Conversation.ID, llmResp.Reply)
 
 	go func() {
 		historyToAppend := make([]common.LlmMessage, 0, 2+len(intermediateMsgs))
@@ -544,7 +544,7 @@ func (c *ChatApi) processMessageAsync(ctx context.Context, req common.ChatReques
 			historyToAppend = append(historyToAppend, intermediateMsgs...)
 		}
 		// 最后追加Assistant的最终回复
-		historyToAppend = append(historyToAppend, common.LlmMessage{Role: openai.ChatMessageRoleAssistant, Content: llmAnswer})
+		historyToAppend = append(historyToAppend, common.LlmMessage{Role: openai.ChatMessageRoleAssistant, Content: llmResp.Reply})
 		service.Service.UserServiceGroup.HistoryService.Append(context.Background(), req.Conversation.ID, historyToAppend...)
 	}()
 }
@@ -611,10 +611,7 @@ func (c *ChatApi) runTriage(ctx context.Context, req common.ChatRequest, fullHis
 	var triageContextResults []dao.SearchResult
 
 	if len(vectorResults) > 0 {
-		limit := int(global.Config.Ai.TriageContextQuestions)
-		if len(vectorResults) < limit {
-			limit = len(vectorResults)
-		}
+		limit := min(len(vectorResults), int(global.Config.Ai.TriageContextQuestions))
 		triageContextResults = vectorResults[:limit]
 		// 仅遍历截取后的切片来提取问题文本
 		for _, res := range triageContextResults {
@@ -690,64 +687,28 @@ func (c *ChatApi) runTriage(ctx context.Context, req common.ChatRequest, fullHis
 }
 
 // runComplexGeneration 执行复杂的RAG+LLM生成，并处理工具调用
-// 返回: 最终回复内容, 中间产生的消息历史(用于存入Redis), 错误
-func (c *ChatApi) runComplexGeneration(ctx context.Context, req common.ChatRequest, fullHistory []common.LlmMessage, vectorResults []dao.SearchResult) (string, []common.LlmMessage, error) {
-	// 准备给大型LLM的参考资料 (RAG)
+// 返回: LLM回复内容, 中间产生的消息历史(用于存入Redis), 错误
+func (c *ChatApi) runComplexGeneration(ctx context.Context, req common.ChatRequest, fullHistory []common.LlmMessage, vectorResults []dao.SearchResult) (*common.LlmComplexResponse, []common.LlmMessage, error) {
 	var llmReferenceDocs []dao.SearchResult
 	if len(vectorResults) > 0 {
 		for _, res := range vectorResults {
-			// 只使用相似度高于配置阈值的文档作为参考
 			if res.Similarity >= global.Config.Ai.VectorSearchMinSimilarity {
 				llmReferenceDocs = append(llmReferenceDocs, res)
 			}
 		}
 	}
 
-	global.Log.Debugln("=================开始进入大型LLM")
+	global.Log.Debugln("=================开始进入大型LLM ReAct Loop")
 
-	conversationHistory := fullHistory
-	llmAnswer, err := service.Service.UserServiceGroup.LlmService.GenerateResponseOrToolCall(ctx, &req, llmReferenceDocs, conversationHistory, req.Conversation.Meta.Sender)
+	llmResp, intermediateMsgs, err := service.Service.UserServiceGroup.LlmService.RunReActLoop(ctx, &req, llmReferenceDocs, fullHistory, req.Conversation.Meta.Sender)
 
-	// 用于收集本轮对话中产生的中间消息(工具调用请求+工具结果)，以便后续追加到Redis历史
-	var intermediateMsgs []common.LlmMessage
-
-	// 检查是否需要调用工具
-	if strings.Contains(llmAnswer, "<tool_code>") {
-		global.Log.Debugf("[runComplexGeneration] LLM请求调用工具, 会话ID: %d", req.Conversation.ID)
-
-		// 记录工具调用指令(Assistant角色)
-		assistantMsg := common.LlmMessage{Role: openai.ChatMessageRoleAssistant, Content: llmAnswer}
-		intermediateMsgs = append(intermediateMsgs, assistantMsg)
-
-		toolResults, execErr := service.Service.UserServiceGroup.LlmService.ExecuteToolCalls(ctx, llmAnswer, req.Conversation.Meta.Sender)
-		if execErr != nil {
-			global.Log.Errorf("[runComplexGeneration] 工具执行过程出错: %v", execErr)
-			// 出错不打断流程，让LLM根据错误信息（已包含在toolResults中）尝试恢复或告知用户
-		}
-
-		if len(toolResults) > 0 {
-			// 记录工具执行结果(Tool角色)
-			intermediateMsgs = append(intermediateMsgs, toolResults...)
-
-			// 将用户问题、助手回复（工具调用指令）和所有工具执行结果一起添加到历史记录中，用于最终合成
-			conversationHistory = append(conversationHistory, common.LlmMessage{Role: openai.ChatMessageRoleUser, Content: req.Content})
-			conversationHistory = append(conversationHistory, assistantMsg)
-			conversationHistory = append(conversationHistory, toolResults...)
-
-			global.Log.Debugln("=================再次调用大型LLM分析数据")
-
-			// 将工具执行结果和历史记录再次发送给LLM进行总结
-			llmAnswer, err = service.Service.UserServiceGroup.LlmService.SynthesizeToolResult(ctx, conversationHistory)
-		}
-	}
-
-	return llmAnswer, intermediateMsgs, err
+	return llmResp, intermediateMsgs, err
 }
 
 // trimHistory 根据轮数和每轮最大消息数修剪历史记录
 // maxRounds: 包含的最大用户消息数（即轮数）
 // maxAssistantPerRound: 每个用户消息后保留的最大Assistant消息数（防止单轮消息过多）
-func (c *ChatApi) trimHistory(history []common.LlmMessage, maxRounds int, maxAssistantPerRound int) []common.LlmMessage {
+func (c *ChatApi) trimHistory(history []common.LlmMessage, maxRounds int, _ int) []common.LlmMessage {
 	if len(history) == 0 {
 		return history
 	}
@@ -755,33 +716,22 @@ func (c *ChatApi) trimHistory(history []common.LlmMessage, maxRounds int, maxAss
 		return []common.LlmMessage{}
 	}
 
-	result := make([]common.LlmMessage, 0, maxRounds*(1+maxAssistantPerRound))
+	result := make([]common.LlmMessage, 0, len(history))
 	rounds := 0
-	assistantCount := 0
 
-	// 倒序遍历，确保保留最近的消息
-	for i := len(history) - 1; i >= 0; i-- {
-		msg := history[i]
+	// 采用倒序遍历且不再对工具调用链中的 Assistant、Tool 强行计数裁剪
+	// 因为 OpenAI 严格限制 ToolCall 及其 Result 必须原子对应，强行抽走任一方都会直接报错
+	for _, msg := range slices.Backward(history) {
+		// 继续往前遍历到的任何 Assistant/Tool/User 消息都属于更老的轮次，必须立即丢弃。
+		if rounds >= maxRounds {
+			break
+		}
 
 		if msg.Role == openai.ChatMessageRoleUser {
 			rounds++
-			// 如果超过了允许的最大轮数，则停止
-			if rounds > maxRounds {
-				break
-			}
-			// 重置助手消息计数器，因为我们已经进入了一个新的（按时间顺序是更早的）轮次
-			// 注意：此时assistantCount统计的是当前这个User消息 *之后* 的Assistant消息
-			assistantCount = 0
-
-			result = append(result, msg)
-		} else {
-			// 对于非用户消息（助手、系统、工具等），我们作为该轮的一部分进行计数
-			// 限制每轮Assistant消息的数量，避免Token被冗余回复占满
-			if assistantCount < maxAssistantPerRound {
-				result = append(result, msg)
-				assistantCount++
-			}
 		}
+
+		result = append(result, msg)
 	}
 
 	// 倒序结果以恢复按时间顺序排列

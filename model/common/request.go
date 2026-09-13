@@ -1,7 +1,7 @@
 package common
 
 import (
-	"gitee.com/taoJie_1/mall-agent/internal/chatwoot"
+	"github.com/twbworld/agent/internal/chatwoot"
 )
 
 type ReloadPost struct {

@@ -7,12 +7,12 @@ import (
 	"sync"
 	"time"
 
-	"gitee.com/taoJie_1/mall-agent/global"
-	"gitee.com/taoJie_1/mall-agent/internal/chatwoot"
-	"gitee.com/taoJie_1/mall-agent/internal/redis"
-	"gitee.com/taoJie_1/mall-agent/model/common"
-	"gitee.com/taoJie_1/mall-agent/model/enum"
-	"gitee.com/taoJie_1/mall-agent/utils"
+	"github.com/twbworld/agent/global"
+	"github.com/twbworld/agent/internal/chatwoot"
+	"github.com/twbworld/agent/internal/redis"
+	"github.com/twbworld/agent/model/common"
+	"github.com/twbworld/agent/model/enum"
+	"github.com/twbworld/agent/utils"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -107,6 +107,8 @@ func (a *actionService) AssignConversationByRules(ctx context.Context, conversat
 }
 
 func (a *actionService) TransferToHuman(ctx context.Context, ConversationID uint, remark enum.TransferToHuman, message ...string) error {
+	global.Log.Debugf("===========转人工: %s", remark)
+
 	if global.ChatwootService == nil {
 		return fmt.Errorf("Chatwoot客户端未初始化")
 	}
@@ -142,9 +144,9 @@ func (a *actionService) TransferToHuman(ctx context.Context, ConversationID uint
 	if userMessage != "" && global.RedisClient != nil {
 		cooldownKey := fmt.Sprintf("%s%d", redis.KeyPrefixTransferMsgSent, ConversationID)
 		ttlSeconds := global.Config.Ai.TransferMsgCooldown
-        if ttlSeconds <= 0 {
-            ttlSeconds = 300
-        }
+		if ttlSeconds <= 0 {
+			ttlSeconds = 300
+		}
 		ttl := time.Duration(ttlSeconds) * time.Second
 
 		acquired, err := global.RedisClient.SetNX(ctx, cooldownKey, "1", ttl).Result()
@@ -208,6 +210,7 @@ func (a *actionService) ToggleTyping(ctx context.Context, conversationID uint, s
 }
 
 func (a *actionService) SendMessage(ctx context.Context, conversationID uint, content string) {
+	global.Log.Debugf("===========发送信息: %s", content)
 	if global.ChatwootService == nil {
 		return
 	}

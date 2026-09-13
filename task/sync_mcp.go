@@ -5,8 +5,8 @@ import (
 	"strings"
 	"sync"
 
-	"gitee.com/taoJie_1/mall-agent/global"
-	"gitee.com/taoJie_1/mall-agent/model/config"
+	"github.com/twbworld/agent/global"
+	"github.com/twbworld/agent/model/config"
 )
 
 // McpCapabilitiesReloader 刷新所有或指定的 MCP 服务的能力。

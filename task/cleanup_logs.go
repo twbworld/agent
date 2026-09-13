@@ -2,14 +2,14 @@ package task
 
 import (
 	"fmt"
-	"gitee.com/taoJie_1/mall-agent/utils"
+	"github.com/twbworld/agent/utils"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
-	"gitee.com/taoJie_1/mall-agent/global"
+	"github.com/twbworld/agent/global"
 )
 
 // 清除日志文件

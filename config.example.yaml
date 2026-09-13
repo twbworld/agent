@@ -70,7 +70,9 @@ chatwoot:
     default_id: 0
 # LLM配置, 最多可配3个, 小模型在前排序
 llm:
-  - # LLM的api地址, "v1"结尾
+  - # LLM的大小, small|medium|large
+    size: small
+    # LLM的api地址, "v1"结尾
     url: "http://127.0.0.1:11434/v1"
     # LLM模型名称
     model: "qwen3:latest"
@@ -78,10 +80,16 @@ llm:
     auth: ""
     # 超时时间(秒)
     timeout: 30
-    # LLM的大小, small|medium|large
-    size: small
     # LLM的温度,不设置则由LLM服务决定, qwen3默认0.6
     temperature: 0.6
+  - size: medium
+    url: "http://127.0.0.1:11434/v1"
+    model: "qwen3:latest"
+    auth: ""
+  - size: large
+    url: "http://127.0.0.1:11434/v1"
+    model: "qwen3:latest"
+    auth: ""
 # 配置向量化模型;中途更换模型可能因dim不同而报错
 llm_embedding:
   # LLM的api地址, "v1"结尾
@@ -118,6 +126,10 @@ ai:
   vector_similarity_threshold: 0.9
   # 向量搜索结果的最低相似度阈值(0-1), 高于此阈值才作为LLM的参考
   vector_search_min_similarity: 0.75
+  # 主模型的自定义采样温度
+  agent_temperature: 0.5
+  # 分诊小模型的自定义采样温度
+  triage_temperature: 0.2
   # 为分诊台提供向量搜索结果作为上下文时，取最相关的前N个问题(预设回复)
   triage_context_questions: 2
   # 分诊台获取的最大历史消息数量(轮数)
@@ -134,6 +146,8 @@ ai:
   async_job_timeout: 60
   # 传递给大型LLM的最大历史消息数量(轮数) (0表示不限制, chatwoot的api默认返回20条)
   chat_max_history_rounds: 5
+  # ReAct 最大思考循环次数
+  max_react_rounds: 5
   # 单轮对话中最多保留的Assistant消息数量,建议5-10
   max_assistant_per_round: 5
   # 知识库定时同步的最小间隔(秒);避免任务短时间内重复执行。

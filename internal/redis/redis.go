@@ -2,12 +2,12 @@ package redis
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"fmt"
 	"time"
 
-	"gitee.com/taoJie_1/mall-agent/model/common"
 	"github.com/go-redis/redis/v8"
+	"github.com/twbworld/agent/model/common"
 )
 
 const (
@@ -32,12 +32,12 @@ var ErrNil = redis.Nil
 type Service interface {
 	Close() error
 	Get(ctx context.Context, key string) *redis.StringCmd
-	Set(ctx context.Context, key string, value interface{}, expiration time.Duration) *redis.StatusCmd
+	Set(ctx context.Context, key string, value any, expiration time.Duration) *redis.StatusCmd
 	Del(ctx context.Context, keys ...string) *redis.IntCmd
 	HGetAll(ctx context.Context, key string) *redis.StringStringMapCmd
-	HSet(ctx context.Context, key string, values ...interface{}) *redis.IntCmd
+	HSet(ctx context.Context, key string, values ...any) *redis.IntCmd
 	HDel(ctx context.Context, key string, fields ...string) *redis.IntCmd
-	SetNX(ctx context.Context, key string, value interface{}, expiration time.Duration) *redis.BoolCmd
+	SetNX(ctx context.Context, key string, value any, expiration time.Duration) *redis.BoolCmd
 	Expire(ctx context.Context, key string, expiration time.Duration) *redis.BoolCmd
 	Ping(ctx context.Context) *redis.StatusCmd
 	// 从Redis获取指定会话的聊天记录
@@ -80,7 +80,7 @@ func (c *client) Get(ctx context.Context, key string) *redis.StringCmd {
 	return c.rdb.Get(ctx, key)
 }
 
-func (c *client) Set(ctx context.Context, key string, value interface{}, expiration time.Duration) *redis.StatusCmd {
+func (c *client) Set(ctx context.Context, key string, value any, expiration time.Duration) *redis.StatusCmd {
 	return c.rdb.Set(ctx, key, value, expiration)
 }
 
@@ -92,7 +92,7 @@ func (c *client) HGetAll(ctx context.Context, key string) *redis.StringStringMap
 	return c.rdb.HGetAll(ctx, key)
 }
 
-func (c *client) HSet(ctx context.Context, key string, values ...interface{}) *redis.IntCmd {
+func (c *client) HSet(ctx context.Context, key string, values ...any) *redis.IntCmd {
 	return c.rdb.HSet(ctx, key, values...)
 }
 
@@ -100,7 +100,7 @@ func (c *client) HDel(ctx context.Context, key string, fields ...string) *redis.
 	return c.rdb.HDel(ctx, key, fields...)
 }
 
-func (c *client) SetNX(ctx context.Context, key string, value interface{}, expiration time.Duration) *redis.BoolCmd {
+func (c *client) SetNX(ctx context.Context, key string, value any, expiration time.Duration) *redis.BoolCmd {
 	return c.rdb.SetNX(ctx, key, value, expiration)
 }
 

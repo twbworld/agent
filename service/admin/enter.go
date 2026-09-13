@@ -1,6 +1,6 @@
 package admin
 
-import "gitee.com/taoJie_1/mall-agent/task"
+import "github.com/twbworld/agent/task"
 
 type ServiceGroup struct {
 	KeywordService   KeywordService
